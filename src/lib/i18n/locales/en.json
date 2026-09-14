@@ -921,6 +921,7 @@
     "sysMsgError": "Errors",
     "sysMsgWarning": "Warnings",
     "sysMsgAll": "All",
+    "sysMsgDebug": "Debug (verbose)",
     "diagnostics": "Diagnostics",
     "logLevel": "Log Level",
     "logOff": "Off",
