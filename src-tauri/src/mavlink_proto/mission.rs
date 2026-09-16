@@ -397,6 +397,9 @@ fn wp_to_item(wp: &ArduWaypoint, seq: u16, target: u8, mission_type: MavMissionT
         target_system:    target,
         target_component: 0,
         seq,
+        // The frame is the planner's business: the frontend puts pure action items (DO_* / CONDITION_*)
+        // into MAV_FRAME_MISSION before a MISSION upload (missionArdupilot.ts, framesForUpload); fence
+        // and rally items keep the global frames their editors set. Passed through unchanged here.
         frame:        u8_to_frame(wp.frame),
         command:      u16_to_cmd(wp.command),
         // `current` flags the active waypoint of a real mission (slot 0); meaningless for fence/rally.
