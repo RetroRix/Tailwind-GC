@@ -24,13 +24,13 @@
     fenceWorking, fenceDirty, fenceEditing,
     FENCE_KIND_INCLUSION, FENCE_KIND_EXCLUSION, FENCE_SHAPE_CIRCLE, FENCE_SHAPE_POLYGON,
     addFenceZone, deleteFenceZone, setFenceKind, setFenceRadius, setFenceParam,
-    saveFenceConfig, revertFenceWorking, type FenceZone,
+    saveFenceConfig, revertFenceWorking, fenceSaveIssue, type FenceZone,
   } from '$lib/stores/fence';
   import { fenceColor, fenceRadiusM } from '$lib/helpers/fenceStyle';
   import {
     rallyWorking, rallyDirty, rallyEditing,
     addRallyPoint, deleteRallyPoint, setRallyAlt, setRallyParam,
-    saveRallyConfig, revertRallyWorking, type RallyPoint,
+    saveRallyConfig, revertRallyWorking, rallySaveIssue, type RallyPoint,
   } from '$lib/stores/rally';
   import { validateGeozones, ensureCCWConfig } from '$lib/helpers/geozoneSanity';
   import { settings, AERO_DISTANCE_OPTIONS, type DistanceUnit } from '$lib/stores/settings';
@@ -225,7 +225,8 @@
     });
     if (ans !== 'ok') return;
     fenceBusy = true;
-    try { await saveFenceConfig(); } finally { fenceBusy = false; }
+    await saveFenceConfig(); // sets $fenceSaveIssue itself, never throws
+    fenceBusy = false;
   }
 
   /** Representative point of a fence zone (circle centre / polygon centroid) for focus-on-click. */
@@ -350,7 +351,8 @@
     });
     if (ans !== 'ok') return;
     rallyBusy = true;
-    try { await saveRallyConfig(); } finally { rallyBusy = false; }
+    await saveRallyConfig(); // sets $rallySaveIssue itself, never throws
+    rallyBusy = false;
   }
   function rallyCenter(p: RallyPoint): { lat: number; lon: number } { return { lat: p.lat / 1e7, lon: p.lon / 1e7 }; }
 
@@ -668,6 +670,11 @@
             <Button variant="standard" disabled={fenceBusy} onclick={onRevertFence}>{$t('geozone.revert')}</Button>
           </div>
         {/if}
+        {#if $fenceSaveIssue?.kind === 'failed'}
+          <div class="gz-issues"><div class="gz-issue gz-err">{$t('fence.saveFailed', { values: { error: $fenceSaveIssue.detail } })}</div></div>
+        {:else if $fenceSaveIssue?.kind === 'params'}
+          <div class="gz-issues"><div class="gz-issue">{$t('fence.paramsNotWritten', { values: { params: $fenceSaveIssue.detail } })}</div></div>
+        {/if}
       </div>
     {/if}
 
@@ -754,6 +761,11 @@
             </Button>
             <Button variant="standard" disabled={rallyBusy} onclick={onRevertRally}>{$t('geozone.revert')}</Button>
           </div>
+        {/if}
+        {#if $rallySaveIssue?.kind === 'failed'}
+          <div class="gz-issues"><div class="gz-issue gz-err">{$t('rally.saveFailed', { values: { error: $rallySaveIssue.detail } })}</div></div>
+        {:else if $rallySaveIssue?.kind === 'params'}
+          <div class="gz-issues"><div class="gz-issue">{$t('rally.paramsNotWritten', { values: { params: $rallySaveIssue.detail } })}</div></div>
         {/if}
       </div>
     {/if}
