@@ -1915,7 +1915,7 @@
       factor = 0.3;
     } else if (nightMode2D === 'auto') {
       // Auto = user system-time + PHYSICAL location (sunset based), smooth — NOT log/camera.
-      const u = resolveUserLocation(); // OS geo → UAV GPS → home → persisted map centre
+      const u = resolveUserLocation(); // OS geo → home → persisted map centre
       factor = cesiumLikeBrightness(sunAltitudeDeg(new Date(), u.lat, u.lon));
     }
     applyNightDim(factor);
