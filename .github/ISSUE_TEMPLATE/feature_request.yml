@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for the suggestion! Please describe what you'd like and why. Check the
         [documentation](https://b14ckyy.github.io/Kite-GC/) and the
-        [existing issues](https://github.com/b14ckyy/Kite-GC/issues) first, in case it's already planned.
+        [existing issues](https://github.com/RetroRix/Tailwind-GC/issues) first, in case it's already planned.
 
   - type: checkboxes
     id: preflight

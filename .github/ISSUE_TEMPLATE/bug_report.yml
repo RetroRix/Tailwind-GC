@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for taking the time to report a bug. Please fill in the details below so we can reproduce
         and fix it quickly. Check the [documentation](https://b14ckyy.github.io/Kite-GC/) and the
-        [existing issues](https://github.com/b14ckyy/Kite-GC/issues) first.
+        [existing issues](https://github.com/RetroRix/Tailwind-GC/issues) first.
 
   - type: checkboxes
     id: preflight

@@ -9,14 +9,14 @@ export const APP_TAGLINE = 'Go far. Get home.';
 export const APP_VERSION = __APP_VERSION__;
 export const GIT_COMMIT = __GIT_COMMIT__;
 export const BUILD_DATE = __BUILD_DATE__;
-export const COPYRIGHT = '© 2026 Marc Hoffmann (b14ckyy)';
+export const COPYRIGHT = '© 2026 Marc Hoffmann (b14ckyy) · Tailwind modifications © 2026 RetroRix';
 export const LICENSE = 'GPL-3.0-or-later';
-export const REPO_URL = 'https://github.com/b14ckyy/Kite-GC';
-/** Published user docs (MkDocs site); `latest` is the released minor's docs. */
-export const DOCS_URL = 'https://b14ckyy.github.io/Kite-GC/latest/';
-export const PRIVACY_URL = `${DOCS_URL}privacy/`;
-/** The community Discord — the permanent invite, lands in #rules. */
-export const DISCORD_URL = 'https://discord.gg/3FM7EWhkg9';
+export const REPO_URL = 'https://github.com/RetroRix/Tailwind-GC';
+/** Upstream project Tailwind GC is based on (credit + original docs). */
+export const UPSTREAM_URL = 'https://github.com/b14ckyy/Kite-GC';
+export const DOCS_URL = 'https://github.com/RetroRix/Tailwind-GC';
+export const PRIVACY_URL = '';
+export const DISCORD_URL = '';
 /** Store listings for the mobile builds — empty until the listings exist; the update dialog then falls
  *  back to the GitHub release page. */
 export const PLAY_STORE_URL = '';
