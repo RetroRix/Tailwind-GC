@@ -17,6 +17,7 @@
   import RcLinkWidget from './widgets/RcLinkWidget.svelte';
   import CompassWidget from './widgets/CompassWidget.svelte';
   import HomeWidget from './widgets/HomeWidget.svelte';
+  import GetHomeWidget from './widgets/GetHomeWidget.svelte';
   import FlightModeWidget from './widgets/FlightModeWidget.svelte';
   import LiveAglWidget from './widgets/LiveAglWidget.svelte';
   import TerrainRadarWidget from './widgets/TerrainRadarWidget.svelte';
@@ -65,6 +66,8 @@
   <CompassWidget {telem} size={sizePx} {interfaceSettings} />
 {:else if id === 'home'}
   <HomeWidget {telem} size={sizePx} {interfaceSettings} />
+{:else if id === 'getHome'}
+  <GetHomeWidget {telem} size={sizePx} {interfaceSettings} />
 {:else if id === 'flightMode'}
   <FlightModeWidget {telem} size={sizePx} />
 {:else if id === 'liveAgl'}

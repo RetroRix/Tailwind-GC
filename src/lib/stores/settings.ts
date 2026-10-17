@@ -487,7 +487,7 @@ const defaults: AppSettings = {
     temperatureUnit: 'c',
   },
   panels: {
-    bottom: ['battery', 'speed', 'ahi', 'altitude', 'compass'],
+    bottom: ['getHome', 'battery', 'speed', 'ahi', 'altitude', 'compass'],
     right: ['home', 'rcLink', 'gps'],
   },
   phoneWidgets: DEFAULT_PHONE_WIDGETS,
