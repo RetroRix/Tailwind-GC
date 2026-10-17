@@ -9,7 +9,7 @@
 
 import { writable, get } from 'svelte/store';
 import { vehicles } from '$lib/stores/vehicles';
-import { settings } from '$lib/stores/settings';
+import { fleetEnabled } from '$lib/stores/fleetMode';
 
 export const selectedVehicleIds = writable<ReadonlySet<string>>(new Set());
 
@@ -23,7 +23,7 @@ export function isSelected(id: string): boolean {
 
 export function toggleSelected(id: string): void {
   // Behind the fleet feature gate: without it a Ctrl/Cmd-click on the one vehicle selects nothing.
-  if (!get(settings).fleetEnabled) return;
+  if (!get(fleetEnabled)) return;
   selectedVehicleIds.update((s) => {
     const next = new Set(s);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -32,12 +32,16 @@ export function toggleSelected(id: string): void {
 }
 
 export function setSelected(ids: Iterable<string>): void {
+  if (!get(fleetEnabled)) return; // behind the fleet feature gate, like `toggleSelected`
   selectedVehicleIds.set(new Set(ids));
 }
 
 export function clearSelection(): void {
   if (current.size) selectedVehicleIds.set(new Set());
 }
+
+// The gate switched off (Debug Monitor) takes the selection along.
+fleetEnabled.subscribe((on) => { if (!on) clearSelection(); });
 
 // Prune ids the backend no longer knows.
 vehicles.subscribe((known) => {

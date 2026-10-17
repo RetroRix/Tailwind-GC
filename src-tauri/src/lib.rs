@@ -7,6 +7,7 @@ mod android;
 mod child_env;
 mod commands;
 mod debug_mode;
+mod fleet_mode;
 mod flightlog;
 mod flightmode;
 mod github_release;
@@ -86,7 +87,7 @@ use commands::safehome::{safehome_read_all, safehome_write_all};
 use commands::geozone::{geozone_read_all, geozone_write_all};
 use commands::fence::{fence_read_all, fence_write_all};
 use commands::rally::{rally_read_all, rally_write_all};
-use commands::info::{get_app_version, is_debug_mode};
+use commands::info::{get_app_version, is_debug_mode, is_fleet_mode};
 use commands::system::{system_active_net_is_wifi, system_on_battery};
 use commands::storage::{share_file, storage_pick_folder};
 use commands::video::{
@@ -402,6 +403,15 @@ pub fn run() {
     let log_level = if debug_flag { log::LevelFilter::Debug } else { log::LevelFilter::Warn };
     logging::init(log_level, is_portable());
 
+    // `--fleet` / `KITE_FLEET` turns on the multi-vehicle features (default off in every build, see
+    // fleet_mode). Logged at the default level so a tester's log shows which mode ran.
+    if fleet_mode::flag_present() {
+        fleet_mode::set(true);
+    }
+    if fleet_mode::enabled() {
+        log::warn!("Fleet (multi-vehicle) features enabled (--fleet / KITE_FLEET)");
+    }
+
     // Linux: the GStreamer decode sink renders through gtkglsink, whose GL context is GDK's — and
     // GTK3 creates a DESKTOP GL context by default (measured on a Pi 5: OpenGL 3.1, legacy). Such a
     // context has no direct DMABuf import (`GL_OES_EGL_image_external`), so a hardware decoder's
@@ -644,6 +654,7 @@ pub fn run() {
             debug_tunnel_stats_snapshot,
             get_app_version,
             is_debug_mode,
+            is_fleet_mode,
             link_status::telemetry_track_since,
             set_log_level,
             get_log_path,

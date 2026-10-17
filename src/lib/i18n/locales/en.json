@@ -1969,7 +1969,7 @@
     "tabFleet": "Fleet (gated)",
     "fleet": {
       "enabled": "Multi-vehicle features enabled",
-      "hint": "Hidden feature gate. Off: the single-link UI (no link manager, Fleet tab or group commands) and no group flights. Stored with the settings.",
+      "hint": "Launch flag --fleet (or the KITE_FLEET environment variable), off by default. Off: the single-vehicle UI (no link manager, Fleet tab, group commands or fleet map layers), no second vehicle on a shared link and no group flights. Switching it here lasts for this session only.",
       "coordinator": "Group-flight coordinator",
       "backendFlag": "Backend flag",
       "on": "on",

@@ -19,6 +19,7 @@
   import { telemetry, allTelemetry, type TelemetryData } from "$lib/stores/telemetry";
   import { vehicles, activeVehicleId, type VehicleSummary } from "$lib/stores/vehicles";
   import { selectedVehicleIds, toggleSelected, setSelected } from "$lib/stores/fleetSelection";
+  import { fleetEnabled } from "$lib/stores/fleetMode";
   import { switchVehicle } from "$lib/controllers/connectionController";
   import { matchActiveMode } from "$lib/helpers/mavModes";
   import { vehicleColor } from "$lib/helpers/vehicleColors";
@@ -502,6 +503,7 @@
   // the fleet camera mode frames the selection (2+) instead of the whole fleet.
   let fleetSelected: ReadonlySet<string> = new Set();
   let fleetCount = $state(0); // reactive mirror of the registry size (drives the fleet camera button)
+  let fleetOn = false; // the `--fleet` launch flag (stores/fleetMode)
   let fleetTargets: ReadonlyMap<string, { lat: number; lon: number; ts: number }> = new Map();
   const FLEET_TARGET_STALE_MS = 10_000;
   const FLEET_BASE_PX = 26;
@@ -628,7 +630,9 @@
       ft.armed = armed;
     }
     const pos = L.latLng(tv.lat, tv.lon);
-    if (!ft.pts.length || pos.distanceTo(ft.pts[ft.pts.length - 1]) >= MIN_TRAIL_DIST) {
+    // The track only from positions with at least a 2D fix (§5e M1 — no lines across the map while the
+    // GPS acquires); the caller already skipped invalid coordinates.
+    if (tv.fixType >= 1 && (!ft.pts.length || pos.distanceTo(ft.pts[ft.pts.length - 1]) >= MIN_TRAIL_DIST)) {
       ft.pts.push(pos);
       if (ft.pts.length >= 2) {
         if (ft.line) ft.line.setLatLngs(ft.pts);
@@ -672,18 +676,23 @@
     for (const id of [...fleetMissionLayers.keys()]) if (gone(id)) removeFleetMission(id, layer);
     for (const id of [...trailStash.keys()]) if (gone(id) && id !== trailOwner) dropStashedTrail(id);
   }
+  /** The fleet gate is off: every other vehicle's trail, home and plan goes (markers and target lines
+   *  are removed by `updateFleet` itself). The active vehicle's parked trails are not fleet drawings. */
+  function dropFleetDrawings(layer: L.LayerGroup) {
+    for (const ft of fleetTrails.values()) if (ft.line) layer.removeLayer(ft.line);
+    fleetTrails.clear();
+    for (const hs of fleetTrailHistory.values()) for (const l of hs) layer.removeLayer(l);
+    fleetTrailHistory.clear();
+    for (const m of fleetHomeMarkers.values()) layer.removeLayer(m);
+    fleetHomeMarkers.clear();
+    for (const g of fleetMissionLayers.values()) layer.removeLayer(g);
+    fleetMissionLayers.clear();
+    fleetMissionKeys.clear();
+  }
   /** A new session after a disconnect-all: the previous fleet's picture goes. */
   function clearFleetHistory() {
     if (!fleetLayer) return;
-    for (const ft of fleetTrails.values()) if (ft.line) fleetLayer.removeLayer(ft.line);
-    fleetTrails.clear();
-    for (const hs of fleetTrailHistory.values()) for (const l of hs) fleetLayer.removeLayer(l);
-    fleetTrailHistory.clear();
-    for (const m of fleetHomeMarkers.values()) fleetLayer.removeLayer(m);
-    fleetHomeMarkers.clear();
-    for (const g of fleetMissionLayers.values()) fleetLayer.removeLayer(g);
-    fleetMissionLayers.clear();
-    fleetMissionKeys.clear();
+    dropFleetDrawings(fleetLayer);
     for (const id of [...trailStash.keys()]) if (id !== trailOwner) dropStashedTrail(id);
   }
   function createFleetTargetIcon(color: string): L.DivIcon {
@@ -702,7 +711,10 @@
   function updateFleet() {
     if (!map) return;
     if (!fleetLayer) fleetLayer = L.layerGroup().addTo(map);
-    const ordered = [...fleetKnown.values()].sort((a, b) => a.linkId - b.linkId || a.sysid - b.sysid);
+    // GATE(fleet): without the `--fleet` launch flag no vehicle is drawn here (no other vehicle, no guided
+    // target line for the active one); the clean-up below removes what a session with the flag left.
+    if (!fleetOn) dropFleetDrawings(fleetLayer);
+    const ordered = fleetOn ? [...fleetKnown.values()].sort((a, b) => a.linkId - b.linkId || a.sysid - b.sysid) : [];
     const size = Math.round(FLEET_BASE_PX * (uiScale || 1));
     const style = get(settings).fleetMarkerStyle;
     const now = Date.now();
@@ -814,6 +826,11 @@
     }
   }
   const unsubFleet: (() => void)[] = [
+    fleetEnabled.subscribe((on) => {
+      fleetOn = on;
+      if (!on && viewMode === 'fleet') viewMode = 'free';
+      if (map) updateFleet();
+    }),
     allTelemetry.subscribe((v) => { fleetTelem = v; if (map) updateFleet(); }),
     vehicles.subscribe((v) => {
       const wasEmpty = fleetKnown.size === 0;
@@ -2733,6 +2750,8 @@
   }
   function onBoxDown(ev: MouseEvent) {
     if (!map || ev.button !== 0 || !(ev.ctrlKey || ev.metaKey)) return;
+    // Selecting vehicles is a fleet feature (the `--fleet` gate); waypoints can always be box-selected.
+    if (!fleetOn && !(get(arduEditMode) && get(autopilotSystem) !== 'inav')) return;
     const tgt = ev.target as HTMLElement | null;
     if (tgt?.closest('.leaflet-marker-icon, .leaflet-interactive, .leaflet-popup, .leaflet-control, .map-controls, button')) return;
     boxStart = map.mouseEventToContainerPoint(ev);
@@ -2845,7 +2864,7 @@
   function toggleViewMode() {
     if (viewMode === 'free') viewMode = 'follow';
     else if (viewMode === 'follow') viewMode = 'heading-follow';
-    else if (viewMode === 'heading-follow') viewMode = fleetCount >= 2 ? 'fleet' : 'free';
+    else if (viewMode === 'heading-follow') viewMode = fleetOn && fleetCount >= 2 ? 'fleet' : 'free';
     else viewMode = 'free';
   }
 

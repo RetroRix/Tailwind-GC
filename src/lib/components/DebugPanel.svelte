@@ -11,6 +11,7 @@
   import { radarAlertDebug, type AlertLevel } from "$lib/controllers/radarAlerts";
   import { gpsInject } from "$lib/stores/telemetry";
   import { settings } from "$lib/stores/settings";
+  import { fleetEnabled, setFleetMode } from "$lib/stores/fleetMode";
   import { invoke } from "@tauri-apps/api/core";
   import { hidSnapshot } from "$lib/stores/hid";
   import { currentChannels } from "$lib/stores/rcProfiles";
@@ -1096,13 +1097,20 @@
       {/if}
     </div>
   {:else if tab === 'fleet'}
-    <!-- The multi-vehicle feature gate (settings.fleetEnabled, pushed to the backend by +page.svelte). -->
+    <!-- The multi-vehicle feature gate: the `--fleet` launch flag (stores/fleetMode), switchable here for
+         the running session. -->
     <div class="perf-tab">
       <label class="perf-check">
         <input
           type="checkbox"
-          checked={$settings.fleetEnabled}
-          onchange={(e) => settings.patch({ fleetEnabled: (e.currentTarget as HTMLInputElement).checked })}
+          checked={$fleetEnabled}
+          onchange={(e) => {
+            const box = e.currentTarget as HTMLInputElement;
+            void setFleetMode(box.checked).catch((err) => {
+              console.warn('[fleet] set_fleet_enabled failed:', err);
+              box.checked = get(fleetEnabled);
+            });
+          }}
         />
         {$t('debug.fleet.enabled')}
       </label>

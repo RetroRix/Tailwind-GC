@@ -47,6 +47,7 @@
   import { allTelemetry, type TelemetryData } from "$lib/stores/telemetry";
   import { vehicles, activeVehicleId, type VehicleSummary } from "$lib/stores/vehicles";
   import { selectedVehicleIds, toggleSelected } from "$lib/stores/fleetSelection";
+  import { fleetEnabled } from "$lib/stores/fleetMode";
   import { switchVehicle } from "$lib/controllers/connectionController";
   import { guidedTargets, guidedActive, activeMode } from "$lib/controllers/vehicleControl";
   import { matchActiveMode } from "$lib/helpers/mavModes";
@@ -1824,6 +1825,7 @@
   let fleet3dActive: string | null = null;
   let fleet3dSelected: ReadonlySet<string> = new Set();
   let fleet3dCount = $state(0); // reactive registry size (the fleet camera step needs 2+)
+  let fleet3dOn = false; // the `--fleet` launch flag (stores/fleetMode)
   let fleet3dTargets: ReadonlyMap<string, { lat: number; lon: number; ts: number }> = new Map();
   let fleet3dHomes: ReadonlyMap<string, VehicleHome> = new Map();
   let fleet3dMissions: ReadonlyMap<string, ArduWaypoint[]> = new Map();
@@ -1864,6 +1866,12 @@
   }
   function updateFleet3D() {
     if (!viewer) return;
+    // GATE(fleet): without the `--fleet` launch flag nothing is drawn here (no other vehicle, no guided
+    // target line for the active one) — the single-vehicle 3D view.
+    if (!fleet3dOn) {
+      if (fleet3d.size) { clearFleet3D(); viewer.scene.requestRender(); }
+      return;
+    }
     const vw = viewer; // narrowed copy for the closures below
     const ordered = [...fleet3dKnown.values()].sort((a, b) => a.linkId - b.linkId || a.sysid - b.sysid);
     const now = Date.now();
@@ -1917,7 +1925,7 @@
         if (!rec.model) {
           rec.model = vw.entities.add({
             position,
-            orientation: uavOrientation(position, tv.yaw, tv.pitch, tv.roll) as any,
+            orientation: uavOrientation(position, tv.yaw, tv.pitch, tv.roll),
             model: { ...uavModelGraphics(cesColor, modelUriForPlatform(v.platformType as PlatformType, modelOverride)), colorBlendAmount: FLEET3D_MODEL_TINT },
             label: fleet3dLabel(v.name, cesColor, -18),
           });
@@ -1930,7 +1938,9 @@
         // Plain trail in the vehicle colour (arming = new flight)
         if (armed && !rec.trailArmed) { fleet3dRemove(rec, ['trail']); rec.trailPts = []; rec.trailLast = undefined; }
         rec.trailArmed = armed;
-        if (!rec.trailLast || haversineDistance(rec.trailLast.lat, rec.trailLast.lon, tv.lat, tv.lon) >= FLEET3D_TRAIL_MIN_M) {
+        // The track only from positions with at least a 2D fix (§5e M1 — no lines across the map while
+        // the GPS acquires).
+        if (tv.fixType >= 1 && (!rec.trailLast || haversineDistance(rec.trailLast.lat, rec.trailLast.lon, tv.lat, tv.lon) >= FLEET3D_TRAIL_MIN_M)) {
           rec.trailPts.push(position);
           rec.trailLast = { lat: tv.lat, lon: tv.lon };
           if (rec.trailPts.length >= 2) {
@@ -2040,6 +2050,11 @@
     fleet3d.clear();
   }
   const unsubFleet3d: (() => void)[] = [
+    fleetEnabled.subscribe((on) => {
+      fleet3dOn = on;
+      if (!on && cameraMode === 'fleet') cameraMode = 'free';
+      if (viewer) updateFleet3D();
+    }),
     allTelemetry.subscribe((v) => { fleet3dTelem = v; if (viewer) updateFleet3D(); }),
     vehicles.subscribe((v) => {
       const wasEmpty = fleet3dKnown.size === 0;
@@ -5063,7 +5078,7 @@
   function cycleCameraMode() {
     if (cameraMode === 'orbit') { enterFpv(); return; }
     if (cameraMode === 'fpv') { exitFpv(); return; }
-    if (cameraMode === 'free' && fleet3dCount >= 2) { enterFleetCamera(); return; }
+    if (cameraMode === 'free' && fleet3dOn && fleet3dCount >= 2) { enterFleetCamera(); return; }
     if (cameraMode === 'free' || cameraMode === 'fleet') {
       cameraMode = 'follow';
       lockRange = 200;

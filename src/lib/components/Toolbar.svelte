@@ -69,7 +69,7 @@
     onOpenRc?: () => void;
     /** Trigger a fresh bounded BLE scan window — called when the device dropdown is opened. */
     onRescanBle?: () => void;
-    /** Fleet feature gate (settings.fleetEnabled): off = no link manager / multi-connect. */
+    /** Fleet feature gate (`--fleet` launch flag, stores/fleetMode): off = no link manager / multi-connect. */
     fleetEnabled?: boolean;
   } = $props();
 

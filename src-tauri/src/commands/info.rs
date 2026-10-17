@@ -16,3 +16,10 @@ pub fn get_app_version(app: tauri::AppHandle) -> String {
 pub fn is_debug_mode() -> bool {
     crate::debug_mode::enabled()
 }
+
+/// True when the multi-vehicle (fleet) features are on — the `--fleet` / `KITE_FLEET` launch flag, or
+/// the Debug Monitor's runtime toggle. The frontend loads it once at startup (`stores/fleetMode`).
+#[tauri::command]
+pub fn is_fleet_mode() -> bool {
+    crate::fleet_mode::enabled()
+}

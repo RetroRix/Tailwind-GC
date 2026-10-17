@@ -46,14 +46,18 @@ pub fn set_active_vehicle(vehicle_id: String, state: State<'_, AppState>, app_ha
     Ok(())
 }
 
-/// Multi-vehicle feature gate (hidden runtime setting, pushed by the frontend on start and on change).
-/// Off (the default): the group coordinator never forms a group flight. A group already running when it
-/// is switched off records on to its normal end — it is never cut mid-flight.
+/// Debug Monitor runtime toggle of the multi-vehicle feature gate (normally the `--fleet` / `KITE_FLEET`
+/// launch flag, `fleet_mode`). Refused outside debug mode. Off: no secondary-vehicle discovery from now
+/// on and the group coordinator never forms a group flight; vehicles already discovered stay, and a group
+/// already running records on to its normal end — it is never cut mid-flight.
 #[tauri::command]
-pub fn set_fleet_enabled(on: bool, state: State<'_, AppState>) -> Result<(), String> {
-    let was = state.fleet_enabled.swap(on, std::sync::atomic::Ordering::Relaxed);
-    if was != on {
-        log::info!("Fleet features {}", if on { "enabled" } else { "disabled" });
+pub fn set_fleet_enabled(on: bool) -> Result<(), String> {
+    if !crate::debug_mode::enabled() {
+        return Err("The fleet features are switched by the --fleet launch flag".into());
+    }
+    if crate::fleet_mode::enabled() != on {
+        crate::fleet_mode::set(on);
+        log::warn!("Fleet features {} (Debug Monitor)", if on { "enabled" } else { "disabled" });
     }
     Ok(())
 }

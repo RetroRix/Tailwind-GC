@@ -66,7 +66,22 @@
     "btNamePlaceholder": "Eigener Name",
     "btNameSave": "Name speichern",
     "btNameCancel": "Abbrechen",
-    "panelTitle": "Verbindung"
+    "panelTitle": "Verbindung",
+    "links": "Links",
+    "linksTip": "Fahrzeuge und Links — aktives Fahrzeug wechseln oder einen weiteren Link öffnen",
+    "linksTitle": "Links",
+    "vehicles": "Fahrzeuge",
+    "noVehicles": "Noch keine Fahrzeuge",
+    "activeVehicle": "Aktiv",
+    "closeLink": "Diesen Link schließen",
+    "addLink": "Link hinzufügen",
+    "switchArmedTitle": "Fahrzeug wechseln, während es scharf ist?",
+    "switchArmedBody": "Das aktuelle Fahrzeug ist scharf. Widgets und das Steuerungspanel folgen stattdessen {name} — danach gesendete Befehle gehen an {name}.",
+    "switchArmedConfirm": "Wechseln",
+    "fleetStyle": "Andere Fahrzeuge auf der Karte",
+    "fleetStyleModel": "3D-Modell",
+    "fleetStyleSymbol": "Symbol",
+    "vehicleHome": "Home"
   },
   "cesiumKey": {
     "title": "3D-Terrain benötigt einen Cesium-Ion-Key",
@@ -155,6 +170,7 @@
   },
   "nav": {
     "uavInfo": "UAV Info",
+    "fleet": "Flotte",
     "settings": "Einstellungen",
     "logbook": "Logbuch",
     "mission": "Mission",
@@ -342,6 +358,114 @@
     "saved": "Auf FC gespeichert.",
     "saveFailed": "Speichern fehlgeschlagen: {error}"
   },
+  "fleet": {
+    "title": "Flotte",
+    "empty": "Keine Fahrzeuge verbunden.",
+    "selectLabel": "Auswahl",
+    "selectAll": "Alle",
+    "selectArmed": "Scharf",
+    "selectFlying": "Fliegend",
+    "selectNone": "Keine",
+    "selectedCount": "{n} ausgewählt",
+    "frame": "Flotte einpassen",
+    "frameHint": "Alle Fahrzeuge (oder die ausgewählten) in den Kartenausschnitt einpassen",
+    "active": "Aktiv",
+    "armed": "Scharf",
+    "disarmed": "Entschärft",
+    "link": {
+      "ok": "Link OK",
+      "stale": "Link veraltet",
+      "lost": "Link verloren"
+    },
+    "col": {
+      "select": "Für Gruppenbefehle auswählen",
+      "battery": "Akku",
+      "sats": "GPS-Satelliten",
+      "alt": "Relative Höhe",
+      "speed": "Geschwindigkeit über Grund"
+    },
+    "warn": {
+      "lowBattery": "Akku schwach",
+      "linkLost": "Link verloren",
+      "failsafe": "Failsafe"
+    },
+    "switchHint": "Eine Zeile anklicken, um dieses Fahrzeug zu aktivieren. Strg+Klick (oder die Checkbox) fügt es der Gruppenauswahl hinzu.",
+    "group": {
+      "title": "Gruppenbefehl",
+      "section": "Gruppenbefehle",
+      "hint": "2 oder mehr Fahrzeuge für Gruppenbefehle auswählen",
+      "rtlAll": "RTL ALLE",
+      "rtlAllHint": "Notfall: alle scharfen Fahrzeuge zum Startpunkt zurückholen",
+      "noArmed": "Keine scharfen Fahrzeuge",
+      "mode": "Modus…",
+      "modeSelect": "Modus wählen…",
+      "send": "Halten, um an {n} zu senden",
+      "sendNone": "Keine Fahrzeuge einbezogen",
+      "include": "Einbeziehen",
+      "altitude": "Starthöhe (m)",
+      "stagger": "Zeitversatz zwischen Fahrzeugen (s)",
+      "speed": "Geschwindigkeit (m/s)",
+      "targets": "Zielfahrzeuge",
+      "busy": "Gruppenbefehl läuft…",
+      "lastRun": "Letzter Gruppenbefehl",
+      "retryFailed": "Fehlgeschlagene wiederholen",
+      "clearSelection": "Auswahl aufheben"
+    },
+    "kind": {
+      "arm": "Armieren",
+      "disarm": "Disarmieren",
+      "takeoff": "Start",
+      "land": "Landen",
+      "rtl": "RTL",
+      "hold": "Halten",
+      "missionStart": "Mission",
+      "changeSpeed": "Geschwindigkeit",
+      "setMode": "Modus setzen",
+      "missionUpload": "Mission hochladen"
+    },
+    "mission": {
+      "wps": "{n} WP",
+      "none": "Keine Mission",
+      "fc": "FC",
+      "fcTip": "Dieses Fahrzeug hat genau diesen Plan geladen",
+      "modified": "Geändert",
+      "modifiedTip": "Seit dem letzten Upload / Speichern bearbeitet",
+      "current": "WP {n}",
+      "edit": "Mission dieses Fahrzeugs bearbeiten",
+      "uploadHint": "Sendet den aktuell im Missionseditor geöffneten Plan nacheinander an jedes ausgewählte Fahrzeug. Ein Abstand versetzt die Kopie jedes Fahrzeugs entlang der Richtung.",
+      "offset": "Abstand zwischen Fahrzeugen (m)",
+      "offsetBearing": "Richtung des Abstands (°)"
+    },
+    "intent": {
+      "hold": "Halten / Loiter",
+      "return": "Rückkehr",
+      "mission": "Mission",
+      "land": "Landen",
+      "guided": "Guided"
+    },
+    "check": {
+      "notMavlink": "Kein MAVLink-Fahrzeug",
+      "unknownFirmware": "Nicht unterstützte Firmware",
+      "linkLost": "Link verloren",
+      "linkStale": "Telemetrie veraltet",
+      "alreadyArmed": "Bereits scharf",
+      "notArmed": "Nicht scharf",
+      "noGpsFix": "Kein 3D-GPS-Fix",
+      "lowBattery": "Akku unter 20 %",
+      "prearmBlocked": "Pre-Arm-Checks schlagen fehl",
+      "modeUnsupported": "Modus auf diesem Fahrzeug nicht verfügbar",
+      "armedUpload": "Fahrzeug ist scharf — ersetzt seine Mission im Flug",
+      "cmdInvalid": "Plan enthält Befehle, die dieser Fahrzeugtyp nicht unterstützt",
+      "emptyPlan": "Der Missionseditor ist leer"
+    },
+    "status": {
+      "pending": "Ausstehend",
+      "running": "Wird gesendet…",
+      "ok": "Angenommen",
+      "fail": "Fehlgeschlagen",
+      "skipped": "Übersprungen"
+    }
+  },
   "control": {
     "title": "Fahrzeugsteuerung",
     "notConnected": "Über MAVLink (ArduPilot / PX4) verbinden, um das Fahrzeug zu steuern.",
@@ -370,6 +494,7 @@
     "flyHere": "Hierhin fliegen",
     "guidedTarget": "Guided-Ziel",
     "setWpHint": "Mission mit dem FC synchronisieren (Download/Upload), um zu aktivieren.",
+    "startNotSyncedHint": "Der Plan auf dem Bildschirm weicht von der Mission auf dem FC ab — das Fahrzeug fliegt, was auf dem FC liegt.",
     "ack": {
       "ok": "Angenommen"
     },
@@ -1233,6 +1358,11 @@
     "clearConfirmTitle": "Mission löschen",
     "clearConfirmMsg": "Alle Wegpunkte dieser Mission entfernen? Kann mit Strg+Z rückgängig gemacht werden.",
     "clearConfirmYes": "Löschen",
+    "selectAllHint": "Strg+A wählt alle Wegpunkte aus; einen ausgewählten Marker ziehen, um alle zu verschieben. Strg+Ziehen auf der Karte zieht einen Auswahlrahmen auf.",
+    "dragReorderHint": "Zeile ziehen, um die Reihenfolge zu ändern",
+    "uploadInvalidTitle": "Mit nicht unterstützten Befehlen hochladen?",
+    "uploadInvalidMsg": "{count} Befehl(e) in diesem Plan werden vom verbundenen Fahrzeugtyp nicht unterstützt und könnten abgelehnt oder ignoriert werden. Trotzdem hochladen?",
+    "uploadInvalidYes": "Hochladen",
     "addMission": "Mission hinzufügen",
     "mission": "Mission",
     "moveToMission": "In Mission verschieben",
@@ -1839,7 +1969,7 @@
     "tabFleet": "Flotte (Gate)",
     "fleet": {
       "enabled": "Multi-Fahrzeug-Funktionen aktiv",
-      "hint": "Versteckter Feature-Schalter. Aus: die Einzel-Link-Oberfläche (kein Link-Manager, kein Flotten-Tab, keine Gruppenbefehle) und keine Gruppenflüge. Wird mit den Einstellungen gespeichert.",
+      "hint": "Startparameter --fleet (oder die Umgebungsvariable KITE_FLEET), standardmäßig aus. Aus: die Einzelfahrzeug-Oberfläche (kein Link-Manager, kein Flotten-Tab, keine Gruppenbefehle, keine Flotten-Kartenebenen), kein zweites Fahrzeug auf einem gemeinsamen Link und keine Gruppenflüge. Ein Umschalten hier gilt nur für diese Sitzung.",
       "coordinator": "Gruppenflug-Koordinator",
       "backendFlag": "Backend-Schalter",
       "on": "an",

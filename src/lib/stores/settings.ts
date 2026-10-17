@@ -420,12 +420,6 @@ export interface AppSettings {
   /** GCS marker mode: off / manual (drag) / continuous (live OS location). */
   gcsMode: GcsMode;
   fleetMarkerStyle: FleetMarkerStyle;
-  /** Hidden runtime gate of the multi-vehicle feature (Dev-Docs active/MULTI_VEHICLE.md "Delivery
-   *  decision"): off = the single-link UI (no link manager, no Fleet tab) and the backend never forms a
-   *  group flight (`set_fleet_enabled`). Only switchable in the dev Debug Monitor. Temporary: until the
-   *  group store prompt ships (GROUP_FLIGHTS.md steps 7/8) `+page.svelte` pushes it to the backend in dev
-   *  builds only — a release build never forms a group flight, even with the persisted flag on. */
-  fleetEnabled: boolean;
   /** Last known physical user location (for Night-Mode auto sunset timing); persisted across sessions. */
   userLocation: { lat: number; lon: number } | null;
   /** Radar (foreign-vehicle tracking) subsystem settings. */
@@ -513,7 +507,6 @@ const defaults: AppSettings = {
   nightMode2D: 'auto',
   gcsMode: 'continuous',
   fleetMarkerStyle: 'model',
-  fleetEnabled: false,
   userLocation: null,
   radar: DEFAULT_RADAR,
   airspace: DEFAULT_AIRSPACE,

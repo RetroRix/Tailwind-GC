@@ -8,6 +8,7 @@
 
 import { writable, get } from 'svelte/store';
 import { isActive, vehicles } from '$lib/stores/vehicles';
+import { fleetEnabled } from '$lib/stores/fleetMode';
 import { orderedVehicles, vehicleColorFor } from '$lib/helpers/fleetStatus';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { settings } from './settings';
@@ -195,7 +196,8 @@ export async function startStatusText(): Promise<void> {
   unlisten = await listen<{ vehicleId?: string; severity: number; text: string }>('mavlink-statustext', (e) => {
     const active = isActive(e.payload);
     const known = get(vehicles);
-    const multi = known.size > 1;
+    // Per-vehicle lines and tags are a fleet feature (behind the `--fleet` gate).
+    const multi = get(fleetEnabled) && known.size > 1;
     // Single vehicle: the plain banner, active only (unchanged). Fleet: every vehicle's lines, each
     // tagged with its name + colour so a failing craft is identifiable at a glance.
     if (!multi && !active) return;

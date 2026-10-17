@@ -656,9 +656,11 @@ fn handler_loop(
                     // Multi-vehicle on one link: an unknown sysid becomes a vehicle on its first
                     // autopilot HEARTBEAT (same acceptance rule as the handshake); any other frame from
                     // an unknown sysid is ignored until then.
-                    // GATE(fleet): secondary-vehicle discovery on a shared link is to be gated on
-                    // `AppState::fleet_enabled` (GROUP_FLIGHTS.md step 6) — not gated yet.
+                    // GATE(fleet): without the `--fleet` launch flag every frame of another system id is
+                    // dropped, as before multi-vehicle — no secondary vehicle, recorder, marker or tagged
+                    // STATUSTEXT. Vehicles discovered while it was on stay until they time out.
                     if !vehicles.contains_key(&sysid) {
+                        if !crate::fleet_mode::enabled() { continue; }
                         let MavMessage::HEARTBEAT(ref hb) = frame.message else { continue };
                         let is_autopilot = hb.autopilot != MavAutopilot::MAV_AUTOPILOT_INVALID
                             || frame.header.component_id == 1;
@@ -1139,8 +1141,9 @@ fn dispatch_message(header: &MavHeader, message: &MavMessage, fc_variant: &str, 
                 ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_3D_FIX => 2,
                 ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_DGPS
                 | ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_RTK_FLOAT
-                | ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_RTK_FIXED => 3,
-                _ => 0,
+                | ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_RTK_FIXED
+                | ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_STATIC
+                | ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_PPP => 3,
             };
 
             // GPS_RAW_INT owns fix type + sat count — cache them so GLOBAL_POSITION_INT reuses the same

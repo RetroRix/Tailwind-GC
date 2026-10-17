@@ -108,7 +108,18 @@
     }
   }
 
+  // A `show()` while the dialog is open waits for it to settle instead of replacing its pending result
+  // (§5e M3) — the page's flight-dialog queue normally keeps them apart already.
+  const waiting: (() => void)[] = [];
+
   export function show(opts: EndFlightOptions): Promise<EndFlightResult | null> {
+    if (open || resolver) {
+      return new Promise((resolve) => { waiting.push(() => { void present(opts).then(resolve); }); });
+    }
+    return present(opts);
+  }
+
+  function present(opts: EndFlightOptions): Promise<EndFlightResult | null> {
     stats = opts.stats;
     recorded = opts.recorded;
     missionConfirm = opts.missionConfirm ?? false;
@@ -133,6 +144,7 @@
     confirmingDiscard = false;
     confirmingArchived = false;
     if (resolver) { resolver(v); resolver = null; }
+    waiting.shift()?.();
   }
   function save() {
     // Linking to a retired/damaged pack needs an explicit confirm (possible accidental serial reuse).

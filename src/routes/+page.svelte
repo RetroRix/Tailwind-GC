@@ -52,6 +52,8 @@
   import GroupCommandBar from "$lib/components/GroupCommandBar.svelte";
   import { vehicles } from "$lib/stores/vehicles";
   import { selectedVehicleIds } from "$lib/stores/fleetSelection";
+  import { fleetEnabled, loadFleetMode } from "$lib/stores/fleetMode";
+  import { enqueueFlightDialog, dropQueuedFlightDialogs } from "$lib/controllers/flightDialogQueue";
   import { navTabRequest } from "$lib/stores/navRequest";
   import RcControlPanel from "$lib/components/control/RcControlPanel.svelte";
   import VirtualSticks from "$lib/components/control/VirtualSticks.svelte";
@@ -949,11 +951,11 @@
   // Fleet tab: only once MORE THAN ONE vehicle is connected over the primary links (Marc, 2026-10-01) —
   // a single-vehicle session must look exactly as before. Protocol-agnostic on purpose: any vehicle
   // counts, so INAV fleets slot in later without touching this gate. Behind the fleet feature gate.
-  const fleetTabAvailable = $derived($settings.fleetEnabled && $vehicles.size >= 2);
+  const fleetTabAvailable = $derived($fleetEnabled && $vehicles.size >= 2);
   // With the gate off, a Fleet tab restored from the last session (or open when it was switched off) must
   // not stay rendered — the same fallback as the RC tab above.
   $effect(() => {
-    if (!$settings.fleetEnabled && activeTab === 'fleet') activeTab = 'uav-info';
+    if (!$fleetEnabled && activeTab === 'fleet') activeTab = 'uav-info';
   });
   const tabs = $derived(
     allTabs.filter(t =>
@@ -1293,15 +1295,6 @@
     const g = $gcsLocation;
     if (!g) return;
     void setRadarNode(g.lat, g.lon, gcsGroundAltM ?? 0);
-  });
-
-  // Fleet feature gate (hidden runtime setting, Debug Monitor): push on start + every change — the backend
-  // group-flight coordinator never forms a group while it is off. Dev builds only until the group store
-  // prompt ships (GROUP_FLIGHTS.md steps 7/8): a flag persisted in a dev session must not start group
-  // flights in a release build whose ended groups nothing could store yet.
-  $effect(() => {
-    const on = $settings.fleetEnabled && import.meta.env.DEV;
-    void invoke('set_fleet_enabled', { on }).catch((e) => console.warn('[fleet] set_fleet_enabled failed:', e));
   });
 
   // Telemetry API (Dev-Docs active/TELEMETRY_API.md): push the persisted config on start + every change;
@@ -2814,6 +2807,7 @@
   async function initPage() {
     await startBleDeviceListener(); // live BLE discovery → bleDevices store
     await loadInfo();
+    void loadFleetMode(); // the `--fleet` launch flag → fleet UI on/off
     // Links the backend still holds (page reload / a UI state that drifted) → show them as connected.
     void recoverBackendLinks().catch(() => {});
     try {
@@ -3137,12 +3131,15 @@
 
   /** Snapshot the flown mission from the active autopilot system (at disarm / interrupt). */
   function captureEndedMission(): void {
+    endedMission = currentMissionSnapshot();
+  }
+
+  function currentMissionSnapshot(): EndedMissionSnapshot {
     const sys = get(autopilotSystem);
     if (sys === 'inav') {
-      endedMission = { system: 'inav', inavWps: [...get(mission).waypoints], arduWps: [], fc: get(missionFlags).fc };
-    } else {
-      endedMission = { system: sys, inavWps: [], arduWps: [...get(arduMission)], fc: false };
+      return { system: 'inav', inavWps: [...get(mission).waypoints], arduWps: [], fc: get(missionFlags).fc };
     }
+    return { system: sys, inavWps: [], arduWps: [...get(arduMission)], fc: false };
   }
 
   function endedMissionHasWps(snap: EndedMissionSnapshot): boolean {
@@ -3191,18 +3188,19 @@
   /** The planner follows the active vehicle, so only its session gets the flown mission captured;
    *  another vehicle's session gets an empty snapshot (nothing is linked to it). Without an active
    *  vehicle (a connecting link's recorder reports before its vehicle is announced) there is no other
-   *  vehicle the planner could belong to, so the mission is captured as well. */
-  function captureEndedMissionFor(vehicleId: string | null): void {
+   *  vehicle the planner could belong to, so the mission is captured as well. Taken when the recording
+   *  ends (while FC-sync still reflects what the FC flew); its dialog may open later (flightDialogQueue). */
+  function endedMissionFor(vehicleId: string | null): EndedMissionSnapshot {
     const active = get(activeVehicleId);
-    if (vehicleId == null || active == null || vehicleId === active) captureEndedMission();
-    else endedMission = { system: 'inav', inavWps: [], arduWps: [], fc: false };
+    if (vehicleId == null || active == null || vehicleId === active) return currentMissionSnapshot();
+    return { system: 'inav', inavWps: [], arduWps: [], fc: false };
   }
 
-  async function onRecordingEnded(stats: EndFlightStats, vehicleId: string | null): Promise<void> {
+  async function onRecordingEnded(stats: EndFlightStats, vehicleId: string | null, flown: EndedMissionSnapshot): Promise<void> {
     awaitingResumeReconnect = false; // a recovered session that came back disarmed is now in the dialog
     recordingOwner = vehicleId;
-    // Capture the flown mission at disarm, while FC-sync still reflects what the FC flew.
-    captureEndedMissionFor(vehicleId);
+    // The flown mission captured at disarm belongs to this dialog's session from now on.
+    endedMission = flown;
     const missionConfirm = endedMissionHasWps(endedMission) && !endedMission.fc;
     try {
       const res = await endFlightDialog.show({ stats, recorded: true, missionConfirm });
@@ -3273,10 +3271,10 @@
   // Disconnect while the UAV was still armed (ADR-042): the recovery prompt (Discard / Save /
   // Continue on Reconnect), NOT the End-Flight dialog — the flight may not be over (port change,
   // switch to telemetry). The session is already stashed as pending in the backend.
-  async function onRecordingInterrupted(info: { temp_path: string; craft_name: string; start_time: string; duration_sec: number; sample_count: number }, vehicleId: string | null): Promise<void> {
+  async function onRecordingInterrupted(info: { temp_path: string; craft_name: string; start_time: string; duration_sec: number; sample_count: number }, vehicleId: string | null, flown: EndedMissionSnapshot): Promise<void> {
     recordingOwner = vehicleId;
-    // Capture the flown mission (FC-sync) for a later commit.
-    captureEndedMissionFor(vehicleId);
+    // The flown mission (FC-sync) captured at the interrupt, for a later commit.
+    endedMission = flown;
     awaitingResumeReconnect = false;
     try {
       const choice = await recoveryPrompt.show(info, { reason: 'lost' });
@@ -3412,14 +3410,18 @@
       'flight-recording-ended',
       (event) => {
         const p = event.payload;
-        void onRecordingEnded({
+        const vid = p.vehicleId ?? null;
+        const stats: EndFlightStats = {
           durationSec: p.duration_sec,
           maxAltM: p.max_alt_m,
           maxSpeedMs: p.max_speed_ms,
           maxDistM: p.max_distance_m,
           totalDistM: p.total_distance_m,
           batteryUsedMah: p.battery_used_mah,
-        }, p.vehicleId ?? null);
+        };
+        // Captured now (at the disarm); the dialog opens once the one before it has settled (§5e M3).
+        const flown = endedMissionFor(vid);
+        enqueueFlightDialog(vid, () => onRecordingEnded(stats, vid, flown));
       },
     );
     // Grace-lapsed re-arm auto-committed the previous flight: close the (now stale) summary and link
@@ -3427,8 +3429,10 @@
     // Secondary vehicles' flights commit by themselves (no End-Flight dialog) — just refresh the list.
     void listen<{ flight_id: number }>('flight-recording-autocommitted', () => { void loadLogbook(); });
     void listen<{ flight_id: number; vehicleId?: string }>('flight-recording-committed', async (event) => {
+      // Its End-Flight summary still waiting in the queue is stale — and then the open one is not its.
+      const waited = dropQueuedFlightDialogs(event.payload.vehicleId) > 0;
       // Another vehicle's grace-lapsed re-arm: its flight is in, but this dialog/snapshot is not its.
-      if (!isRecordingOwner(event.payload.vehicleId)) { void loadLogbook(); return; }
+      if (waited || !isRecordingOwner(event.payload.vehicleId)) { void loadLogbook(); return; }
       const snap = endedMission; // snapshot before any await
       endFlightDialog?.close();
       if (endedMissionHasWps(snap) && snap.fc) {
@@ -3439,6 +3443,8 @@
     // Re-arm within grace (or a recovered session resumed on reconnect) continues the same flight —
     // drop the stale summary dialog and exit the awaiting-reconnect state.
     void listen<{ vehicleId?: string }>('flight-recording-resumed', (event) => {
+      // Its End-Flight summary still waiting in the queue is stale — and then the open one is not its.
+      if (dropQueuedFlightDialogs(event.payload?.vehicleId) > 0) return;
       if (!isRecordingOwner(event.payload?.vehicleId)) return; // e.g. a secondary re-arming within grace
       awaitingResumeReconnect = false;
       endFlightDialog?.close();
@@ -3446,7 +3452,12 @@
     // Connection lost while recording (device gone, e.g. USB unplugged) → recovery prompt.
     void listen<{ temp_path: string; craft_name: string; start_time: string; duration_sec: number; sample_count: number; vehicleId?: string }>(
       'flight-recording-interrupted',
-      (event) => { lostWhileHidden = false; void onRecordingInterrupted(event.payload, event.payload.vehicleId ?? null); },
+      (event) => {
+        lostWhileHidden = false;
+        const vid = event.payload.vehicleId ?? null;
+        const flown = endedMissionFor(vid); // captured now, the prompt may open later (§5e M3)
+        enqueueFlightDialog(vid, () => onRecordingInterrupted(event.payload, vid, flown));
+      },
     );
     // The device vanished (fatal transport error) — the backend tore the scheduler down. Clean up the
     // connection state so the UI shows disconnected and the user can simply reconnect.
@@ -3654,7 +3665,7 @@
     <StatusTextToasts />
     <!-- Multi-vehicle group commands, bottom-centre (renders nothing with fewer than 2 MAVLink vehicles;
          behind the fleet feature gate). -->
-    {#if $settings.fleetEnabled}
+    {#if $fleetEnabled}
       <GroupCommandBar />
     {/if}
   </div>
@@ -3813,7 +3824,7 @@
     onOpenRaw={() => (rawTelemetryOpen = true)}
     onOpenRc={() => selectTab('rc-control')}
     onRescanBle={bleScanWindow}
-    fleetEnabled={$settings.fleetEnabled}
+    fleetEnabled={$fleetEnabled}
   />
     <RelayPanel open={relayPanelOpen} />
   </div>

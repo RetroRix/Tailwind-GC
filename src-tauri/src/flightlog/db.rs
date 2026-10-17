@@ -1195,6 +1195,16 @@ pub fn update_session_meta_platform_type(conn: &Connection, platform_type: u8) -
     Ok(())
 }
 
+/// Set the home / stats reference of an open temp session (the first 3D-fix position after its arm,
+/// GROUP_FLIGHTS.md §5e M1) — so a crash-recovered session keeps it.
+pub fn update_session_meta_start(conn: &Connection, start_lat: f64, start_lon: f64) -> SqlResult<()> {
+    conn.execute(
+        "UPDATE session_meta SET start_lat = ?1, start_lon = ?2 WHERE id = 1",
+        params![start_lat, start_lon],
+    )?;
+    Ok(())
+}
+
 /// Replace the FC identity of an open temp session — the MSP-over-MAVLink probe upgrades the MAVLink
 /// heartbeat identity to the INAV one right after connect (see `FlightRecorder::set_fc_info`).
 pub fn update_session_meta_identity(
@@ -1350,13 +1360,16 @@ pub struct StatsSample {
     pub alt_m: Option<f64>,
     pub speed_ms: Option<f64>,
     pub mah_drawn: Option<u32>,
+    /// Unified GPS fix scale (`scheduler::telemetry::FIX_*`); positions below a 3D fix count for no
+    /// distance (GROUP_FLIGHTS.md §5e M1).
+    pub fix_type: Option<u8>,
 }
 
 /// A temp session's telemetry reduced to the statistics columns, in time order — the narrow read for
 /// recomputing a flight's stats (a full `read_flight_track` decodes every column of every row).
 pub fn read_stats_samples(conn: &Connection) -> SqlResult<Vec<StatsSample>> {
     let mut stmt = conn.prepare(
-        "SELECT timestamp_ms, lat, lon, baro_alt_m, alt_m, speed_ms, mah_drawn
+        "SELECT timestamp_ms, lat, lon, baro_alt_m, alt_m, speed_ms, mah_drawn, fix_type
          FROM telemetry_records WHERE flight_id = 0 ORDER BY timestamp_ms ASC",
     )?;
     let rows = stmt.query_map([], |row| {
@@ -1368,6 +1381,7 @@ pub fn read_stats_samples(conn: &Connection) -> SqlResult<Vec<StatsSample>> {
             alt_m: row.get(4)?,
             speed_ms: row.get(5)?,
             mah_drawn: row.get(6)?,
+            fix_type: row.get(7)?,
         })
     })?;
     rows.collect()

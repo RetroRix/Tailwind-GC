@@ -8,7 +8,7 @@
 //! disarm, first status and teardown from the recorders themselves — never a MAVLink or MSP detail.
 //!
 //! Rules (Marc, GROUP_FLIGHTS.md §1, §5, §5b): with the fleet feature enabled
-//! (`AppState::fleet_enabled`) and at least two recorders registered, the first arm WITH a 3D fix
+//! (the `--fleet` launch flag, `crate::fleet_mode`) and at least two recorders registered, the first arm WITH a 3D fix
 //! starts a group. From then on every registered recorder records (member mode; an unarmed session
 //! where none runs), the group starts at the earliest arm among the recordings already running, and it
 //! ends when the last armed member has disarmed and nothing re-armed within `GROUP_END_GRACE` — or,
@@ -147,7 +147,10 @@ pub struct GroupMemberSummary {
     pub armed_sec: i64,
     pub max_alt_m: f64,
     pub max_speed_ms: f64,
+    /// `maxDistM` / `totalDistM` — the End-Flight summary's names (GROUP_FLIGHTS.md §3.4).
+    #[serde(rename = "maxDistM")]
     pub max_distance_m: f64,
+    #[serde(rename = "totalDistM")]
     pub total_distance_m: f64,
     pub battery_used_mah: Option<u32>,
     #[serde(skip)]
@@ -448,7 +451,7 @@ pub struct GroupCoordinator {
     wake: Condvar,
     slots: SessionSlotsHandle,
     clock: Arc<dyn Clock>,
-    /// The fleet feature flag (`AppState::fleet_enabled`): off → never a group.
+    /// The fleet feature flag (`crate::fleet_mode::handle()`; tests pass their own): off → never a group.
     enabled: Arc<AtomicBool>,
     sink: OnceLock<Box<dyn GroupEventSink>>,
 }
@@ -1456,8 +1459,9 @@ mod tests {
         assert_eq!(members[0].temp_path, a_path);
     }
 
-    /// (c) The initiator needs a 3D fix: an arm without one forms no group (A records a single flight);
-    /// a later arm with a fix starts it — at A's earlier arm.
+    /// (c) The initiator needs a 3D fix: an arm without one forms no group, and (§5e, Marc 2026-10-02)
+    /// records nothing; a later arm with a fix starts the group — at that arm, A had no recording — and A
+    /// joins it on its next status.
     #[test]
     fn initiator_without_3d_fix_forms_no_group_until_an_arm_with_one() {
         let rig = Rig::new("nofix", true);
@@ -1469,12 +1473,38 @@ mod tests {
         b.status(false);
         a.status(true);
         assert!(rig.running().is_none());
-        assert!(a.path().is_some(), "A still records its single flight");
+        assert!(a.path().is_none(), "no fix → A records nothing");
+        assert!(a.emitted().is_empty());
         rig.advance_ms(10_000);
         b.status(true);
         let id = rig.running().expect("group on the arm with a fix");
-        assert_eq!(id, "ba28bab88e8664d0"); // start = A's arm at base, position = B's
+        let b_arm = DateTime::<Utc>::from_timestamp_millis(rig.base_ms() + 10_000).unwrap();
+        assert_eq!(id, group_id_for(b_arm, 48.2, 11.6)); // start = B's arm, position = B's
+        assert_eq!(rig.kgrp_start_ms(&id), rig.base_ms() + 10_000);
         a.status(true);
+        assert_eq!(a.group().as_deref(), Some(id.as_str()));
+        assert!(a.path().is_some(), "a member records regardless of fix");
+    }
+
+    /// §5e: an arm without a fix records nothing; the fix arriving while still armed starts the
+    /// recording then — and that arm, now with a fix, may start the group (A is the initiator).
+    #[test]
+    fn a_fix_while_armed_starts_the_recording_and_the_group() {
+        let rig = Rig::new("fix-later", true);
+        let a = rig.recorder("L1:S1", "A");
+        let b = rig.recorder("L2:S1", "B");
+        b.gps(2, 48.2, 11.6);
+        a.status(false);
+        b.status(false);
+        a.status(true); // armed, no GPS at all
+        assert!(a.path().is_none() && rig.running().is_none());
+        rig.advance_ms(4000);
+        a.gps(2, 48.1, 11.5);
+        assert!(a.path().is_some(), "the fix starts the recording");
+        assert_eq!(a.emitted(), ["flight-recording-started"]);
+        let id = rig.running().expect("A's arm, now with a fix, starts the group");
+        let start = DateTime::<Utc>::from_timestamp_millis(rig.base_ms() + 4000).unwrap();
+        assert_eq!(id, group_id_for(start, 48.1, 11.5));
         assert_eq!(a.group().as_deref(), Some(id.as_str()));
     }
 
