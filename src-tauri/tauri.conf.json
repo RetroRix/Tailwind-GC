@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Kite Ground Control",
+  "productName": "Tailwind Ground Control",
   "version": "../package.json",
-  "identifier": "com.kitegc.app",
+  "identifier": "com.tailwindgc.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Kite Ground Control",
+        "title": "Tailwind Ground Control",
         "width": 1280,
         "height": 800,
         "dragDropEnabled": true,
@@ -28,7 +28,9 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDkyRTI4OTQ0Rjg5NUI0QTUKUldTbHRKWDRSSW5pa2g0SmVXOUZPeFdTYnh3Vkl2UjBjZU1GbGZnVjJPS3prRkZ3RUVaajIzeEUK",
-      "endpoints": ["https://github.com/b14ckyy/Kite-GC/releases/latest/download/latest.json"],
+      "endpoints": [
+        "https://github.com/b14ckyy/Kite-GC/releases/latest/download/latest.json"
+      ],
       "windows": {
         "installMode": "passive"
       }
@@ -36,7 +38,12 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "deb", "appimage", "rpm"],
+    "targets": [
+      "nsis",
+      "deb",
+      "appimage",
+      "rpm"
+    ],
     "linux": {
       "deb": {
         "depends": [
@@ -47,7 +54,9 @@
           "gstreamer1.0-nice",
           "gstreamer1.0-libav"
         ],
-        "recommends": ["gstreamer1.0-tools"]
+        "recommends": [
+          "gstreamer1.0-tools"
+        ]
       },
       "rpm": {
         "recommends": [

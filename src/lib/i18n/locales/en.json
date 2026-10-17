@@ -1,6 +1,6 @@
 {
   "app": {
-    "brand": "KiteGC",
+    "brand": "TailwindGC",
     "version": "v{version}"
   },
   "window": {
@@ -395,7 +395,7 @@
   },
   "update": {
     "title": "Update available",
-    "body": "A new version of Kite Ground Control is available.",
+    "body": "A new version of Tailwind Ground Control is available.",
     "latest": "Latest:",
     "current": "You have:",
     "prerelease": "pre-release",
@@ -409,7 +409,7 @@
     "downloading": "Downloading… {pct}%",
     "installing": "Installing…",
     "failed": "Update failed: {error}",
-    "portableNote": "Portable build: the executable is replaced in place and Kite restarts."
+    "portableNote": "Portable build: the executable is replaced in place and Tailwind restarts."
   },
   "airspace": {
     "title": "Airspace Manager",
@@ -610,8 +610,8 @@
     "alertCpaLookAhead": "CPA look-ahead",
     "ffModule": "ESP32 module (serial)",
     "ffNodeName": "Node name",
-    "ffNodeNamePlaceholder": "KITE-GCS",
-    "ffHint": "Kite emulates an INAV FC at your GCS location so the module shares it and relays peers.",
+    "ffNodeNamePlaceholder": "TAILWIND-GCS",
+    "ffHint": "Tailwind emulates an INAV FC at your GCS location so the module shares it and relays peers.",
     "linkQuality": "Link quality (0–4)",
     "acType": {
       "light": "Light aircraft",
@@ -659,7 +659,7 @@
     "rtspUrl": "RTSP URL",
     "rtspTransportHint": "Transport: UDP (lowest latency, e.g. UAV-Link), TCP, or Auto (try both)",
     "nativeClient": "Native RTSP client (experimental)",
-    "nativeClientHint": "Kite's own built-in RTSP client — needs no MediaMTX and no ffmpeg. MJPEG, H.264 and HEVC sources (hardware H.264/HEVC decode on Windows, Android and Linux); connects via UDP first with automatic TCP fallback.",
+    "nativeClientHint": "Tailwind's own built-in RTSP client — needs no MediaMTX and no ffmpeg. MJPEG, H.264 and HEVC sources (hardware H.264/HEVC decode on Windows, Android and Linux); connects via UDP first with automatic TCP fallback.",
     "dockShow": "Show video",
     "dockHide": "Hide video",
     "dockMapShow": "Show map",
@@ -867,9 +867,9 @@
     "directionLines": "Direction indicators",
     "directionLinesHint": "Heading, course-over-ground and predicted-turn lines at the aircraft on the map",
     "mavlinkFullTelemetry": "Full MAVLink Telemetry",
-    "mavlinkFullTelemetryHint": "MAVLink only: stream everything the FC sends at its own configured rates (ignores the Attitude/GPS rate settings). For high-bandwidth links and capturing all data in the .tlog. Default off — Kite requests a reduced rate set that fits slow RC links.",
+    "mavlinkFullTelemetryHint": "MAVLink only: stream everything the FC sends at its own configured rates (ignores the Attitude/GPS rate settings). For high-bandwidth links and capturing all data in the .tlog. Default off — Tailwind requests a reduced rate set that fits slow RC links.",
     "telemetryApi": "Telemetry API",
-    "telemetryApiHint": "Serve Kite's live telemetry to other programs as JSON — read-only. TCP stream on port 27300, HTTP snapshot on port 27301, UDP subscribers on port 27300. Runs in the background, also on the phone. See the Telemetry API reference in the docs.",
+    "telemetryApiHint": "Serve Tailwind's live telemetry to other programs as JSON — read-only. TCP stream on port 27300, HTTP snapshot on port 27301, UDP subscribers on port 27300. Runs in the background, also on the phone. See the Telemetry API reference in the docs.",
     "telemetryApiTcp": "TCP stream (port 27300)",
     "telemetryApiHttp": "HTTP snapshot (port 27301)",
     "telemetryApiUdp": "UDP subscribers (port 27300)",
@@ -955,9 +955,9 @@
   "logbook": {
     "title": "Flight Logbook",
     "disabled": "Flight logging is disabled. Enable it in Settings and reconnect.",
-    "dbNewer": "This flight database comes from a newer Kite version. The logbook stays disabled until a matching or newer Kite is installed — the database is not modified.",
+    "dbNewer": "This flight database comes from a newer Tailwind version. The logbook stays disabled until a matching or newer Tailwind is installed — the database is not modified.",
     "dbNewerTitle": "Flight database from a newer version",
-    "dbNewerPopup": "This flight database was created by a newer Kite version and cannot be used with this build. The database is NOT modified.\n\nRestore a backup of the old database (or point the database path at a compatible copy) — otherwise the logbook is unavailable. Alternatively, install the newer Kite version again.",
+    "dbNewerPopup": "This flight database was created by a newer Tailwind version and cannot be used with this build. The database is NOT modified.\n\nRestore a backup of the old database (or point the database path at a compatible copy) — otherwise the logbook is unavailable. Alternatively, install the newer Tailwind version again.",
     "sortMode": "Sort Mode",
     "sortAircraftLocationDate": "Aircraft -> Location -> Date",
     "sortLocationDateAircraft": "Location -> Date -> Aircraft",
@@ -1088,7 +1088,7 @@
     "decoderMissingMsg": "INAV Blackbox logs need the external 'blackbox_decode' tool, which isn't installed. Download it automatically from the official iNavFlight releases?",
     "decoderDownload": "Download",
     "decoderDownloadFailed": "Could not download blackbox_decode: {error}",
-    "kflightFileFilter": "KiteGC Flight Files",
+    "kflightFileFilter": "TailwindGC Flight Files",
     "exportTitle": "Export Complete",
     "exportSuccess": "{count} flight(s) exported successfully.",
     "importKflightTitle": "Import Complete",
@@ -1850,7 +1850,7 @@
     "vidNatPresented": "Presented",
     "vidNatCodec": "Codec",
     "vidNatDroppedHidden": "Dropped (off-screen)",
-    "vidNatHint": "Kite's own RTSP client. Frames in counts what the depacketizer delivers (H.264/HEVC access units can arrive split — Presented is the true picture rate); Dropped counts frames discarded whole after packet loss. RTP recv/Lost/Reordered/Late come straight from the receive loop: Lost never arrived, Reordered were repaired by the 16-packet window, Late arrived too late to use. On the hardware-decode path, Presented is what the D3D layer actually put on screen.",
+    "vidNatHint": "Tailwind's own RTSP client. Frames in counts what the depacketizer delivers (H.264/HEVC access units can arrive split — Presented is the true picture rate); Dropped counts frames discarded whole after packet loss. RTP recv/Lost/Reordered/Late come straight from the receive loop: Lost never arrived, Reordered were repaired by the 16-packet window, Late arrived too late to use. On the hardware-decode path, Presented is what the D3D layer actually put on screen.",
     "perf": {
       "fps": "FPS",
       "fpsOverlay": "Cesium FPS overlay",

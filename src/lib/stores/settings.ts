@@ -305,7 +305,9 @@ export interface UpdateCheckSettings {
 }
 
 export const DEFAULT_UPDATE_CHECK: UpdateCheckSettings = {
-  mode: 'release',
+  // Tailwind rebrand: default OFF — the upstream check points at the original
+  // Kite-GC repo; Tailwind must not update back into stock Kite.
+  mode: 'disabled',
   skippedVersion: null,
 };
 
