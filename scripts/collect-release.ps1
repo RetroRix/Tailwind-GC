@@ -2,8 +2,8 @@
 # Kite Ground Control — collect + rename build outputs (Windows)
 # Renames Tauri's outputs to a unified scheme and drops them in <repo>/release/:
 #
-#     KiteGC_Windows_x64_<Version>_<Type>.<ext>
-#     KiteGC_Android_<abi>_<Version>_installer.apk      (when an Android release build exists)
+#     TailwindGC_Windows_x64_<Version>_<Type>.<ext>
+#     TailwindGC_Android_<abi>_<Version>_installer.apk      (when an Android release build exists)
 #
 #   Type = installer  (NSIS -setup.exe; the Android .apk)
 #        | portable   (kite-gc.exe, zipped with an empty `.portable` marker so the download keeps its
@@ -16,7 +16,7 @@
 # `-AndroidOnly` collects the APKs alone (implies -Keep). `just build-android` uses it: an Android
 # build leaves the DESKTOP outputs of an earlier build untouched in target/release, and collecting
 # them would republish a stale binary under the current version number — a 1.0.0-rc2 kite-gc.exe
-# came out as KiteGC_Windows_x64_1.1.0-dev_portable.zip (found 2026-09-04).
+# came out as TailwindGC_Windows_x64_1.1.0-dev_portable.zip (found 2026-09-04).
 # ============================================================
 param([switch]$Keep, [switch]$AndroidOnly)
 if ($AndroidOnly) { $Keep = $true }
@@ -29,7 +29,7 @@ $rel = Join-Path $target 'release'
 $bundle = Join-Path $rel 'bundle'
 $out = Join-Path $root 'release'
 
-$app = 'KiteGC'; $os = 'Windows'; $arch = 'x64'
+$app = 'TailwindGC'; $os = 'Windows'; $arch = 'x64'
 function Get-Name($type, $ext) { "${app}_${os}_${arch}_${version}_${type}.${ext}" }
 
 if (-not $Keep -and (Test-Path $out)) { Remove-Item $out -Recurse -Force }

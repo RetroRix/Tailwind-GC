@@ -41,15 +41,15 @@ fi
 
 # <platform-key> <artifact file name>. Order = the order in the manifest.
 PLATFORMS=(
-    "windows-x86_64      KiteGC_Windows_x64_${VERSION}_installer.exe"
-    "darwin-aarch64      KiteGC_macOS_universal_${VERSION}_update.tar.gz"
-    "darwin-x86_64       KiteGC_macOS_universal_${VERSION}_update.tar.gz"
-    "linux-x86_64-deb    KiteGC_Linux_x64_${VERSION}_installer.deb"
-    "linux-x86_64-rpm    KiteGC_Linux_x64_${VERSION}_installer.rpm"
-    "linux-x86_64        KiteGC_Linux_x64_${VERSION}_standalone.AppImage"
-    "linux-aarch64-deb   KiteGC_Linux_arm64_${VERSION}_installer.deb"
-    "linux-aarch64-rpm   KiteGC_Linux_arm64_${VERSION}_installer.rpm"
-    "linux-aarch64       KiteGC_Linux_arm64_${VERSION}_standalone.AppImage"
+    "windows-x86_64      TailwindGC_Windows_x64_${VERSION}_installer.exe"
+    "darwin-aarch64      TailwindGC_macOS_universal_${VERSION}_update.tar.gz"
+    "darwin-x86_64       TailwindGC_macOS_universal_${VERSION}_update.tar.gz"
+    "linux-x86_64-deb    TailwindGC_Linux_x64_${VERSION}_installer.deb"
+    "linux-x86_64-rpm    TailwindGC_Linux_x64_${VERSION}_installer.rpm"
+    "linux-x86_64        TailwindGC_Linux_x64_${VERSION}_standalone.AppImage"
+    "linux-aarch64-deb   TailwindGC_Linux_arm64_${VERSION}_installer.deb"
+    "linux-aarch64-rpm   TailwindGC_Linux_arm64_${VERSION}_installer.rpm"
+    "linux-aarch64       TailwindGC_Linux_arm64_${VERSION}_standalone.AppImage"
 )
 
 # 1. Sign what is unsigned. `tauri signer sign` writes <file>.sig beside the file and reads the key

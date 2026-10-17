@@ -3,8 +3,8 @@
 # Kite Ground Control — collect + rename build outputs (Linux + macOS)
 # Renames Tauri's outputs to a unified scheme and drops them in <repo>/release/:
 #
-#     KiteGC_<OS>_<Arch>_<Version>_<Type>.<ext>
-#     KiteGC_Android_<abi>_<Version>_installer.apk      (when an Android release build exists)
+#     TailwindGC_<OS>_<Arch>_<Version>_<Type>.<ext>
+#     TailwindGC_Android_<abi>_<Version>_installer.apk      (when an Android release build exists)
 #
 #   Type = installer   (.deb / .rpm / .dmg; the Android .apk)
 #        | standalone  (.AppImage / .app-as-zip — self-contained runnable app)
@@ -39,7 +39,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(grep '"version"' "$ROOT/package.json" | head -1 | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
 TARGET="${CARGO_TARGET_DIR:-$ROOT/src-tauri/target}"
 OUT="$ROOT/release"
-APP="KiteGC"
+APP="TailwindGC"
 
 case "$(uname -s)" in
     Darwin) OS="macOS" ;;
