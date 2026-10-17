@@ -212,7 +212,7 @@
   <div class="toolbar-left" data-tauri-drag-region>
     <img
       class="logo"
-      src={collapse >= 2 ? '/branding/kitegc-icon-white.svg' : '/branding/kitegc-wordmark-white.svg'}
+      src="/branding/tailwind-icon.png"
       alt={$t('app.brand')}
       draggable="false"
       data-tauri-drag-region

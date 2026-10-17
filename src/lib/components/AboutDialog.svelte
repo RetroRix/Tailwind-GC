@@ -29,7 +29,8 @@
       <button class="about-x" onclick={close} title={$t('about.close')} aria-label={$t('about.close')}>×</button>
 
       <div class="about-head">
-        <img class="about-logo-full" src="/branding/kitegc-logo-full-light.svg" alt={APP_NAME} />
+        <img class="about-logo-full" src="/branding/tailwind-icon.png" alt={APP_NAME} />
+        <div class="about-name">{APP_NAME}</div>
         <div class="about-tagline">{APP_TAGLINE}</div>
       </div>
 
@@ -116,7 +117,8 @@
   .about-x:hover { color: #e0e0e0; background: rgba(255, 255, 255, 0.06); }
 
   .about-head { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 16px; }
-  .about-logo-full { width: 340px; max-width: 100%; height: auto; display: block; }
+  .about-logo-full { width: 190px; max-width: 100%; height: auto; display: block; border-radius: 18px; }
+  .about-name { font-size: 22px; font-weight: 700; color: #e8e8e8; margin-top: 6px; }
   .about-tagline { font-size: 12px; color: #949494; }
 
   .about-rows { display: flex; flex-direction: column; gap: 5px; padding-bottom: 14px; border-bottom: 1px solid #272727; }
