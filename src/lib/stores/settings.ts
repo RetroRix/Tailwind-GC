@@ -446,8 +446,9 @@ const defaults: AppSettings = {
   lastBleDevice: '',
   btPortNames: {},
   map: {
-    center: [51.505, -0.09],
-    zoom: 13,
+    // Tailwind default home view: El Paso, TX (Franklin Mountains / Rio Grande in frame).
+    center: [31.7619, -106.485],
+    zoom: 11,
   },
   mapProvider: 'esri-hybrid',
   mapCacheMaxMB: 200,
