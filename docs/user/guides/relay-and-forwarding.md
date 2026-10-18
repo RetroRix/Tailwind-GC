@@ -1,7 +1,7 @@
 # Relay & forwarding
 
-The **Telemetry Relay** taps the live telemetry already flowing into Kite, **re-encodes** it into another
-wire protocol, and pushes it out a **second** link. That turns Kite into a telemetry transcoder — feed an
+The **Telemetry Relay** taps the live telemetry already flowing into Tailwind, **re-encodes** it into another
+wire protocol, and pushes it out a **second** link. That turns Tailwind into a telemetry transcoder — feed an
 antenna tracker, a phone app, a second ground station, or convert one protocol into another — all from the
 data your aircraft is already sending.
 
@@ -12,8 +12,8 @@ the supported protocols.
 !!! note "What the relay is — and isn't"
     - **Live only** — it forwards the active connection's telemetry; it does **not** forward log replay.
     - **One-way** — it only pushes telemetry *out*. It never sends commands back to the aircraft.
-    - **A transcoder, not a pass-through** — everything is decoded to Kite's internal model and
-      re-encoded, so it can convert between protocols. Fields Kite doesn't model are dropped.
+    - **A transcoder, not a pass-through** — everything is decoded to Tailwind's internal model and
+      re-encoded, so it can convert between protocols. Fields Tailwind doesn't model are dropped.
 
 ## Opening the panel
 
@@ -37,10 +37,10 @@ Each relay is configured like a mini connection bar:
 2. **Protocol** — what to encode the telemetry *as*: **LTM**, **MAVLink**, **CRSF** or **SmartPort**.
 3. **Output** — where to send it:
    - **Serial** — a second COM port + baud (also covers Bluetooth-SPP adapters like an HC-05).
-   - **BLE** — a Bluetooth Low Energy device Kite writes to.
-   - **TCP** — Kite acts as a **server**: it opens a **listen port** and the consumer (app / GCS)
-     connects *to Kite's IP*.
-   - **UDP** — Kite **sends** to a **host / IP + port** you enter (can be a broadcast address).
+   - **BLE** — a Bluetooth Low Energy device Tailwind writes to.
+   - **TCP** — Tailwind acts as a **server**: it opens a **listen port** and the consumer (app / GCS)
+     connects *to Tailwind's IP*.
+   - **UDP** — Tailwind **sends** to a **host / IP + port** you enter (can be a broadcast address).
 4. **Status dot** — **idle** (not connected), **active** (green, with the output byte rate), **waiting**
    (amber — e.g. a TCP relay with no client connected yet), **device missing** (the output port/device
    isn't available), or **error**.
@@ -74,12 +74,12 @@ Stream to QGroundControl or Mission Planner on another device on the same networ
 3. Point the app at *UDP in* on that port. The aircraft now shows up there — even if your aircraft talks
    MSP, because the relay re-encodes it as MAVLink.
 
-### Let an app connect to Kite (over TCP)
+### Let an app connect to Tailwind (over TCP)
 
 When you'd rather have the consumer dial in:
 
 1. **+ Relay** → your protocol → output **TCP** → set a **listen port**.
-2. In the app, connect to **Kite's IP : that port** (Kite is the server). Good for an LTM tool like
+2. In the app, connect to **Tailwind's IP : that port** (Tailwind is the server). Good for an LTM tool like
    *mwptools* or a MAVLink GCS that prefers TCP.
 
 ### Convert between protocols
@@ -90,8 +90,8 @@ link in → **MAVLink** out for a MAVLink ground station.
 
 ## Good to know
 
-- **TCP**: Kite is the server (consumer connects to Kite). **UDP**: Kite is the sender (you give it the
-  target IP/port). Listen ports must be unique — Kite bumps a duplicate to the next free port for you.
+- **TCP**: Tailwind is the server (consumer connects to Tailwind). **UDP**: Tailwind is the sender (you give it the
+  target IP/port). Listen ports must be unique — Tailwind bumps a duplicate to the next free port for you.
 - The relay emits a complete frame set paced to the incoming telemetry rate (typically a few Hz), so the
   output cadence follows your link.
 - **Flight-mode / vehicle-type naming** in the MAVLink, CRSF and SmartPort outputs is best-effort — the

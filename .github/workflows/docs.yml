@@ -1,52 +1,25 @@
-# Build + deploy the VERSIONED user documentation site (MkDocs Material + mike) to GitHub Pages.
+# Tailwind Ground Control — user documentation site (MkDocs Material).
 #
-# mike (https://github.com/jimporter/mike) commits every deployed version as a subfolder of the
-# gh-pages branch and maintains a versions.json there; the Material theme renders the header
-# version dropdown from it. Pages must serve that branch:
-#   Repo → Settings → Pages → Build and deployment → Source = "Deploy from a branch: gh-pages /(root)".
+# Single-version model (Tailwind simplification of the upstream mike setup): the docs on
+# master ARE the current docs. A push to master that touches the docs builds the site and
+# publishes it to the gh-pages branch root, which GitHub Pages serves at
+# https://retrorix.github.io/Tailwind-GC/
 #
-# Versioning model — the docs follow the release lines, ONE docs version per MINOR release
-# (x.y.1 patches never change features), see docs/user/for-developers/contributing.md:
-#   release/<x.y>.x → the source of THAT minor's docs. A push there redeploys the minor read from
-#                     package.json. The "latest" alias moves onto it only when the minor is the
-#                     highest RELEASED one (a final v<x.y.z> tag exists for it), so neither a docs
-#                     fix on an older line nor a line still in its RC phase steals "latest"; a
-#                     pre-release version is labelled "(pre-release)" in the dropdown meanwhile.
-#   tag push v*     → redeploys the tagged minor and moves "latest" once the tag is final — the
-#                     release commit and its tag may arrive in either order.
-#   development     → "Dev", the next feature release. master deploys nothing: it is a smoke-tested
-#                     snapshot of development from which the release branches are cut.
-#   changelog       → ONE page for every released line: the newest release branch renders it,
-#                     every older line's changelog page redirects there (docs/hooks/
-#                     changelog_redirect.py, fed by KITE_DOCS_VERSION / KITE_DOCS_CHANGELOG_HOME).
-#                     "Dev" keeps its own copy, in-development box included.
-#   docs-only fix   → lands on the release branch of the version it describes and reaches the newer
-#                     lines with the merge-up, like code. No cherry-picks, no manual dispatch.
-#   workflow_dispatch → re-runs the deploy for the chosen ref (a release branch, a tag or
-#                     development); on any other ref it only validates the build.
-#
-# Local preview needs no CI: `mkdocs serve` (single version, see docs/requirements.txt) or
-# `mike serve` (the full versioned site from a local gh-pages branch).
+# Local preview: pip install -r docs/requirements.txt, then `mkdocs serve`.
 
 name: docs
 
 on:
   push:
-    branches: [development, 'release/**']
-    tags: ['v*']
+    branches: [master]
     paths:
-      - docs/user/**
-      - docs/hooks/**
-      - docs/404.html
-      - mkdocs.yml
-      - overrides/**
-      - docs/requirements.txt
-      - .github/workflows/docs.yml
-      - package.json # the release commit must (re)deploy even when it changes no docs file
-
+      - 'docs/user/**'
+      - 'mkdocs.yml'
+      - 'overrides/**'
+      - 'docs/requirements.txt'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
-# mike pushes the built site to the gh-pages branch.
 permissions:
   contents: write
 
@@ -60,66 +33,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0 # mike appends commits to the existing gh-pages history; tags + branches for the version logic
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r docs/requirements.txt
-      # Validate before any deploy — mike's own builds are not strict.
       - run: mkdocs build --strict
-      - name: Resolve the versions
-        id: ver
-        run: |
-          v="$(node -p "require('./package.json').version")"
-          minor="$(echo "$v" | cut -d. -f1,2)"
-          case "$v" in *-*) pre=true ;; *) pre=false ;; esac
-          # Highest FINAL release tag → the minor that owns the "latest" alias.
-          released="$(git tag -l 'v[0-9]*' | grep -v -- '-' | sort -V | tail -1 | sed 's/^v//' | cut -d. -f1,2 || true)"
-          # Newest release line (highest release/* branch) → renders the shared changelog.
-          newest="$(git branch -r --list 'origin/release/*' | sed 's#.*origin/release/##; s/\.x$//' | sort -V | tail -1 || true)"
-          latest=false; [ -n "$released" ] && [ "$minor" = "$released" ] && latest=true
-          {
-            echo "minor=$minor"
-            echo "prerelease=$pre"
-            echo "latest=$latest"
-            echo "newest=$newest"
-          } >> "$GITHUB_OUTPUT"
-          echo "version $v → minor $minor (pre-release: $pre), released latest: ${released:-none}, newest line: ${newest:-none}"
-      - name: Author the gh-pages commits as the Actions bot
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      - name: Deploy the development docs (Dev = development tip)
-        if: github.ref == 'refs/heads/development'
-        run: mike deploy --push --title Dev dev
-      - name: Deploy the release docs (the minor of package.json, plus the latest alias when it is the highest released one)
-        if: startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/tags/v')
-        env:
-          # The changelog hook: this version renders the shared changelog only if it is the newest line.
-          KITE_DOCS_VERSION: ${{ steps.ver.outputs.minor }}
-          KITE_DOCS_CHANGELOG_HOME: ${{ steps.ver.outputs.newest }}
-        run: |
-          title="${{ steps.ver.outputs.minor }}"
-          [ "${{ steps.ver.outputs.prerelease }}" = "true" ] && title="$title (pre-release)"
-          if [ "${{ steps.ver.outputs.latest }}" = "true" ]; then
-            mike deploy --push --update-aliases --title "$title" "${{ steps.ver.outputs.minor }}" latest
-          else
-            mike deploy --push --title "$title" "${{ steps.ver.outputs.minor }}"
-          fi
-      - name: Point the site root at the latest release
-        if: steps.ver.outputs.latest == 'true'
-        run: mike set-default --push latest
-      # GitHub Pages serves exactly ONE 404 page for the whole site: /404.html at the gh-pages
-      # root. mike only manages version folders, so publish it in a throwaway worktree. It
-      # forwards pre-versioning deep links (old bookmarks) to the same path under latest/.
-      - name: Publish the root 404 redirect
-        run: |
-          git worktree add "$RUNNER_TEMP/ghp" gh-pages
-          cp docs/404.html "$RUNNER_TEMP/ghp/404.html"
-          cd "$RUNNER_TEMP/ghp"
-          git add 404.html
-          if ! git diff --cached --quiet; then
-            git commit -m "Publish the root 404 redirect"
-            git push origin gh-pages
-          fi
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site

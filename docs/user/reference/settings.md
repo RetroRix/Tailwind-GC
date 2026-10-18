@@ -1,7 +1,7 @@
 # Settings
 
 A reference for every option in the **Settings** tool (navigation rail). Settings are split across two
-tabs: **Interface** (how Kite looks and the units it uses) and **Data** (links, caches, logging and
+tabs: **Interface** (how Tailwind looks and the units it uses) and **Data** (links, caches, logging and
 alerts). Changes apply immediately and are remembered between sessions.
 
 ![The Settings panel](../assets/getting-started/panels/settings.png)
@@ -66,11 +66,11 @@ Altitude and Compass sit in the bottom dock and Home, RC Link and GPS in the rig
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Default Protocol** | Which protocol the connection bar starts on. **Last used** restores whatever you connected with last time, which is what Kite has always done. Pin it to **MSP**, **MAVLink** or **Telemetry** and that choice wins on every launch, whatever the last session used. Kite still remembers the last-used protocol, so switching back to **Last used** picks up where you left off. | Last used |
+| **Default Protocol** | Which protocol the connection bar starts on. **Last used** restores whatever you connected with last time, which is what Tailwind has always done. Pin it to **MSP**, **MAVLink** or **Telemetry** and that choice wins on every launch, whatever the last session used. Tailwind still remembers the last-used protocol, so switching back to **Last used** picks up where you left off. | Last used |
 
 ### Telemetry
 
-Kite polls the link at just **two** configurable rates — **Attitude** and **GPS / Position**. Everything
+Tailwind polls the link at just **two** configurable rates — **Attitude** and **GPS / Position**. Everything
 else is *derived* from those: a few fields ride along with (a fraction of) those polls, and the remaining
 data — status, battery, flight mode, RC link, … — refreshes at roughly **1 Hz**. So these two rates set
 how smooth the instruments feel; the rest is automatic.
@@ -109,19 +109,19 @@ See **[Flight logbook](../guides/logbook.md)** for how these are used.
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Log level** | How much Kite writes to its diagnostic log file — Off / Error / Warning / Debug. Raise it when reporting a problem. | Warning |
+| **Log level** | How much Tailwind writes to its diagnostic log file — Off / Error / Warning / Debug. Raise it when reporting a problem. | Warning |
 | **Open log folder** | Open the folder containing the diagnostic log in your file manager. | — |
 
 ### Updates
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Check for updates** | Whether Kite asks GitHub for a newer version when it starts — **Disabled**, **Stable releases**, **Patch releases only** (bug-fix releases of the version you run, e.g. 1.1.0 → 1.1.1, never 1.2.0), or **Include pre-releases** (betas and release candidates). | Stable releases |
+| **Check for updates** | Whether Tailwind asks GitHub for a newer version when it starts — **Disabled**, **Stable releases**, **Patch releases only** (bug-fix releases of the version you run, e.g. 1.1.0 → 1.1.1, never 1.2.0), or **Include pre-releases** (betas and release candidates). | Stable releases |
 
-Kite never downloads anything on its own. When a newer version exists you get a notice with the
+Tailwind never downloads anything on its own. When a newer version exists you get a notice with the
 version you have, the one that is available, and the release notes, plus four choices:
 
-- **Update and Restart** downloads the new version, installs it and restarts Kite. On Windows and
+- **Update and Restart** downloads the new version, installs it and restarts Tailwind. On Windows and
   Linux this runs the installer of the package you installed (a `.deb`/`.rpm` asks for your password);
   on macOS the app bundle is replaced in place. A **portable** copy replaces its own executable and
   restarts. On Android and iOS the button opens the app store instead.
@@ -149,4 +149,4 @@ See **[Missions](../guides/missions.md)**.
 ## See also
 
 - The interface map: **[Quick tour](../getting-started/quick-tour.md)**.
-- File formats Kite reads and writes: **[File formats](file-formats.md)**.
+- File formats Tailwind reads and writes: **[File formats](file-formats.md)**.

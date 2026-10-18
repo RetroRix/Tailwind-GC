@@ -59,7 +59,7 @@ When an **INAV** flight controller is connected (and disarmed):
   vehicle.
 - **Adopt FC lifetime stats** — read the FC's onboard `stats` totals (if the feature is enabled) and
   stage them as the vehicle's **lifetime baseline**; saved, they're added to the logbook flights so the
-  totals reflect the airframe's whole life, including flights from before you used Kite.
+  totals reflect the airframe's whole life, including flights from before you used Tailwind.
 
 ## Import & export
 

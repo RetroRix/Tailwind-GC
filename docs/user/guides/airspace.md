@@ -83,7 +83,7 @@ Zoomed in over an operating area: obstacles (and other close-range features) now
 airspaces.
 ///
 
-Aeronautical data is **static**, so Kite caches the surrounding region and only refetches when you move
+Aeronautical data is **static**, so Tailwind caches the surrounding region and only refetches when you move
 well outside it — no constant polling.
 
 ## The FC airspace editors (cross-reference)

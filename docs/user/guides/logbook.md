@@ -1,6 +1,6 @@
 # Flight logbook
 
-The logbook is Kite's flight history: every flight it records (or you import) is stored locally, with
+The logbook is Tailwind's flight history: every flight it records (or you import) is stored locally, with
 stats, notes, weather and links to the aircraft, batteries and mission used — and you can **replay** any
 of them on the map and instruments. It works for **INAV**, **ArduPilot** and **PX4** alike.
 
@@ -8,7 +8,7 @@ Open it from the **Logbook** tool on the navigation rail.
 
 ## Recording happens automatically
 
-While you're connected with **flight logging enabled** (Settings), Kite records telemetry in the
+While you're connected with **flight logging enabled** (Settings), Tailwind records telemetry in the
 background and splits it into flights by **arm → disarm**. When a flight ends you get a short
 **post-flight summary** where you can:
 
@@ -53,7 +53,7 @@ The logbook view: the flight list (left) and the selected flight's details (righ
 
 ## Replaying a flight
 
-**Disconnect**, then select a flight and press play: Kite replays the recorded telemetry through the
+**Disconnect**, then select a flight and press play: Tailwind replays the recorded telemetry through the
 **same instruments and map** as a live flight. The player gives you **play / pause**, a **timeline**
 scrubber and **playback speed**, and the flown **track** can be coloured by flight mode, altitude, speed
 or signal. If the flight has a linked mission, it's drawn alongside the track. 3D replay works too — see
@@ -76,7 +76,7 @@ tapping anywhere outside the Logbook panel collapses it to its info card, giving
 
 Flights are stored at 10 samples per second — plenty for the map, but an onboard log usually
 contains far more. When a flight has its **original log stored** (INAV Blackbox, ArduPilot
-Dataflash or PX4 ULog), the player offers a **HI-RES** switch: Kite re-decodes the stored log at
+Dataflash or PX4 ULog), the player offers a **HI-RES** switch: Tailwind re-decodes the stored log at
 its **full rate** into a temporary file and drives the instruments, horizon and stick overlay from
 it — updates then run at your screen's refresh rate instead of 10 Hz. Combined with the
 **slow-motion speeds** (0.25× / 0.5×) this is the way to study a manoeuvre frame by frame.
@@ -91,7 +91,7 @@ feeds the live values.
 
 You don't have to import a log to look at it. On the desktop, with **no UAV connected**, **drop one
 or more onboard logs onto the map** (INAV Blackbox `.bbl` / `.txt`, ArduPilot `.bin`, PX4 `.ulg`, or
-a `.tlog` / `.rawmsp` telemetry log) — or use the **Open** button in the Logbook toolbar — and Kite
+a `.tlog` / `.rawmsp` telemetry log) — or use the **Open** button in the Logbook toolbar — and Tailwind
 parses them into a temporary store and replays them exactly like logbook flights: same track, same
 player, HI-RES included. Files dropped later join the same list, and a flash download with several
 logs lists them all. The Logbook panel shows those flights with their details **read-only**; nothing
@@ -103,11 +103,11 @@ Liked what you saw? In the detail view, **Import** runs the normal import of jus
 duplicate check and linking included — and drops it from the temporary list, while **Dismiss**
 simply removes it. **Import Logs** in the toolbar imports every opened file at once, **Close**
 discards them all; both return you to the regular logbook, as does dismissing the last opened
-flight. The temporary store is also cleared when you restart Kite.
+flight. The temporary store is also cleared when you restart Tailwind.
 
 ## Importing logs
 
-Use **Import** to pull in logs from outside Kite (one file or a batch). Supported formats:
+Use **Import** to pull in logs from outside Tailwind (one file or a batch). Supported formats:
 
 | Format | From |
 |---|---|
@@ -116,11 +116,11 @@ Use **Import** to pull in logs from outside Kite (one file or a batch). Supporte
 | **PX4 ULog** (`.ulg`) | PX4 onboard flash / SD-card logs |
 | **MAVLink telemetry** (`.tlog`) | a MAVLink ground-station recording |
 | **MWPTools raw-MSP** (`.rawmsp`) | mwp's raw telemetry capture |
-| **Kite flight** (`.kflight`) | a flight exported from another Kite install |
+| **Tailwind flight** (`.kflight`) | a flight exported from another Tailwind install |
 
-A progress bar tracks the import. INAV Blackbox needs the **`blackbox_decode`** helper, which Kite
+A progress bar tracks the import. INAV Blackbox needs the **`blackbox_decode`** helper, which Tailwind
 fetches automatically the first time you import one. A `.bbl` pulled from the flight controller's
-flash usually holds **several flights** — one per arm / disarm cycle. Kite detects that and offers to
+flash usually holds **several flights** — one per arm / disarm cycle. Tailwind detects that and offers to
 import them all, each as its own logbook entry. Imported telemetry logs (`.tlog` / `.rawmsp`) are
 treated as telemetry recordings and **split into separate flights on the arm / disarm markers** in the
 log, the same way a live recording is.
@@ -130,7 +130,7 @@ PX4 ULog note: PX4 doesn't log a throttle *output*, so a replayed `.ulg` flight 
 
 ## Exporting
 
-- **`.kflight`** — export selected flights (multi-select supported) as Kite's portable flight file, to
+- **`.kflight`** — export selected flights (multi-select supported) as Tailwind's portable flight file, to
   move them to another install.
 - **Original log file** — re-export the onboard log stored with the flight: an INAV Blackbox
   (`.bbl` / `.txt`), ArduPilot Dataflash (`.bin`) or PX4 ULog (`.ulg`). For a flight that came out of a multi-flight
@@ -141,15 +141,15 @@ PX4 ULog note: PX4 doesn't log a throttle *output*, so a replayed `.ulg` flight 
 ## The database, updates and the automatic backup
 
 All flights live in a single SQLite database (`flights.db`, folder configurable in Settings). When a
-Kite update needs to **upgrade the database format**, Kite first writes a **full backup** next to the
+Tailwind update needs to **upgrade the database format**, Tailwind first writes a **full backup** next to the
 database file (`flights.pre-migration-backup.db`) — automatically, before anything is changed. Only
 the **latest** backup is kept (with blackbox logs the file can be several GB), and Settings shows it
 with its size and a **Delete** button once it exists. To keep a copy permanently, move the file
 somewhere else yourself.
 
-If you ever **downgrade** Kite after such an upgrade, the older version refuses to touch the newer
+If you ever **downgrade** Tailwind after such an upgrade, the older version refuses to touch the newer
 database: the logbook shows a notice (and the database stays untouched) until you either install the
-newer Kite again or restore a matching backup.
+newer Tailwind again or restore a matching backup.
 
 ## Vehicles & batteries
 

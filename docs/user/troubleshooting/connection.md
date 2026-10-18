@@ -18,7 +18,7 @@ how the connection controls work in the first place, see the **[Connecting guide
 
 - **Match the protocol to the firmware:** **MSP** for INAV, **MAVLink** for ArduPilot/PX4. Connecting
   with the wrong protocol won't handshake.
-- **Check the baud rate.** Kite presets **115200** for MSP and **57600** for MAVLink. If you changed
+- **Check the baud rate.** Tailwind presets **115200** for MSP and **57600** for MAVLink. If you changed
   the FC's port speed, set the matching rate here. A wrong baud is the most common "connects but no
   data" cause on serial links.
 
@@ -30,20 +30,20 @@ connection from a crashed app sometimes needs a replug (or, rarely, a reboot) to
 
 ## Bluetooth (SPP) won't connect
 
-Classic-Bluetooth serial (SPP) links have a couple of quirks Kite already smooths over, plus one you
+Classic-Bluetooth serial (SPP) links have a couple of quirks Tailwind already smooths over, plus one you
 may still hit:
 
 - **Pair the device in the OS first.** It then appears as a normal COM port (Windows) or `rfcomm`/`tty`
   device (Linux).
 - **Use the right port.** A paired SPP device creates *two* COM ports on Windows — outgoing and
-  incoming. Kite **hides the incoming (server) one** automatically, so just pick the port it shows.
+  incoming. Tailwind **hides the incoming (server) one** automatically, so just pick the port it shows.
 - **First open fails with a "semaphore timeout" (Windows error 121).** This is a known Bluetooth
-  behaviour: the very first open can time out while the radio brings the RFCOMM channel up. Kite
+  behaviour: the very first open can time out while the radio brings the RFCOMM channel up. Tailwind
   **retries the open automatically** (three attempts), so it usually succeeds on the second try. If it
   still fails:
     - Make sure the device is **paired and in range**, and not connected in another app.
     - Try connecting **once more** — a cold radio sometimes needs a moment.
-    - If another GCS (e.g. Mission Planner) *can* open the same port but Kite can't, grab the log (see
+    - If another GCS (e.g. Mission Planner) *can* open the same port but Tailwind can't, grab the log (see
       below) and share it — it records the exact OS error and how each Bluetooth port was classified.
 
 !!! note "BLE is different"
@@ -52,7 +52,7 @@ may still hit:
 
 ## Network (TCP/UDP) links
 
-- **Host and port** must match your endpoint. Kite's default follows the protocol and the transport
+- **Host and port** must match your endpoint. Tailwind's default follows the protocol and the transport
   (**MAVLink** UDP 14550 or TCP 5760, **MSP** TCP 5761); a simulator or router may use something else
   (e.g. a second **SITL on 5762**).
 - Make sure the bridge/router/simulator is actually **running and reachable** (firewall, same network),
@@ -61,7 +61,7 @@ may still hit:
 !!! tip "`read 0 bytes … parser errors=0` in the log"
     A MAVLink handshake timeout that reports **0 bytes read and 0 parser errors** means *nothing arrived
     at all* — it is never a baud, dialect or framing problem. Look at the source and the network, not at
-    Kite's decoding.
+    Tailwind's decoding.
 
 ### No data from an ELRS backpack (MAVLink over WiFi)
 
@@ -78,14 +78,14 @@ of them missing gives the same symptom: the handshake times out having read **0 
   your home network instead (STA mode), use the **LAN IP it was given** by your router.
 
 The backpack won't send anything until it knows where to send: its page shows **GCS IP: IP UNSET** until
-a ground station speaks to it first. Kite's initial GCS **HEARTBEAT** is what sets it, so simply pressing
-**Connect** is enough — there's nothing to configure on Kite's side.
+a ground station speaks to it first. Tailwind's initial GCS **HEARTBEAT** is what sets it, so simply pressing
+**Connect** is enough — there's nothing to configure on Tailwind's side.
 
 !!! note "Checking the backpack directly"
     Most backpack firmware exposes its state as JSON at `http://<backpack-ip>/mavlink`. A healthy,
     forwarding backpack reports `"enabled":true`, non-zero `listen`/`send` ports, a climbing
     `packets_down`, and a real address in `ip.gcs` once a GCS has connected — a quick way to tell a
-    backpack problem from a Kite problem.
+    backpack problem from a Tailwind problem.
 
 ## The link drops shortly after connecting
 
@@ -96,7 +96,7 @@ a ground station speaks to it first. Kite's initial GCS **HEARTBEAT** is what se
 
 ## Getting a diagnostic log
 
-Kite writes a plain-text log you can hand back when something won't connect.
+Tailwind writes a plain-text log you can hand back when something won't connect.
 
 1. Open **Settings → Diagnostics**.
 2. Set **Log Level** to **Debug (verbose)** to capture the full connection sequence (the Bluetooth
@@ -113,9 +113,9 @@ The log lives in your app-data folder:
 | **macOS** | `~/Library/Application Support/kite-gc/` |
 | **Portable** | `data\` (next to the executable) |
 
-Kite writes **one file per day** — `kite-gc-YYYY-MM-DD.log` — appending each session under a header block
+Tailwind writes **one file per day** — `kite-gc-YYYY-MM-DD.log` — appending each session under a header block
 and keeping the last **30 days** (older files are pruned on startup), so a failure you only notice after
-restarting Kite isn't lost. **Log File → Open Folder** takes you straight there.
+restarting Tailwind isn't lost. **Log File → Open Folder** takes you straight there.
 
 !!! tip "Sharing a log"
     The log contains port names and firmware/version strings but no personal data. Attach it to a

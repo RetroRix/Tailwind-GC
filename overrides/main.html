@@ -2,18 +2,8 @@
 
 <!-- Announcement bar. announce.dismiss (mkdocs.yml) hides it once the reader clicks the X and
      remembers that in localStorage, keyed by a hash of this text — so it stays hidden across visits
-     and versions until the text changes. Change the text = show it once more to everyone. -->
+     until the text changes. Change the text = show it once more to everyone. -->
 {% block announce %}
-  <strong>Kite Ground Control 1.0 is released.</strong> Your
-  <a href="https://github.com/b14ckyy/Kite-GC/issues">feedback &amp; bug reports</a> are very welcome.
-{% endblock %}
-
-<!-- Shown by the theme on every version whose aliases do NOT include the site default ("latest"),
-     i.e. on old releases and on "Dev". ../<base_url> climbs out of the version folder to the site
-     root, which redirects to the latest release. -->
-{% block outdated %}
-  You are not reading the documentation for the latest release.
-  <a href="{{ '../' ~ base_url }}">
-    <strong>Switch to the latest release.</strong>
-  </a>
+  <strong>Tailwind Ground Control</strong> — Go far. Get home. Your
+  <a href="https://github.com/RetroRix/Tailwind-GC/issues">feedback &amp; bug reports</a> are very welcome.
 {% endblock %}

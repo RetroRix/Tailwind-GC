@@ -1,6 +1,6 @@
 # Building from source
 
-How to set up a development environment and build Kite Ground Control yourself. The project uses
+How to set up a development environment and build Tailwind Ground Control yourself. The project uses
 **[just](https://github.com/casey/just)** as its task runner for a consistent interface across Windows,
 Linux and macOS.
 
@@ -107,7 +107,7 @@ USB serial goes through the Android USB Host API, so the driver lives in Kotlin
 | **CP210x** | Silicon Labs bridges — most SiK telemetry radios |
 
 FTDI (RFD900) and CH340 are **not** driven yet; both slot in as another `SerialDriver` in that Kotlin
-file. Android grants USB access per device and per session: plugging the cable in and picking Kite
+file. Android grants USB access per device and per session: plugging the cable in and picking Tailwind
 from the system dialog grants it up front, otherwise the first connect raises the permission prompt.
 
 Bluetooth LE follows the same shape on the platform's own GATT stack (`BleSerial.kt` with
@@ -215,7 +215,7 @@ up itself, so only the bare `cargo check` needs it. (On Windows the prebuilt dir
 | Log import (.kflight / .rawmsp / .tlog) | ✅ works | Parsed in-process. A `.kflight` brings the flight, its track and its records; the archived original log files inside it (INAV blackbox, ArduPilot dataflash) are left behind — the mobile database never stores originals. ArduPilot `.bin` and PX4 `.ulg` import are desktop-only. |
 | Blackbox import (.txt / .bbl / .bfl) | ❌ impossible | Needs the external `blackbox_decode` tool, and Android forbids executing a downloaded binary. Import on a desktop and bring flights over as `.kflight`. |
 | Video: camera / OTG capture device | ✅ works (tablets) | The WebView's own capture path (`getUserMedia`), no helper involved. Hidden on phones until the phone UI decides. |
-| Video: RTSP (MJPEG / H.264 / HEVC) | ✅ works | Runs entirely on Kite's built-in RTSP client — no engine helpers (an Android app cannot spawn them, so the desktop engines are not offered). H.264/HEVC decode in device hardware onto a native surface below the WebView; MJPEG rides the multipart path. Native capture (ffmpeg) is not offered — the OS's own capture devices arrive through the camera kind. |
+| Video: RTSP (MJPEG / H.264 / HEVC) | ✅ works | Runs entirely on Tailwind's built-in RTSP client — no engine helpers (an Android app cannot spawn them, so the desktop engines are not offered). H.264/HEVC decode in device hardware onto a native surface below the WebView; MJPEG rides the multipart path. Native capture (ffmpeg) is not offered — the OS's own capture devices arrive through the camera kind. |
 | Custom database / raw-log folder | ✅ mirror | Browse grants ONE folder via the system picker (scoped storage — no permission). The app keeps working app-private (SQLite and the raw writers need real paths, which a SAF grant cannot provide) and **mirrors into the folder at session end**: raw logs as files, the database as an atomic snapshot. That copy survives an uninstall. |
 | Exports to `Documents/` | ⚠️ different | Scoped storage makes Documents a MediaStore collection, not a path — exports go through the system share/save dialog instead. |
 
@@ -250,7 +250,7 @@ into a **`release/`** folder at the repo root, renamed to a unified scheme so lo
 release builds:
 
 ```
-KiteGC_<OS>_<arch>_<version>_<type>.<ext>
+TailwindGC_<OS>_<arch>_<version>_<type>.<ext>
 ```
 
 - **Type** = `installer` (`.exe` / `.deb` / `.rpm` / `.dmg`, and the Android `.apk`), `standalone`
@@ -264,7 +264,7 @@ KiteGC_<OS>_<arch>_<version>_<type>.<ext>
   offered as an update.
 - The naming logic lives in `scripts/collect-release.*` and is shared by local builds and the GitHub
   release workflow (`.github/workflows/release.yml`), so filenames match everywhere.
-- `just build-android` drops its APK into the same folder as `KiteGC_Android_<abi>_<version>_installer.apk`
+- `just build-android` drops its APK into the same folder as `TailwindGC_Android_<abi>_<version>_installer.apk`
   (one file per ABI folder Gradle produced, e.g. `arm64` or `universal`). It collects **only** the APK and
   leaves the desktop outputs already in `release/` alone — an earlier desktop build's binaries still sit in
   `target/release/`, and collecting those here would republish a stale one under the current version number.
@@ -305,7 +305,7 @@ These are things to know when **running** the packaged Linux app (not build erro
 
 - **Three helpers are fetched at runtime, not bundled**: `blackbox_decode` (Blackbox import shells out
   to INAV's decoder), `ffmpeg` (the classic video image path) and `mediamtx` (the classic RTSP → WebRTC
-  engine) — the native RTSP client needs neither. Kite
+  engine) — the native RTSP client needs neither. Tailwind
   looks for each next to the executable, then in its own app-data `bin/` directory, then on `PATH`, and
   offers to download it on first use. Each failure is local to its feature — without `blackbox_decode`
   only Blackbox import is affected, live recording and replay still work. On macOS `ffmpeg` is bundled

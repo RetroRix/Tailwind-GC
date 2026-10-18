@@ -1,12 +1,12 @@
 # Release support
 
-Kite Ground Control is used in places where a ground station simply has to work — so a released
+Tailwind Ground Control is used in places where a ground station simply has to work — so a released
 version does not stop receiving fixes the moment the next one appears. This page states what you can
 rely on.
 
 ## Version numbers
 
-Kite uses `MAJOR.MINOR.PATCH`:
+Tailwind uses `MAJOR.MINOR.PATCH`:
 
 | Kind | Example | What it brings |
 | --- | --- | --- |
@@ -63,8 +63,8 @@ belongs to, under its patch version, so the notes for a release line stay in one
 
 ## Getting patch releases
 
-Patch releases are published on the [GitHub releases page](https://github.com/b14ckyy/Kite-GC/releases)
-like every other version. With **Check for updates** set to *Stable releases* in the settings, Kite
+Patch releases are published on the [GitHub releases page](https://github.com/RetroRix/Tailwind-GC/releases)
+like every other version. With **Check for updates** set to *Stable releases* in the settings, Tailwind
 tells you at start-up when a newer stable version exists (see [Settings](reference/settings.md)).
 
 Found a problem in a supported line? See [Reporting a problem](troubleshooting/reporting-issues.md) —

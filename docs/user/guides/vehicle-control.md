@@ -39,7 +39,7 @@ on a stray click.
 - **Stick-flown modes are locked without an RC source.** Manual / Acro / Stabilize / FBWA and similar
   modes that need live stick input are hidden behind **"Show all modes"** and stay **disabled** until
   there's a usable RC source — either a **physical transmitter** (the FC reports a valid receiver
-  signal) **or active [RC control](rc-control.md)** (Kite streaming the sticks to the FC). With
+  signal) **or active [RC control](rc-control.md)** (Tailwind streaming the sticks to the FC). With
   neither, the panel shows **"No RC link"** so you can't switch into a mode you couldn't actually fly.
 - **Set active WP only unlocks when the mission is in sync.** Choosing a waypoint to jump to is
   disabled until the mission on the map matches the FC's (see [Mission control](#mission-control)),
@@ -71,7 +71,7 @@ Mode colours match the rest of the app (see the [quick tour](../getting-started/
 
 - **Takeoff** (with a target altitude) is offered for **multirotor, VTOL and PX4** vehicles. A
   fixed-wing plane launches via an AUTO mission takeoff or by hand, so the command is hidden there. On
-  ArduPilot, Kite switches to Guided first so the FC accepts the takeoff.
+  ArduPilot, Tailwind switches to Guided first so the FC accepts the takeoff.
 - **RTL** returns to the launch/home point.
 - **Land** lands in place — hidden for plain ArduPlane fixed-wing (which lands via an AUTO sequence or
   RTL); QuadPlane uses its vertical QLAND path.
@@ -86,11 +86,11 @@ pick another mode here or on the transmitter), so the map interaction always mat
 
 You don't have to press the toggle first if the vehicle is **already** in its guided mode — after a
 mid-flight connect, or when another ground station put it there. Clicking the map works straight away
-in that case, so Kite never has to re-send a mode change just to let you command a point. (While a
+in that case, so Tailwind never has to re-send a mode change just to let you command a point. (While a
 mission editor or the survey generator is open, those own the map click instead.)
 
 **What you see on the 2D map:** the target is marked where the flight controller says it is, not merely
-where you clicked — Kite reads it back from the FC once per second, so a target set or moved by another
+where you clicked — Tailwind reads it back from the FC once per second, so a target set or moved by another
 ground station shows up too. For a **fixed-wing** vehicle a dashed green circle around it draws the
 loiter track the aircraft will actually fly: the radius you set for this Fly Here, or the firmware's
 configured default (`WP_LOITER_RAD` / `NAV_LOITER_RAD`) when you didn't set one. A copter simply holds

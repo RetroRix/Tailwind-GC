@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in improving Kite Ground Control! Bug reports, fixes, features, translations and
+Thanks for your interest in improving Tailwind Ground Control! Bug reports, fixes, features, translations and
 documentation are all welcome.
 
 ## Getting started
@@ -13,7 +13,7 @@ documentation are all welcome.
 
 ## Branching model
 
-Kite uses three kinds of long-lived branches. Which one you target matters:
+Tailwind uses three kinds of long-lived branches. Which one you target matters:
 
 | Branch | What it is | Push to it? |
 | --- | --- | --- |
@@ -97,7 +97,7 @@ release notes, so this one line saves the archaeology at release time.
 
 ## Internationalisation
 
-Kite ships in English, German, French, Chinese and Bulgarian. For contributions:
+Tailwind ships in English, German, French, Chinese and Bulgarian. For contributions:
 
 - **`en.json` is the source of truth and is required** — every new or changed UI string must have its
   English key.
@@ -118,7 +118,7 @@ Contributed by teodoryantcheff.
 
 ## Licensing & contributor terms
 
-Kite Ground Control is licensed under **[GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html)**.
+Tailwind Ground Control is licensed under **[GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html)**.
 
 - Every source file carries an SPDX header:
   ```
@@ -135,10 +135,9 @@ Kite Ground Control is licensed under **[GPL-3.0-or-later](https://www.gnu.org/l
 
 ## Reporting bugs & ideas
 
-Use the **[GitHub issue tracker](https://github.com/b14ckyy/Kite-GC/issues)**. For bug reports, the
+Use the **[GitHub issue tracker](https://github.com/RetroRix/Tailwind-GC/issues)**. For bug reports, the
 in-app diagnostics log (Settings → Diagnostics) and your OS / autopilot / firmware versions help a lot —
 see **[Reporting a problem](../troubleshooting/reporting-issues.md)**.
 
-For questions and discussion there is the **[Kite Discord](https://discord.gg/3FM7EWhkg9)** (English): `#help` for
-user questions, `#ideas` for feature ideas before they become issues, `#development` for
-contributors — PRs, translations, architecture.
+For questions and discussion, use the **[GitHub issue tracker](https://github.com/RetroRix/Tailwind-GC/issues)** —
+feature ideas are welcome there too, before they become pull requests.

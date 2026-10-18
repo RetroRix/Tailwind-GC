@@ -1,7 +1,7 @@
 # File formats
 
-The files Kite reads and writes, grouped by what they're for. **R** = Kite can open/import it, **W** =
-Kite can save/export it.
+The files Tailwind reads and writes, grouped by what they're for. **R** = Tailwind can open/import it, **W** =
+Tailwind can save/export it.
 
 ## Missions
 
@@ -9,7 +9,7 @@ Kite can save/export it.
 |---|---|---|---|
 | **INAV mission** | `.mission` | R / W | MultiWii XML, compatible with the INAV Configurator and MWPTools. |
 | **ArduPilot / PX4 mission** | `.waypoints` | R / W | QGroundControl-compatible plain text. |
-| **QGroundControl plan** | `.plan` | R | QGC's JSON plan — the format QGC saves (PX4 workflows). Mission waypoints only: QGC pattern items (Survey, Corridor Scan, …) are refused with a clear message, and the plan's geofence/rally sections are ignored — manage those in Kite's own Airspace tools. |
+| **QGroundControl plan** | `.plan` | R | QGC's JSON plan — the format QGC saves (PX4 workflows). Mission waypoints only: QGC pattern items (Survey, Corridor Scan, …) are refused with a clear message, and the plan's geofence/rally sections are ignored — manage those in Tailwind's own Airspace tools. |
 
 You can also drag a mission file straight onto the map. See **[Missions](../guides/missions.md)**.
 
@@ -19,12 +19,12 @@ You can also drag a mission file straight onto the map. See **[Missions](../guid
 
 | Format | Extension | Notes |
 |---|---|---|
-| **INAV Blackbox** | `.bbl`, `.txt` | Onboard-flash (`.bbl`) or SD-card (`.txt`) blackbox. Needs the `blackbox_decode` helper, which Kite fetches automatically on first use. |
+| **INAV Blackbox** | `.bbl`, `.txt` | Onboard-flash (`.bbl`) or SD-card (`.txt`) blackbox. Needs the `blackbox_decode` helper, which Tailwind fetches automatically on first use. |
 | **ArduPilot Dataflash** | `.bin` | ArduPilot onboard logs. |
 | **PX4 ULog** | `.ulg` | PX4 onboard flash / SD-card logs. PX4 logs no throttle output, so replayed throttle shows the thrust setpoint. |
 | **MAVLink telemetry** | `.tlog` | A MAVLink ground-station recording. |
 | **MWPTools raw-MSP** | `.rawmsp` | mwp's raw telemetry capture. |
-| **Kite flight** | `.kflight` | A flight exported from another Kite install. |
+| **Tailwind flight** | `.kflight` | A flight exported from another Tailwind install. |
 
 Imported **telemetry** logs (`.tlog` / `.rawmsp`) are split into separate flights on the arm / disarm
 markers, the same as a live recording.
@@ -33,7 +33,7 @@ markers, the same as a live recording.
 
 | Format | Extension | Notes |
 |---|---|---|
-| **Kite flight** | `.kflight` | Kite's portable flight file — export selected flights to move them to another install. |
+| **Tailwind flight** | `.kflight` | Tailwind's portable flight file — export selected flights to move them to another install. |
 | **Original log file** | `.bbl` / `.txt` / `.bin` / `.ulg` | Re-export the onboard log stored with a flight (Blackbox, Dataflash or ULog). Imported `.tlog` / `.rawmsp` is parsed straight in and **not** kept as a file, so there's nothing to re-export there. |
 | **Track** | `.kmz` / `.kml` / `.gpx` / `.csv` | A flight's path for Google Earth, GPS tools or a spreadsheet. |
 

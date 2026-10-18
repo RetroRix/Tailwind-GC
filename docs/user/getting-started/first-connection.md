@@ -48,7 +48,7 @@ The connection controls in the top bar: protocol, transport, port, baud, and **C
     *Here: a Virtual COM Port (the flight controller), a Bluetooth COM port, and a CH340 USB-serial
     adapter — pick the one that matches your board.*
 
-5. **Baud rate** — leave the default. Kite sets it for you when you pick the protocol:
+5. **Baud rate** — leave the default. Tailwind sets it for you when you pick the protocol:
    **115200** for MSP, **57600** for MAVLink. Only change it if you've set a non-standard rate on the FC.
 
 6. Click **Connect**.
@@ -69,7 +69,7 @@ That's it — you're connected. 🎉
 
 ## Disconnect
 
-Click **Disconnect** in the top bar. Kite remembers your **port, baud, protocol and transport**, so
+Click **Disconnect** in the top bar. Tailwind remembers your **port, baud, protocol and transport**, so
 next time you can usually just press **Connect** straight away.
 
 ## It didn't connect?

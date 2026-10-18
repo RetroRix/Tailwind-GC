@@ -1,6 +1,6 @@
 # Video
 
-Kite can show a live video feed alongside (or behind) the map — a **local capture device** such as a
+Tailwind can show a live video feed alongside (or behind) the map — a **local capture device** such as a
 webcam or USB capture card, or an **RTSP stream** from a network video source. Open it from the
 **Video** tool on the navigation rail.
 
@@ -12,7 +12,7 @@ is remembered between sessions.
 - **Camera (device)** — a local capture device opened the simple way, through the system's built-in
   camera access. Choose a device from the dropdown (webcams and capture cards the system exposes are
   listed automatically). No extra downloads.
-- **Native Capture (Advanced)** — a local capture device opened via Kite's capture engine for **more
+- **Native Capture (Advanced)** — a local capture device opened via Tailwind's capture engine for **more
   control and wider device support**. See the comparison below.
 - **RTSP (network)** — enter the stream URL (e.g. from your video receiver or an RTSP server), pick a
   **transport**, and optionally **save the connection** to a list for one-click recall — see
@@ -23,12 +23,12 @@ is remembered between sessions.
     **MJPEG** costs more bandwidth but is passed through untouched — the lightest option wherever
     nothing should be converted (see the
     [platform notes](#platform-notes-what-to-expect-per-operating-system)).
-    **HEVC/H.265** plays wherever the **Kite RTSP client** does the decoding: always on **Android**,
+    **HEVC/H.265** plays wherever the **Tailwind RTSP client** does the decoding: always on **Android**,
     and on **Windows**, **Linux** and **macOS** with the *Native RTSP client* toggle on (hardware
     decode; Windows additionally needs the free "HEVC Video Extensions" from the Microsoft Store).
     macOS is the one platform whose classic engine path plays HEVC as well.
 
-    Other codecs — VP8, VP9, AV1 — are **not supported**. A stream Kite cannot play usually shows up
+    Other codecs — VP8, VP9, AV1 — are **not supported**. A stream Tailwind cannot play usually shows up
     as an endless *"Reconnecting…"* rather than a clear error. If you need one of them, please open a
     request: the limit is that we have no way to test it, not that it is impossible.
 
@@ -90,14 +90,14 @@ The RTSP source has a small **connection manager** built in:
   looks uneven — duplicated or skipped single frames — on a jittery link such as cellular; every step
   costs exactly that much extra latency, so leave it at 0 when the picture is already smooth. The
   setting takes effect immediately on the running stream and is remembered.
-- **Native RTSP client (experimental)** — Kite's own built-in stream client: no helper downloads,
+- **Native RTSP client (experimental)** — Tailwind's own built-in stream client: no helper downloads,
   UDP-first connection with automatic TCP fallback, and native hardware H.264/HEVC decode on Windows,
   Linux and macOS (Android always uses it; there is no toggle there). Recommended on Linux — see the
   [platform notes](#platform-notes-what-to-expect-per-operating-system). If a particular source
   misbehaves with it, switch it off to fall back to the classic engine path.
 
 **Auto-reconnect:** if a running RTSP feed drops or stalls — a radio hole on a cellular link, the
-source restarting, a network change — Kite **reconnects automatically and keeps trying indefinitely**
+source restarting, a network change — Tailwind **reconnects automatically and keeps trying indefinitely**
 until the feed returns or you stop it. While it retries, every video surface shows a
 **"Reconnecting… (n)"** overlay with the attempt count and a **Stop** button. Brief dropouts on a live
 feed are given a few seconds to heal on their own before a full reconnect is forced, so momentary
@@ -108,7 +108,7 @@ signal dips don't interrupt the stream unnecessarily.
     no helper either (on Android that is always the case). **Native Capture** uses the bundled
     **ffmpeg** engine. Classic-path **RTSP** (toggle off) uses **MediaMTX** for the direct video path
     and **ffmpeg** for the image path — a machine whose browser engine offers no direct path (common
-    on Linux) uses ffmpeg alone and never needs MediaMTX. Kite downloads whichever it needs
+    on Linux) uses ffmpeg alone and never needs MediaMTX. Tailwind downloads whichever it needs
     **automatically** the first time you use that source — no manual install. On macOS ffmpeg is
     shipped with the app.
 
@@ -129,7 +129,7 @@ The same feed can appear in several places at once (they all share one stream):
   window off-screen to the right and back — it appears once a source runs and hides while the Video
   widget is active.
 - **In a detached window** — the floating window taken **out of the app** into its own window, which
-  you can put anywhere: beside Kite, or on a second monitor that then becomes your video screen. It
+  you can put anywhere: beside Tailwind, or on a second monitor that then becomes your video screen. It
   **stays on top of other applications** and looks exactly like the frame inside the app.
   Hold the pointer over the floating window and an **unplug button** appears in its **top-left
   corner**; that takes the picture out. The detached window has no title bar — its buttons appear
@@ -138,7 +138,7 @@ The same feed can appear in several places at once (they all share one stream):
   the **top-right corner** resizes it, and the frame keeps the stream's aspect ratio.
   It **can't host the map** (double-click does nothing there), and where it stands — including
   fullscreen — is remembered: quit while detached and it comes back detached, on the same screen. If
-  that screen is gone, it opens at a default size on Kite's own screen.
+  that screen is gone, it opens at a default size on Tailwind's own screen.
   Requires the **Native RTSP client** — on **Windows**, **macOS** and **Linux**; the
   [platform notes](#platform-notes-what-to-expect-per-operating-system) say what a Wayland desktop
   does differently.
@@ -197,7 +197,7 @@ The switch is remembered; turn it off to get the edge-to-edge fullscreen back.
 
 ## Platform notes: what to expect per operating system
 
-Video is the one part of Kite that depends heavily on components Kite does **not** ship: the operating
+Video is the one part of Tailwind that depends heavily on components Tailwind does **not** ship: the operating
 system's built-in browser engine and its media plugins. That works out very differently per platform,
 and it is only fair to say so plainly.
 
@@ -209,13 +209,13 @@ the **Native RTSP client** is switched on — see below.
 
 **On macOS both RTSP routes are available.** The classic engine plays H.264 *and* HEVC directly (the
 macOS browser engine is the only one that accepts HEVC on that path), and the **Native RTSP client**
-toggle switches to Kite's own client: H.264 and HEVC are decoded by the system's VideoToolbox and
+toggle switches to Tailwind's own client: H.264 and HEVC are decoded by the system's VideoToolbox and
 drawn straight into the video area — no helper programs, UDP-first with TCP fallback, mirror and
 rotate live. Either route is fine; the native one skips the helper download and the local relay leg.
 The detached video window works here too, and so does showing the picture in two places at once.
 
 **On Linux, switch on the *Native RTSP client* for network streams.** With that toggle (Video panel →
-RTSP section) Kite plays RTSP itself: **H.264 and HEVC go straight into the machine's hardware
+RTSP section) Tailwind plays RTSP itself: **H.264 and HEVC go straight into the machine's hardware
 decoder** — Intel/AMD graphics via VA-API, the Raspberry Pi 4's H.264 and the Pi 5's HEVC block via
 V4L2, with an
 automatic software fallback — and the picture is composited natively behind the interface instead of
@@ -224,7 +224,7 @@ for roughly a third of one CPU core where the classic path burned more than two 
 not hold 50 fps. MJPEG sources are passed through untouched, as always. The client uses the
 distribution's GStreamer plugins (the **.deb** installs them automatically; elsewhere:
 `gstreamer1.0-plugins-base`, `…-good`, `…-bad`, `gstreamer1.0-gtk3` and `gstreamer1.0-libav`, or your
-distro's equivalents) — if one is missing, Kite reports which GStreamer element it could not find.
+distro's equivalents) — if one is missing, Tailwind reports which GStreamer element it could not find.
 Showing the picture in **two places at once** and the **detached video window** both work on this
 route; the notes below say what each of them costs.
 
@@ -232,11 +232,11 @@ route; the notes below say what each of them costs.
     Encoders that pad the picture height to their block size — NVENC at 720p codes 736 rows, every
     1080p stream codes 1088 — declare the visible part in the stream header. The Pi 5's decoder path in
     GStreamer would copy every picture to apply that crop, which the zero-copy display cannot take.
-    Kite instead lets the decoder deliver the full padded picture and hides the padding rows under the
+    Tailwind instead lets the decoder deliver the full padded picture and hides the padding rows under the
     interface, so these streams stay zero-copy as well.
 
     The Pi 5's decoder also cannot paper over a lost picture: a picture whose reference never arrived
-    stalls it, and the Pi's kernel driver then hangs until a reboot. Kite therefore holds the video
+    stalls it, and the Pi's kernel driver then hangs until a reboot. Tailwind therefore holds the video
     after any lost packet until the next keyframe arrives — a short pause instead of a frozen decoder.
     A **short keyframe interval** at the encoder (1 s) keeps that pause short.
 
@@ -246,15 +246,15 @@ route; the notes below say what each of them costs.
     **portable build** instead; the AppImage is provided for a quick look at everything else and is
     planned to be retired.
 
-**With the Native RTSP client off, video support is provided as-is.** Kite then runs video through
+**With the Native RTSP client off, video support is provided as-is.** Tailwind then runs video through
 WebKitGTK, which hands playback to GStreamer — and which plugins your distribution installs is
 entirely up to your distribution. There are hundreds of combinations of distro, desktop, graphics
-driver and plugin set, and we cannot test or support them all. Concretely, these are things Kite
+driver and plugin set, and we cannot test or support them all. Concretely, these are things Tailwind
 cannot fix from its side on that classic path:
 
 - **Whether an RTSP stream can be played directly at all.** Many Linux systems — Raspberry Pi OS and
   current Debian desktops among them — run a browser engine that does not expose the direct (WebRTC)
-  video path, and that cannot be installed after the fact. Kite then falls back to a **converted image
+  video path, and that cannot be installed after the fact. Tailwind then falls back to a **converted image
   stream**. It works, but it adds a conversion, so **expect noticeably more latency than on Windows or
   macOS** — this is the single biggest practical difference. If a smaller delay matters more than
   resolution, **send a smaller or slower stream from the source** (e.g. 480p instead of 720p, or 30
@@ -264,7 +264,7 @@ cannot fix from its side on that classic path:
   720×576 frame took about 13 ms against roughly 2 ms, and longer while the machine was busy. So a
   frame rate that is effortless on Windows can be out of reach on comparable Linux hardware, whatever
   the CPU says.
-- **Whether that conversion uses your graphics hardware.** Kite tests your machine at start-up and uses
+- **Whether that conversion uses your graphics hardware.** Tailwind tests your machine at start-up and uses
   the GPU for the conversion when it can — on Intel and AMD desktop graphics via VAAPI, and on
   Raspberry Pi 3/4 class boards via their built-in decoder. Where that works it is a large saving
   (measured on an Intel laptop: roughly a seventh of the CPU load). But it depends entirely on your
@@ -278,13 +278,13 @@ cannot fix from its side on that classic path:
 - **You can force the CPU path.** If hardware conversion misbehaves on your machine, switch on
   **Disable hardware acceleration** in the Video panel; the setting is remembered.
 - **Local camera quirks.** On Linux the system camera layer can be slow or unresponsive on some setups.
-  Kite works around the worst cases (it caps the automatic resolution and frame rate, and routes the
+  Tailwind works around the worst cases (it caps the automatic resolution and frame rate, and routes the
   advanced capture path around that layer entirely), but a camera the system itself can't open cleanly
   is out of reach.
 - **The detached video window works, but it cannot stay on top of everything on Wayland.** Current
   desktops that run on Wayland — GNOME's default — do not let an application put its own window
   above other applications, so the detached window takes its turn in the normal stacking order
-  there. Put it on a second monitor or beside Kite and it stays where you want it. The window also
+  there. Put it on a second monitor or beside Tailwind and it stays where you want it. The window also
   decodes the picture for itself (a window cannot borrow another window's hardware video surface),
   so it costs a second hardware decode of the same stream.
 - **The picture in two places at once costs a conversion.** The second place is drawn by the
@@ -297,17 +297,17 @@ for network video, and a well-equipped desktop distribution generally plays the 
 too. In short: **on Linux, try the Native RTSP client first for RTSP; an MJPEG source is the lightest
 choice either way.**
 
-**On Android, RTSP runs entirely through Kite's own built-in stream client** — there is nothing to
+**On Android, RTSP runs entirely through Tailwind's own built-in stream client** — there is nothing to
 download and no engine choice: H.264 and HEVC are decoded by the device's hardware decoder, and MJPEG
 streams are shown directly. (On iOS, RTSP is not available yet.)
 
 - **Location updates pause during a Wi-Fi stream.** Every live location fix makes Android scan for
   Wi-Fi networks, and each scan takes the Wi-Fi radio off your network's channel for a moment — with
   an RTSP stream running over that same Wi-Fi, this shows up as a brief dropout roughly every ten
-  seconds. Kite therefore pauses the **continuous** GCS-marker location mode automatically while an
+  seconds. Tailwind therefore pauses the **continuous** GCS-marker location mode automatically while an
   RTSP stream is playing over Wi-Fi: the GCS marker freezes at its last position and updates resume
   the moment the stream stops. Streams received over **mobile data** (or Ethernet) are not affected,
-  and neither is a manually placed GCS marker. When Kite cannot tell which way the stream travels
+  and neither is a manually placed GCS marker. When Tailwind cannot tell which way the stream travels
   (some VPN setups), it pauses to be safe.
 
 ## Where to go next

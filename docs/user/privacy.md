@@ -1,18 +1,18 @@
 # Privacy policy
 
-*Effective: 2026-09-06 (Kite 1.0.0 and later) · Applies to Kite Ground Control on Windows, macOS, Linux,
+*Effective: 2026-09-06 (Tailwind 1.0.0 and later) · Applies to Tailwind Ground Control on Windows, macOS, Linux,
 Android and iOS. Not every feature named here exists on every platform or version; where a feature is
 absent, the connection it would make is absent too.*
 
-Kite Ground Control ("Kite") is a ground-control station for RC aircraft and drones. It is free and
+Tailwind Ground Control ("Tailwind") is a ground-control station for RC aircraft and drones. It is free and
 open-source software (GPL-3.0-or-later) and is built to work in the field without depending on us.
 This page states what data the app handles, what stays on your device, and which outside services the
 app contacts while you use it.
 
 The short version:
 
-- **We collect nothing — as of today.** Kite has no user account, no analytics, no crash reporting, no
-  advertising and no server of ours that the app reports to. We do not see who uses Kite or how. Should a
+- **We collect nothing — as of today.** Tailwind has no user account, no analytics, no crash reporting, no
+  advertising and no server of ours that the app reports to. We do not see who uses Tailwind or how. Should a
   future version ever add anything of that kind, it will be **opt-in**, off by default, and announced in
   the release notes and on this page before it ships.
 - **Your data stays on your device.** Settings, flight logs, missions, vehicle and battery records are
@@ -21,21 +21,21 @@ The short version:
   weather, ADS-B traffic, airspace data, the update check). Those services see the technical details of
   such requests. The list below says exactly which ones and when.
 
-## Who provides Kite
+## Who provides Tailwind
 
-Kite is free software published under the GNU General Public License v3 or later by
+Tailwind is free software published under the GNU General Public License v3 or later by
 
 **Marc Hoffmann** · [b14ckyy@outlook.com](mailto:b14ckyy@outlook.com)
 
-The complete source code is public in the project's [GitHub repository](https://github.com/b14ckyy/Kite-GC),
+The complete source code is public in the project's [GitHub repository](https://github.com/RetroRix/Tailwind-GC),
 so every statement on this page can be checked against the code. As the licence states, the software is
 provided **as is, without warranty of any kind** and without any obligation on the authors; this page
 describes what the app does, it does not create liability beyond the licence terms. Questions about this
 policy go to the address above.
 
-## What Kite stores on your device
+## What Tailwind stores on your device
 
-Everything Kite keeps is a local file on the device you run it on. Nothing is synchronised to a cloud
+Everything Tailwind keeps is a local file on the device you run it on. Nothing is synchronised to a cloud
 service by the app.
 
 | Data | What it contains | Where |
@@ -58,11 +58,11 @@ Deleting the app's data folder, or uninstalling the app on Android and iOS, remo
 These transfers happen only because you trigger them, and you choose the recipient every time:
 
 - **Exports** — flight logs (`.kflight`), vehicle (`.kvehicle`) and battery (`.kbatt`) files, missions
-  (`.mission`, `.waypoints`, `.plan`). Kite writes the file where you tell it to; on Android and iOS it
+  (`.mission`, `.waypoints`, `.plan`). Tailwind writes the file where you tell it to; on Android and iOS it
   hands the file to the system share sheet.
 - **Diagnostic log** — Settings → Diagnostics → *Open Folder* shows you the log file, and on Android
   *Share log file* passes it to the app you pick (mail, messenger, cloud drive). Attaching it to a bug
-  report is your step; nothing is uploaded by Kite itself.
+  report is your step; nothing is uploaded by Tailwind itself.
 - **Reporting a problem** — the About dialog and the docs link to GitHub. Anything you post there is
   governed by [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies).
 - **Telemetry and video on your network** — telemetry forwarding, the video relay and the Telemetry API
@@ -72,9 +72,9 @@ These transfers happen only because you trigger them, and you choose the recipie
 
 ## Third-party services the app contacts
 
-Kite is a client: for some features it downloads data from public services straight from your device.
+Tailwind is a client: for some features it downloads data from public services straight from your device.
 The app sends only what the request needs — usually a map position and a radius — plus what every
-internet request carries (your IP address, a user-agent string naming Kite and its version). None of
+internet request carries (your IP address, a user-agent string naming Tailwind and its version). None of
 these requests contain your name, your flight logs or any identifier for your device or your aircraft.
 Each provider handles the request under its own privacy policy, which we link below.
 
@@ -84,7 +84,7 @@ Each provider handles the request under its own privacy policy, which we link be
 | --- | --- | --- | --- |
 | **At every app start** | GitHub Releases API ([GitHub privacy statement](https://docs.github.com/site-policy/privacy-policies)) | A request for the latest release version. No data about you or your installation | Settings → Updates → *Check for updates: Disabled* |
 | **When a flight is recorded** (the aircraft arms with a valid GPS fix) | Open-Meteo ([privacy](https://open-meteo.com/en/terms)) and OpenStreetMap Nominatim ([privacy](https://osmfoundation.org/wiki/Privacy_Policy)) | The take-off coordinates, to store the weather and the place name in the logbook entry | *(no setting yet — see the note below)* |
-| **While the map is shown** | The map tile provider you selected: OpenStreetMap ([privacy](https://osmfoundation.org/wiki/Privacy_Policy)), OpenTopoMap, CARTO ([privacy](https://carto.com/privacy)), Esri ArcGIS ([privacy](https://www.esri.com/en-us/privacy/overview)) | The map tiles for the area on screen, i.e. which region you are looking at | Use the map without internet — Kite then shows only what the system's web cache still holds |
+| **While the map is shown** | The map tile provider you selected: OpenStreetMap ([privacy](https://osmfoundation.org/wiki/Privacy_Policy)), OpenTopoMap, CARTO ([privacy](https://carto.com/privacy)), Esri ArcGIS ([privacy](https://www.esri.com/en-us/privacy/overview)) | The map tiles for the area on screen, i.e. which region you are looking at | Use the map without internet — Tailwind then shows only what the system's web cache still holds |
 | **When a terrain feature needs elevation** (AGL planning, terrain clearance, line-of-sight analysis, terrain radar) | Copernicus DEM on AWS Open Data ([AWS privacy notice](https://aws.amazon.com/privacy/)) | The 1°×1° elevation tile covering the area | Downloads only for areas you plan or fly in; tiles are cached |
 
 ### Only while the feature is enabled
@@ -103,18 +103,18 @@ Each provider handles the request under its own privacy policy, which we link be
 
 ## Device permissions
 
-Kite asks for a permission only when the feature that needs it is used, and uses it only for that
+Tailwind asks for a permission only when the feature that needs it is used, and uses it only for that
 feature. Denying a permission disables that feature and nothing else.
 
 | Permission | Used for | Platforms that ask |
 | --- | --- | --- |
 | **Location** | Placing the ground-station marker on the map, the reference point for the radar, and the sunset timing of the automatic night mode. The position is used on the device only: it is not written to the flight log and not sent anywhere; a coarse last-known value stays in the settings | Android, iOS, macOS, Windows (system dialog); Linux has no permission system |
-| **Camera** | The *Camera (device)* video source: showing an FPV feed from a capture device or built-in camera. The image is displayed only; Kite does not record it | Android, iOS, macOS, Windows |
-| **Microphone** | Declared together with the camera for the capture source. Kite does not record or transmit audio | Android |
+| **Camera** | The *Camera (device)* video source: showing an FPV feed from a capture device or built-in camera. The image is displayed only; Tailwind does not record it | Android, iOS, macOS, Windows |
+| **Microphone** | Declared together with the camera for the capture source. Tailwind does not record or transmit audio | Android |
 | **Bluetooth** | Connecting to a flight controller or telemetry link over BLE or Bluetooth SPP. On Android 12+ the scan is declared *never for location* — it cannot be used to derive your position | Android, iOS, macOS |
 | **Local network** | Telemetry over Wi-Fi (TCP/UDP), RTSP video from an onboard computer, the Telemetry API | iOS, macOS 15+ |
 | **USB** | Serial connection to a flight controller. Granted per device by the system dialog | Android |
-| **Notifications** | The persistent notification that keeps the telemetry link alive while Kite is in the background | Android 13+ |
+| **Notifications** | The persistent notification that keeps the telemetry link alive while Tailwind is in the background | Android 13+ |
 | **Network state / Wi-Fi state** | Showing which network the tablet is on, so a telemetry bridge's soft-AP can be recognised | Android (no prompt) |
 
 ## Your data, your control
@@ -122,16 +122,16 @@ feature. Denying a permission disables that feature and nothing else.
 The only personal data involved is what your device sends when it contacts the services above (your IP
 address) and, if you grant it, the optional location permission — both used on your device, only to
 provide the functions you use. We do not store, see or receive any of it, so there is nothing we could
-hand over, correct or delete on your behalf: everything Kite keeps is on your device and under your
+hand over, correct or delete on your behalf: everything Tailwind keeps is on your device and under your
 control, and every outside connection is listed above so you can decide whether to use the feature that
 makes it. Requests to a third-party service are subject to that service's own policy; contact them
 directly for anything concerning their processing.
 
-If you do not agree with how Kite works as described here, do not use the app.
+If you do not agree with how Tailwind works as described here, do not use the app.
 
 ## Children
 
-Kite is a tool for operating aircraft and is not directed at children under 16.
+Tailwind is a tool for operating aircraft and is not directed at children under 16.
 
 ## Changes to this policy
 

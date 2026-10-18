@@ -1,6 +1,6 @@
 # Telemetry & display
 
-Once you're [connected](connecting.md), Kite turns the link into a live cockpit: a moving map behind a
+Once you're [connected](connecting.md), Tailwind turns the link into a live cockpit: a moving map behind a
 set of flight instruments, with the aircraft's status along the top. This guide explains what every
 part shows and how to arrange it to your liking.
 
@@ -19,7 +19,7 @@ It draws, in real time:
 
 ### Direction indicators
 
-At the aircraft, Kite can draw short **direction lines**: the **heading** (where the nose points),
+At the aircraft, Tailwind can draw short **direction lines**: the **heading** (where the nose points),
 the **course over ground** (where it's actually travelling — the two differ in wind), and a
 **predicted-turn** arc. Toggle them with **Direction indicators** in **[Settings](../reference/settings.md)**
 (on by default).
@@ -71,8 +71,8 @@ along the bottom. Each widget is self-contained and updates live.
 - Widgets scale to fit the dock, and your layout (which dock each widget sits in, and its size) is
   **remembered between sessions**.
 - **On a phone** the docks are replaced by a widget column on the right edge with two swipeable pages;
-  long-press a widget to rearrange or resize — see **Kite on a phone** in the
-  **[Quick tour](../getting-started/quick-tour.md#kite-on-a-phone)**.
+  long-press a widget to rearrange or resize — see **Tailwind on a phone** in the
+  **[Quick tour](../getting-started/quick-tour.md#tailwind-on-a-phone)**.
 
 ![A widget dock in edit mode](../assets/guides/telemetry/widget_edit_mode.png)
 /// caption
@@ -116,9 +116,9 @@ How often the instruments update depends on the **telemetry rates** in **[Settin
 movement, speed, altitude). Higher rates look smoother but use more link bandwidth; the defaults are
 conservative so they're safe even on a slow over-the-air link.
 
-On **MAVLink**, Kite normally requests only the messages it needs at those two rates and turns the rest
+On **MAVLink**, Tailwind normally requests only the messages it needs at those two rates and turns the rest
 of the firmware's high-rate streams down, so a narrow telemetry radio isn't flooded. The **Full MAVLink
-Telemetry** option turns that off: Kite hands rate control back to the **flight controller**, which then
+Telemetry** option turns that off: Tailwind hands rate control back to the **flight controller**, which then
 streams whichever fields at whatever rates *it* is configured for. Use it on a fast link (USB, Wi-Fi,
 high-bandwidth radio) or when you want a complete `.tlog` recording. (These rate requests are sticky on
 the FC until it reboots.)
@@ -129,16 +129,16 @@ The **UAV Info** tool on the navigation rail is a quick read-out of *what you're
 
 - **Flight controller** — craft name, firmware variant and version, board / target, vehicle type, the
   API version, and hardware revision when reported. Shown for any connection (INAV, ArduPilot, PX4).
-- **Features** *(INAV)* — badges for the INAV capabilities Kite can use (autoland, geozones, MSP-RC,
+- **Features** *(INAV)* — badges for the INAV capabilities Tailwind can use (autoland, geozones, MSP-RC,
   AUX-RC, ADS-B), lit when your INAV version supports them. These are version-dependent and INAV-specific,
   so the section appears only on an INAV link.
 
-The **vehicle type** row is a dropdown. Kite fills it with the type it detected during the handshake (the
+The **vehicle type** row is a dropdown. Tailwind fills it with the type it detected during the handshake (the
 INAV mixer platform, or the MAVLink vehicle type plus the QuadPlane check), and you can change it at any
 time — when the flight controller's platform setting does not match the airframe, or on a telemetry-only
-link where Kite can only say *Generic*. The map and the 3D model follow your choice, and the flight
+link where Tailwind can only say *Generic*. The map and the 3D model follow your choice, and the flight
 recorder stores it with the flight, including a flight that is already being recorded. The override is
-not saved: it lasts for the session, and after a reconnect it comes back only when Kite recognises the
+not saved: it lasts for the session, and after a reconnect it comes back only when Tailwind recognises the
 same flight controller. INAV and MAVLink links report a hardware ID for that, shown as **FC ID**
 (shortened, with a copy button for the full value) and stored with each flight; telemetry-only links
 have none and start from *Generic* again.

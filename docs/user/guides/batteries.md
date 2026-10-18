@@ -25,7 +25,7 @@ Each pack stores:
 - **Identity** — label, manufacturer, model, **status** (active, storage, retired, damaged), connector
   (XT60, XT90, …), in-service date and notes.
 - **Spec** — **chemistry** (LiPo, Li-ion, …), **cell count**, **capacity** (mAh) and the discharge /
-  charge **C-ratings**. From the chemistry and cell count Kite shows the pack's **nominal / min / max
+  charge **C-ratings**. From the chemistry and cell count Tailwind shows the pack's **nominal / min / max
   voltage** and its **energy** (Wh).
 
 ## Lifetime tracking
@@ -33,7 +33,7 @@ Each pack stores:
 Each pack accumulates **lifetime totals** — flight count, flight time, energy drawn (mAh) and
 charge / cycle counts — built from the flights linked to it. You can also:
 
-- **Add usage** — enter manual deltas (e.g. bench cycles, or flights from before you used Kite).
+- **Add usage** — enter manual deltas (e.g. bench cycles, or flights from before you used Tailwind).
 - **Baseline** — set a starting point so the totals reflect the pack's whole life.
 
 ## Linking to flights

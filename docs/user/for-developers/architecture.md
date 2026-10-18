@@ -1,6 +1,6 @@
 # Architecture overview
 
-A high-level map of how Kite Ground Control is built. This is the public overview; the detailed
+A high-level map of how Tailwind Ground Control is built. This is the public overview; the detailed
 decision record (ADRs) is kept internally.
 
 ## Tech stack

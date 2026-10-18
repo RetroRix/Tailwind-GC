@@ -1,7 +1,7 @@
 # For developers
 
-Kite Ground Control is free, open-source software (GPL-3.0-or-later) and contributions are welcome.
-This section is for people who want to **build Kite from source**, understand how it's put together, or
+Tailwind Ground Control is free, open-source software (GPL-3.0-or-later) and contributions are welcome.
+This section is for people who want to **build Tailwind from source**, understand how it's put together, or
 **contribute** code, translations or documentation.
 
 - **[Architecture overview](architecture.md)** — the tech stack and how the backend, frontend and
@@ -28,7 +28,7 @@ This section is for people who want to **build Kite from source**, understand ho
 
 ## Source code
 
-The project lives on GitHub: **[b14ckyy/Kite-GC](https://github.com/b14ckyy/Kite-GC)**. Issues and
+The project lives on GitHub: **[RetroRix/Tailwind-GC](https://github.com/RetroRix/Tailwind-GC)**. Issues and
 pull requests are the best way to get involved.
 
 !!! note "Internal design notes"

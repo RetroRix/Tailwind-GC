@@ -1,12 +1,12 @@
 # Installation
 
-Kite Ground Control is a small, self-contained desktop app (a few tens of MB — it uses your system's
+Tailwind Ground Control is a small, self-contained desktop app (a few tens of MB — it uses your system's
 web view rather than bundling a whole browser). Grab the build for your platform from the
-[**Releases**](https://github.com/b14ckyy/Kite-GC/releases) page and you're ready to connect.
+[**Releases**](https://github.com/RetroRix/Tailwind-GC/releases) page and you're ready to connect.
 
 ## Downloads
 
-Every asset follows one naming scheme — `KiteGC_<OS>_<arch>_<version>_<type>` — so it's clear what you're
+Every asset follows one naming scheme — `TailwindGC_<OS>_<arch>_<version>_<type>` — so it's clear what you're
 grabbing:
 
 | Platform | Installer | Standalone | Portable |
@@ -14,7 +14,7 @@ grabbing:
 | **Windows** (x64) | `..._installer.exe` (NSIS — install for you or all users) | — | `..._portable.zip` |
 | **Linux** (x64 / arm64) | `..._installer.deb` (Debian/Ubuntu) or `..._installer.rpm` (Fedora/openSUSE) | `..._standalone.AppImage` | `..._portable.zip` |
 | **macOS** (universal) | `..._installer.dmg` | `..._standalone.zip` (the `.app`) | — |
-| **Android** (arm64) | `KiteGC_Android_universal_<version>_installer.apk` | — | — |
+| **Android** (arm64) | `TailwindGC_Android_universal_<version>_installer.apk` | — | — |
 
 - **Installer** — integrates with your system (Start menu / app launcher, uninstaller).
 - **Standalone** — one self-contained runnable file (Linux `.AppImage`, macOS `.app`); no install.
@@ -34,11 +34,11 @@ grabbing:
 
 Download the `.apk` on the device and open it; Android asks once to allow installs from that browser
 or file manager. Phones get a dedicated landscape layout, tablets the desktop one. Links: **USB serial**
-over an OTG cable (Android asks per device — pick Kite in the dialog when you plug the cable in),
+over an OTG cable (Android asks per device — pick Tailwind in the dialog when you plug the cable in),
 **Bluetooth LE** (the first scan asks for the *Nearby devices* permission) and **Wi-Fi** (UDP / TCP).
 Data lives in the app's private storage; **Settings → Data** can point the flight database and raw
 logs at a shared folder instead. See [Connecting](../guides/connecting.md) for what happens while
-Kite is in the background.
+Tailwind is in the background.
 
 **iPhone / iPad**: no public download yet — the app builds from source (see
 [Building from source](../for-developers/building.md)).
@@ -47,14 +47,14 @@ Kite is in the background.
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i KiteGC_Linux_*_installer.deb
+sudo dpkg -i TailwindGC_Linux_*_installer.deb
 
 # Fedora / openSUSE
-sudo rpm -i KiteGC_Linux_*_installer.rpm
+sudo rpm -i TailwindGC_Linux_*_installer.rpm
 
 # AppImage — no install needed
-chmod +x KiteGC_Linux_*_standalone.AppImage
-./KiteGC_Linux_*_standalone.AppImage
+chmod +x TailwindGC_Linux_*_standalone.AppImage
+./TailwindGC_Linux_*_standalone.AppImage
 ```
 
 !!! warning "Linux: your distribution needs to be reasonably current"
@@ -66,10 +66,10 @@ chmod +x KiteGC_Linux_*_standalone.AppImage
     which always comes from your system.
 
     **On those same older systems, video has a problem we cannot package around.** They ship
-    WebKitGTK 2.50, and Kite runs inside that engine. In the 2.50 series a stopped video stream can
+    WebKitGTK 2.50, and Tailwind runs inside that engine. In the 2.50 series a stopped video stream can
     leave the engine spinning — we measured a permanently busy CPU core that only quits when the app
     does. Debian 13 and Ubuntu 24.04 carry 2.52, where this does not happen. So an older distribution
-    is not merely unsupported by these downloads; it is a system on which Kite's video would misbehave
+    is not merely unsupported by these downloads; it is a system on which Tailwind's video would misbehave
     however you installed it.
 
 !!! warning "AppImage: on a very new distribution you may get an empty window"
@@ -92,21 +92,21 @@ chmod +x KiteGC_Linux_*_standalone.AppImage
     Verified working: **Ubuntu 24.04**, **Debian 13**. Known broken: **Ubuntu 26.04**.
 
     If you know AppImage packaging or WebKitGTK well and see something we missed, please say so in
-    [issue #29](https://github.com/b14ckyy/Kite-GC/issues/29) — we would rather be wrong about this.
+    [issue #29](https://github.com/RetroRix/Tailwind-GC/issues/29) — we would rather be wrong about this.
 
-    You can still **[build Kite yourself](../for-developers/building.md)** on an older distribution and
+    You can still **[build Tailwind yourself](../for-developers/building.md)** on an older distribution and
     everything else will work — but the video issue comes from your system's browser engine, so a
     self-built copy has it too. The only real fix is a newer distribution.
 
 ## Installed vs portable mode
 
-You can run Kite two ways:
+You can run Tailwind two ways:
 
 - **Installed** (the `.exe` / `.deb` / `.rpm` / `.dmg`) — integrates with your system (Start menu / app
   launcher / Applications, uninstaller) and stores its data in your user profile (see
   [below](#where-your-data-is-stored)).
 - **Portable** — unzip the `..._portable.zip`: it already contains the executable **and** an empty file
-  named **`.portable`**, so Kite keeps **everything** — the flight database, raw logs, and any downloaded
+  named **`.portable`**, so Tailwind keeps **everything** — the flight database, raw logs, and any downloaded
   helper tools — in a single `data/` folder **next to the executable**, writing nothing to your user
   profile. (You can also add a `.portable` file next to a standalone executable / AppImage yourself.)
 
@@ -118,7 +118,7 @@ You can run Kite two ways:
 
 ## Where your data is stored
 
-In a normal install Kite follows each OS's conventions; in portable mode everything lives under
+In a normal install Tailwind follows each OS's conventions; in portable mode everything lives under
 `data/` next to the executable.
 
 | Data | Windows (installed) | Linux (installed) | macOS (installed) | Portable |
@@ -131,7 +131,7 @@ In a normal install Kite follows each OS's conventions; in portable mode everyth
 
 Your **preferences and layout** are kept in the web view's local storage — Microsoft **WebView2** on
 Windows, **WebKitGTK** on Linux, **WKWebView** on macOS — **not inside the program file**. In **portable
-mode** Kite redirects that storage into the `data/` folder next to the executable, so a portable copy
+mode** Tailwind redirects that storage into the `data/` folder next to the executable, so a portable copy
 carries its settings with it. (One exception: on Windows, portable mode doesn't restore the **window
 size/position**, because that path can't be redirected.)
 
@@ -160,8 +160,8 @@ Keeping it tidy:
 
 ## External dependencies & automatic downloads
 
-Kite needs **nothing extra to connect and fly**. A few **optional** features rely on a small helper
-program, which Kite offers to **download automatically the first time you use that feature**:
+Tailwind needs **nothing extra to connect and fly**. A few **optional** features rely on a small helper
+program, which Tailwind offers to **download automatically the first time you use that feature**:
 
 | Helper | Used for | How it's provided |
 |---|---|---|
@@ -169,13 +169,13 @@ program, which Kite offers to **download automatically the first time you use th
 | `ffmpeg` | **Video** (native capture + fallback decoding for some RTSP sources) | auto-download on **Windows & Linux**; **bundled inside the app on macOS** |
 | `mediamtx` | **Video** (the RTSP → low-latency engine) | auto-download on **Windows, Linux & macOS** |
 
-- Downloaded helpers are stored in Kite's tools folder (`…\kite-gc\bin`, or `data\bin` in portable
+- Downloaded helpers are stored in Tailwind's tools folder (`…\kite-gc\bin`, or `data\bin` in portable
   mode) — they don't touch your system.
   Linux auto-downloads cover the common 64-bit CPUs (Intel/AMD `x86_64` and ARM `aarch64`).
-- Kite finds a helper if it's **on your `PATH`**, **next to the app**, or in that tools folder. Where a
+- Tailwind finds a helper if it's **on your `PATH`**, **next to the app**, or in that tools folder. Where a
   helper isn't provided automatically — `blackbox_decode` on macOS, or an unsupported CPU like
   32-bit/armv7 — install it yourself (e.g. `brew install ffmpeg` on macOS, or your package manager /
-  a manual download) and put it on your `PATH` or next to the app; Kite will pick it up.
+  a manual download) and put it on your `PATH` or next to the app; Tailwind will pick it up.
 - These downloads need **internet access**. The **map** also needs it: both **2D map tiles** and
   **3D terrain** are streamed on demand and cached after first view — there's no offline map download
   yet (it's under consideration for the future if there's enough demand). Connecting to your aircraft,
@@ -183,5 +183,5 @@ program, which Kite offers to **download automatically the first time you use th
 
 ## First run
 
-Launch Kite, and head to **[your first connection](first-connection.md)**. New to the interface?
+Launch Tailwind, and head to **[your first connection](first-connection.md)**. New to the interface?
 The **[quick tour](quick-tour.md)** points out where everything is.

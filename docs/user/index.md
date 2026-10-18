@@ -1,17 +1,20 @@
 <p align="center" markdown>
-  ![Kite Ground Control](assets/branding/kitegc-logo-full.svg#only-light){ width="480" }
-  ![Kite Ground Control](assets/branding/kitegc-logo-full-light.svg#only-dark){ width="480" }
+  ![Tailwind Ground Control](assets/branding/tailwind-icon.png){ width="220" }
 </p>
 
-**Kite Ground Control (Kite GC)** is a modern, cross-platform ground control station for
+<p align="center" markdown>
+**Go far. Get home.**
+</p>
+
+**Tailwind Ground Control (Tailwind GC)** is a modern, cross-platform ground control station for
 **INAV**, **ArduPilot**, and **PX4** aircraft — planes, multirotors, VTOL, helicopters, rovers and
 boats. It combines everything you expect from a GCS with a fast, intuitive interface and a few things
 you won't find anywhere else — like a full 3D flight view, a fleet & battery manager, and live video
 right next to the map.
 
-![Kite Ground Control in 3D mode](assets/main_interface_3d.png)
+![Tailwind Ground Control in 3D mode](assets/main_interface_3d.png)
 /// caption
-Kite Ground Control flying in 3D mode.
+Tailwind Ground Control flying in 3D mode.
 ///
 
 ## Highlights
@@ -72,7 +75,7 @@ Everything you'd expect from a ground station:
   community translations welcome) and
   persistent window, layout and settings between sessions.
 
-## What makes Kite special
+## What makes Tailwind special
 
 - **Full 3D mode** — Cesium 3D globe with real terrain, a unified 3D mission overlay, an FPV cockpit
   camera with a conformal HUD, and live day/night lighting.
@@ -105,13 +108,17 @@ Everything you'd expect from a ground station:
 
 ## Community
 
-Questions, setups, flight videos — the Kite community meets on Discord (English):
+Questions, setups, flight videos — Tailwind Ground Control is built by
+[RetroRix](https://github.com/RetroRix) and flies with the **Rick Squared** crew
+(RC planes, FPV, PPC & PPG). Bugs and feature ideas go to GitHub:
 
-[:fontawesome-brands-discord: Join the Kite Discord](https://discord.gg/3FM7EWhkg9){ .md-button .md-button--primary }
+[:fontawesome-brands-github: Tailwind GC on GitHub](https://github.com/RetroRix/Tailwind-GC){ .md-button .md-button--primary }
 
-Bugs and feature ideas go to [GitHub](https://github.com/b14ckyy/Kite-GC/issues) — see
-**[Reporting a problem](troubleshooting/reporting-issues.md)** for what to include.
+See **[Reporting a problem](troubleshooting/reporting-issues.md)** for what to include in a bug
+report. Tailwind GC is based on the open-source [Kite GC](https://github.com/b14ckyy/Kite-GC) by
+Marc Hoffmann — the original project's documentation and community are the upstream home of the
+codebase Tailwind builds on.
 
 ---
 
-Kite GC is free, open-source software (GPL-3.0-or-later).
+Tailwind GC is free, open-source software (GPL-3.0-or-later).

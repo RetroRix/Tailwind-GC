@@ -1,6 +1,6 @@
 # Missions
 
-Kite's mission planner lets you draw a flight plan on the map, send it to the aircraft, and read one
+Tailwind's mission planner lets you draw a flight plan on the map, send it to the aircraft, and read one
 back. It speaks three flight stacks — **INAV**, **ArduPilot** and **PX4** — and adapts the editor,
 the icons and the file format to whichever one is active. This guide covers the shared concepts and
 where the three differ; it doesn't drill into every individual waypoint type.
@@ -17,7 +17,7 @@ The planner always targets one stack at a time:
   you fly. For **ArduPilot** there's also a **vehicle-type** dropdown (Plane / Copter / QuadPlane /
   Rover / Boat / Sub), which tunes the available commands and icons.
 
-If you connect to a different stack while a plan is loaded, Kite asks before discarding it.
+If you connect to a different stack while a plan is loaded, Tailwind asks before discarding it.
 
 ![The flight-stack selector](../assets/guides/missions/system_selector.png)
 /// caption
@@ -85,7 +85,7 @@ Each waypoint carries an altitude against a **reference**:
 
 - **INAV** offers three modes: **REL** (relative to the home/launch point — the usual default), **AMSL**
   (absolute, above mean sea level) and **AGL** (above ground level / terrain-following). AGL is a
-  **planning aid**: because INAV itself only stores REL/AMSL, Kite resolves each AGL point to an absolute
+  **planning aid**: because INAV itself only stores REL/AMSL, Tailwind resolves each AGL point to an absolute
   altitude (using terrain elevation) when the mission is uploaded or exported.
 - **ArduPilot / PX4** set a MAVLink **altitude frame** per item — **relative** (to home), **absolute**
   (AMSL) or **terrain** (terrain-following).
@@ -211,18 +211,18 @@ the aircraft will fly.
 ## Files & the mission library
 
 - **Save / load files** — INAV uses `.mission` (MultiWii XML); ArduPilot and PX4 use `.waypoints`
-  (the QGroundControl-compatible plain-text format). Kite also **imports QGroundControl `.plan`
+  (the QGroundControl-compatible plain-text format). Tailwind also **imports QGroundControl `.plan`
   files** (the only format modern QGC saves, so the usual hand-off in PX4 workflows) — mission
   waypoints only: QGC pattern items (Survey, Corridor Scan, …) can't be expanded outside QGC and are
   refused with a clear message, and a plan's embedded geofence/rally sections are ignored. Saving
-  from Kite produces `.waypoints`, which QGC can open. You can also drag a file onto the map.
+  from Tailwind produces `.waypoints`, which QGC can open. You can also drag a file onto the map.
 - **Provenance badges** tell you where the loaded plan came from — **FC** (downloaded), **FILE** (opened
   from disk) or **DB** (from the library) — plus a **Modified** badge once you've edited it. Shown for
   all three stacks.
 
 ### The mission library (Mission Manager)
 
-Save a plan into Kite's **library** to reuse it across sessions, then open the **Mission Manager** to
+Save a plan into Tailwind's **library** to reuse it across sessions, then open the **Mission Manager** to
 browse them. Missions are grouped by **location** (named automatically from their coordinates) and can
 be **searched**, **loaded to the map**, **exported** to a file, or **deleted** — with a warning when
 flights still link to a mission you're removing. Saving **de-duplicates by content**, so re-saving an
@@ -245,7 +245,7 @@ mission.
 
 ## Staying clear of airspace
 
-If the aircraft has **geozones** (INAV) or a **geofence** (ArduPilot / PX4) set, Kite can check your
+If the aircraft has **geozones** (INAV) or a **geofence** (ArduPilot / PX4) set, Tailwind can check your
 plan against them and warn about waypoints that breach a no-fly area. See **[Safety](safety.md)**.
 
 ## Where to go next

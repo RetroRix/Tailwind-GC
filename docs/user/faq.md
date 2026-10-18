@@ -4,7 +4,7 @@
 
 ### Which map providers can I use?
 
-Kite ships with several free map sources — no account or API key required. Pick one under
+Tailwind ships with several free map sources — no account or API key required. Pick one under
 **[Settings → Interface → Map → Tile Provider](reference/settings.md)**; the choice applies to **both
 the 2D map and the 3D globe**:
 
@@ -19,7 +19,7 @@ All of them work **offline** once the tiles have been cached — see below.
 
 ### Can I use the maps offline?
 
-Yes, within limits. Kite caches every map tile it downloads (**[Settings → Data → Map →
+Yes, within limits. Tailwind caches every map tile it downloads (**[Settings → Data → Map →
 Tile Cache](reference/settings.md)**). Pan and zoom over your flying area **while you still have an
 internet connection**, and those tiles stay available offline afterwards. There is **no bulk
 "pre-download this whole region" button** — the cache fills from what you actually view. The default
@@ -30,7 +30,7 @@ cache is 200 MB and can be raised up to 5 GB.
 This comes up because other ground stations (Mission Planner, QGroundControl) show Google satellite
 imagery. We looked at both Google and HERE carefully and deliberately chose **not** to integrate them.
 The short version: for a ground control station the downsides outweigh a marginal difference in map
-style, and the satellite imagery is **not actually better** than what Kite already offers.
+style, and the satellite imagery is **not actually better** than what Tailwind already offers.
 
 **Google Maps.** The way other apps show Google imagery relies on **undocumented tile endpoints** that
 Google's Terms of Service explicitly forbid accessing outside the official Maps Platform. It works only

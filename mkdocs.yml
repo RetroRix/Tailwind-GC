@@ -5,21 +5,21 @@
 # The published site is VERSIONED with mike (one entry per minor release + "Dev" for the master
 # tip) — see .github/workflows/docs.yml for the deployment model.
 
-site_name: Kite Ground Control
-site_description: User documentation for Kite Ground Control — an INAV / ArduPilot / PX4 ground control station.
-site_url: https://b14ckyy.github.io/Kite-GC/
-repo_url: https://github.com/b14ckyy/Kite-GC
-repo_name: b14ckyy/Kite-GC
+site_name: Tailwind Ground Control
+site_description: User documentation for Tailwind Ground Control — an INAV / ArduPilot / PX4 ground control station. Go far. Get home.
+site_url: https://retrorix.github.io/Tailwind-GC/
+repo_url: https://github.com/RetroRix/Tailwind-GC
+repo_name: RetroRix/Tailwind-GC
 edit_uri: edit/master/docs/user/
 docs_dir: docs/user
 site_dir: site
-copyright: Copyright &copy; Marc Hoffmann (b14ckyy) — GPL-3.0-or-later
+copyright: Copyright &copy; Marc Hoffmann (b14ckyy) · Tailwind modifications &copy; RetroRix — GPL-3.0-or-later
 
 theme:
   name: material
   language: en
   custom_dir: overrides
-  logo: assets/branding/kitegc-icon-white.svg
+  logo: assets/branding/tailwind-icon.png
   favicon: assets/branding/favicon.png
   palette:
     # Dark by default (matches the app's INAV dark theme), with a light toggle.
@@ -51,9 +51,6 @@ theme:
 plugins:
   - search
 
-# Release channel filter for the changelog (see the hook's docstring + docs.yml).
-hooks:
-  - docs/hooks/changelog_redirect.py
 
 extra_css:
   - assets/branding/extra.css
@@ -65,15 +62,10 @@ extra:
   # Footer icons (Material renders extra.social at the bottom of every page).
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/b14ckyy/Kite-GC
-      name: Kite on GitHub
-    - icon: fontawesome/brands/discord
-      link: https://discord.gg/3FM7EWhkg9
-      name: Kite community on Discord
+      link: https://github.com/RetroRix/Tailwind-GC
+      name: Tailwind on GitHub
   # Header version dropdown (Material's native mike support): reads the versions.json that mike
   # maintains on the gh-pages branch. Old versions get the "outdated" banner (overrides/main.html).
-  version:
-    provider: mike
 
 markdown_extensions:
   - admonition

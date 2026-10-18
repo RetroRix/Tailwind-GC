@@ -1,6 +1,6 @@
 # RC control
 
-Kite can fly the aircraft from the ground station using a **USB joystick, gamepad or RC transmitter** (in
+Tailwind can fly the aircraft from the ground station using a **USB joystick, gamepad or RC transmitter** (in
 USB / joystick mode): it reads your controller, maps the axes and buttons to RC channels, and streams
 them to the flight controller over the live link. This is a **safety-critical** feature — it's off until
 you explicitly **take control**, and it's deliberately gated behind a deadman so a frozen or disconnected
@@ -9,7 +9,7 @@ GCS can never keep stale sticks flying.
 !!! danger "This commands the aircraft"
     RC control sends real stick inputs to a real vehicle. Understand your FC's RC and failsafe
     configuration first, test on the bench, and keep a way to recover (a physical transmitter, or the
-    FC's failsafe). Kite adds guards, but **you** are flying.
+    FC's failsafe). Tailwind adds guards, but **you** are flying.
 
 Open it from the **RC** tool on the navigation rail. It's available once you enable RC control in
 **Settings**, and is hidden on passive-telemetry links (there's no uplink to send on).
@@ -31,7 +31,7 @@ all three. Only the part that talks to the FC differs. Each stack's specifics ar
 
 The controller half works the same regardless of the stack:
 
-- **Device** — pick your controller from the **Device** dropdown. Kite reads the **raw** device (all
+- **Device** — pick your controller from the **Device** dropdown. Tailwind reads the **raw** device (all
   axes, buttons and hat switches), so HOTAS sticks, throttles and transmitters in joystick mode work, not
   just Xbox-style gamepads. A small centre deadband is applied so a resting stick can't leak a command.
 - **Raw input monitor** — a collapsible view of every live axis / button / hat, so you can see what your
@@ -83,9 +83,9 @@ arming light) as the reminder; click it to jump straight back to the panel and r
 **Release control**, or a genuine loss of authority (see the deadman below), ever stops it.
 
 - **Deadman** — the GCS continuously heartbeats the latest frame; if it stops (controller unplugged, UI
-  frozen, link dropped, or you release control) Kite **stops streaming immediately** and never repeats the
+  frozen, link dropped, or you release control) Tailwind **stops streaming immediately** and never repeats the
   last sticks. The FC then does whatever its failsafe is configured to do.
-- **Seed on connect** — when you engage, Kite seeds each **button-driven** and **adjust** channel from
+- **Seed on connect** — when you engage, Tailwind seeds each **button-driven** and **adjust** channel from
   the FC's current values so they don't jump. **Passthrough (direct-axis) channels are *not* seeded** — a
   stick that isn't physically centred can still jump to its real position the moment you take control, so
   centre your sticks before engaging.
@@ -94,7 +94,7 @@ arming light) as the reminder; click it to jump straight back to the panel and r
 - **Config locked while armed** — while the vehicle is **armed**, the panel locks its configuration
   (channel mapping, profiles, input device and platform) down to the **live monitor + take/release** only,
   so you can't accidentally re-map a channel or switch profile mid-flight. Disarm to edit again.
-- **RC rate** — the stick stream rate is selectable (10–25 Hz). On **INAV**, Kite runs a quick
+- **RC rate** — the stick stream rate is selectable (10–25 Hz). On **INAV**, Tailwind runs a quick
   **link-speed test** a couple of seconds after you engage and warns if the link can't keep up at the
   chosen rate (suggesting a lower RC or telemetry rate). This test is **INAV/MSP only** — there's no
   equivalent check on the MAVLink (ArduPilot / PX4) path.
@@ -106,13 +106,13 @@ INAV uses two MSP primitives:
 - **`SET_RAW_RC`** — the streamed **stick** frame (channels 1–16). It's *fire-and-forget* and fails safe:
   if the stream stops, the FC reverts to its RC / failsafe.
 - **`AUX_RC`** — **latched** AUX switches (channels 17–32). A value set here **persists** on the FC until
-  you change it; there's **no failsafe** under it, which is why Kite keeps critical switches off it.
+  you change it; there's **no failsafe** under it, which is why Tailwind keeps critical switches off it.
 
 ### Version differences (important)
 
 | INAV version | What you get |
 |---|---|
-| **Below 8.0** | **No RC over MSP** — Kite blocks it (older firmware always replies, wasting the downlink). |
+| **Below 8.0** | **No RC over MSP** — Tailwind blocks it (older firmware always replies, wasting the downlink). |
 | **8.0 – 9.0** | **Stick streaming** via `SET_RAW_RC` (channels 1–16). |
 | **9.1 and up** | Adds **latched AUX** via `AUX_RC` (channels 17–32) on top. |
 
@@ -129,7 +129,7 @@ while the FC's **`MSP RC OVERRIDE`** mode is **active**:
 - While it's **off**, the panel shows *"Override inactive — AUX only"* and only your AUX channels (CH17+)
   do anything. While it's **on**, it shows *"MSP RC OVERRIDE active — controlling CH1–16"*.
 - On top of that, the FC keeps an **override bitmask** — a list of which channels MSP is even *allowed* to
-  override. Kite compares it with your mapped channels and, if some wouldn't be overridden, offers a
+  override. Tailwind compares it with your mapped channels and, if some wouldn't be overridden, offers a
   one-click **Set override bitmask** (applied **at runtime only**, not saved to the FC).
 
 **The receiver is set to MSP, with no other radio** (a direct serial or internet link). There's no
@@ -143,10 +143,10 @@ you'd map an AUX switch to turn `MSP RC OVERRIDE` itself on).
 !!! warning "Don't share the stick channels with another MSP-RC system"
     INAV **cannot tell who an MSP RC command comes from**. If something else already feeds RC to the FC
     over MSP — for example an **mLRS** link running in MSP-RC mode — do **not** also drive the main
-    channels (CH1–16) from Kite: the two streams collide and the FC can't separate them. In that setup,
+    channels (CH1–16) from Tailwind: the two streams collide and the FC can't separate them. In that setup,
     use **AUX channels (CH17+) only** from the GCS.
 
-Kite also reads the FC's **mode ranges** and labels each AUX channel with the mode it drives (e.g. *CH5 →
+Tailwind also reads the FC's **mode ranges** and labels each AUX channel with the mode it drives (e.g. *CH5 →
 ANGLE*), and runs **safety checks** on the AUX channels you control: a critical mode (ARM / RTH /
 FAILSAFE) on a latching AUX channel is **blocked** (if the link dropped, a latched switch could leave you
 unable to disarm or recover), and autonomous GPS modes (CRUISE / WP / POSHOLD / ALTHOLD) raise a
@@ -156,13 +156,13 @@ unable to disarm or recover), and autonomous GPS modes (CRUISE / WP / POSHOLD / 
 
 ArduPilot uses **`RC_CHANNELS_OVERRIDE`** — one message carrying channels **1–16**, grouped in the panel
 as **Primary (CH1–8)** and **Secondary (CH9–16)** (the two halves use different "release" encodings, which
-Kite handles for you).
+Tailwind handles for you).
 
 - **No override-mode switch** — overrides take effect as soon as you engage, so the **manual Take-control
   gate is the primary guard** here.
 - **FC-side deadman** — ArduPilot's `RC_OVERRIDE_TIME` (≈3 s by default) reverts to the real RX if the
-  stream stops. Kite's own deadman is the front-line stop; the FC timeout is the backstop.
-- **No forced release on disengage** — when you release control Kite simply *stops* sending (rather than
+  stream stops. Tailwind's own deadman is the front-line stop; the FC timeout is the backstop.
+- **No forced release on disengage** — when you release control Tailwind simply *stops* sending (rather than
   sending a "release" frame), leaving the FC a few-second window to re-engage before its failsafe fires.
 - **`SYSID_MYGCS`** — ArduPilot only accepts overrides from its configured GCS system ID; a mismatch
   silently drops them.
@@ -175,10 +175,10 @@ Kite handles for you).
 !!! warning "Don't share the channels with another MAVLink-RC system"
     ArduPilot **cannot tell two `RC_CHANNELS_OVERRIDE` sources apart**. If a radio already feeds RC to the
     FC over MAVLink — for example a **SIYI** air unit in MAVLink-RC mode, with no separate serial receiver
-    — do **not** also drive those channels from Kite: the two override streams collide, and **`SYSID_MYGCS`**
+    — do **not** also drive those channels from Tailwind: the two override streams collide, and **`SYSID_MYGCS`**
     filtering may silently drop one of them. Unlike INAV there is **no separate AUX channel space** on
-    ArduPilot (it's one CH1–16 override), so there's **no clean "AUX-only" fallback** — Kite RC control and
-    another MAVLink-RC system must **not** be used together on the main channels. Use Kite RC control only
+    ArduPilot (it's one CH1–16 override), so there's **no clean "AUX-only" fallback** — Tailwind RC control and
+    another MAVLink-RC system must **not** be used together on the main channels. Use Tailwind RC control only
     when the other radio is **idle / handed off**, or set up a dedicated, non-conflicting configuration
     first — consult the **ArduPilot RC / MAVLink-override documentation** and the
     **[RC control troubleshooting](../troubleshooting/rc-control.md)** page.
@@ -186,15 +186,15 @@ Kite handles for you).
 ## PX4 (MAVLink)
 
 PX4 is fundamentally different: it uses **`MANUAL_CONTROL`**, which is **not** per-channel PWM but
-**four normalised axes** (roll, pitch, throttle, yaw) plus up to **6 aux axes** and **32 buttons**. Kite
+**four normalised axes** (roll, pitch, throttle, yaw) plus up to **6 aux axes** and **32 buttons**. Tailwind
 gives PX4 its own **manual-control editor** rather than the channel grid.
 
 - **Throttle is centred** — stick centre = mid throttle (PX4 maps it [−1, 1] → [0, 1] for both
   multirotor and fixed-wing).
 - **Buttons** are sent as a bitfield; **PX4 maps each button to an action** per vehicle (in PX4 / QGC), so
-  there's nothing button-related to configure on the Kite side.
+  there's nothing button-related to configure on the Tailwind side.
 - **`COM_RC_IN_MODE`** must allow a MAVLink/joystick source (not "RC only") or PX4 ignores the input —
-  Kite shows a reminder.
+  Tailwind shows a reminder.
 - **Modes and arming** stay on the Control tool.
 
 !!! note "PX4 support is newer"

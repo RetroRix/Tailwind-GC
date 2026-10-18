@@ -1,9 +1,9 @@
 # Quick tour
 
-A two-minute look at the Kite interface, so you know where everything lives. Don't worry about the
+A two-minute look at the Tailwind interface, so you know where everything lives. Don't worry about the
 details here — each area has its own guide; this is just the map of the cockpit.
 
-![The Kite interface with its main regions numbered](../assets/getting-started/ui_overview.png)
+![The Tailwind interface with its main regions numbered](../assets/getting-started/ui_overview.png)
 /// caption
 The main interface, with the numbered regions described below.
 ///
@@ -26,7 +26,7 @@ The window is built from a few fixed regions around a full-screen map:
 
 The command centre. From left to right:
 
-- **Brand & version** — the Kite logo and the running version.
+- **Brand & version** — the Tailwind logo and the running version.
 - **Aircraft status (centre)** — the **arming indicator**, a row of **sensor-health tiles** (gyro, acc,
   mag, baro, GPS, and rangefinder/airspeed when fitted — green = OK, amber = warning, red = fault), and
   the **battery** readout. Tiles only appear for sensors your craft actually reports, so the row adapts
@@ -211,7 +211,7 @@ Each widget, at a glance — expand for what it shows and how it works:
     ![The Home widget](../assets/getting-started/widgets/home.png)
 
 ??? note "Flight Mode"
-    The current **flight mode** as a badge. Kite maps every stack's modes onto one **protocol-agnostic**
+    The current **flight mode** as a badge. Tailwind maps every stack's modes onto one **protocol-agnostic**
     model, so INAV, ArduPilot and PX4 read consistently: the **exact mode name** is always kept (e.g.
     *Angle*, *Cruise*, *RTL*, *FBW-A*, *QLoiter*), while the **badge colour** comes from the mode's
     **category** — the *same* colour scheme used to colour the flight track on the map. Roughly:
@@ -272,9 +272,9 @@ The thin strip along the very **bottom**:
   version and port (e.g. *INAV 8.0.0 on COM7*).
 - **Right** — the **arming state** (ARMED / DISARMED) while connected.
 
-## Kite on a phone
+## Tailwind on a phone
 
-On a **phone** (Android or iPhone) Kite uses its own **landscape** layout, built for a screen that has
+On a **phone** (Android or iPhone) Tailwind uses its own **landscape** layout, built for a screen that has
 room for either the map or a widget, rarely both. Tablets keep the desktop layout described above.
 
 - **No top bar, no status bar, no bottom dock.** The map fills the whole screen; the navigation rail's

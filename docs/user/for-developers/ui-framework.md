@@ -1,6 +1,6 @@
 # UI framework & theme
 
-Kite has a small set of **shared UI building blocks** and a fixed **dark theme**. Using them is a hard
+Tailwind has a small set of **shared UI building blocks** and a fixed **dark theme**. Using them is a hard
 rule, not a suggestion: it keeps every panel visually consistent, keeps behaviour (sizing, scaling,
 accessibility, transitions) correct for free, and avoids a drift of one-off buttons and inputs.
 
@@ -80,7 +80,7 @@ For destructive or arming actions, use the deliberate-gesture controls instead o
 
 ## Design theme
 
-Kite follows the **INAV Configurator dark theme**. The root element is `color-scheme: dark`; the palette:
+Tailwind follows the **INAV Configurator dark theme**. The root element is `color-scheme: dark`; the palette:
 
 | Token | Hex | Role |
 |---|---|---|

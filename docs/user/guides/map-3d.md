@@ -1,6 +1,6 @@
 # 3D map
 
-Kite has a full **3D globe** view, built on CesiumJS, alongside the flat 2D map. It drapes real-world
+Tailwind has a full **3D globe** view, built on CesiumJS, alongside the flat 2D map. It drapes real-world
 **terrain** and map imagery over the globe and renders the **same data you see in 2D** — the flight
 track, the mission, the aircraft, and every overlay (radar, geozones, safe homes, airspace) — in three
 dimensions, with several camera modes including a first-person cockpit view.
@@ -19,7 +19,7 @@ mission overlay.
 
 ## Real-world terrain & imagery
 
-3D terrain comes from **Cesium World Terrain**, which needs a **free Cesium Ion token**. Kite prompts you
+3D terrain comes from **Cesium World Terrain**, which needs a **free Cesium Ion token**. Tailwind prompts you
 for one the first time you open 3D; paste it once (or add it later in **Settings → Data**) and the globe
 shows true elevation. Without a token the 3D view still works — you just don't get real-world terrain
 relief. The surface **imagery** is whatever map/tile provider you've chosen for the 2D map, draped over
@@ -83,7 +83,7 @@ telemetry in real time. The same models are used for the chase/orbit views and a
 
 ![The five aircraft models: fixed-wing, multirotor, tricopter, VTOL and the generic arrow](../assets/guides/map-3d/uav_models.png)
 /// caption
-Kite picks the model from the vehicle type the flight controller reports — multirotor, tricopter,
+Tailwind picks the model from the vehicle type the flight controller reports — multirotor, tricopter,
 fixed-wing, and VTOL for ArduPilot QuadPlanes and PX4 VTOL airframes; an unknown type (passive
 telemetry, for instance) gets the generic arrow. Red marks the
 left side, green the right, the yellow spike the nose; the same model draws the 2D map icon.
@@ -91,7 +91,7 @@ left side, green the right, the yellow spike the nose; the same model draws the 
 
 ## Everything else, in 3D too
 
-The 3D map mirrors the rest of Kite's overlays, each placed at real altitude:
+The 3D map mirrors the rest of Tailwind's overlays, each placed at real altitude:
 
 - **Radar contacts** — 3D models coloured by relative altitude, with drop-lines and ground footprints
   for near-level traffic. See **[Radar & ADS-B](radar-and-adsb.md)**.

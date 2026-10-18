@@ -1,8 +1,8 @@
 # Safety
 
-Kite groups the features that keep an aircraft out of trouble — **terrain clearance**, **no-fly /
+Tailwind groups the features that keep an aircraft out of trouble — **terrain clearance**, **no-fly /
 keep-in areas**, and **automatic landing / return** — into one place in this guide. Most of them are
-*editors* for settings that live on the flight controller itself: Kite reads them, lets you change them
+*editors* for settings that live on the flight controller itself: Tailwind reads them, lets you change them
 on the map, and writes them back. The FC does the actual enforcing in flight.
 
 Which tools you get depends on the connected stack, because the three firmwares model safety quite
@@ -51,10 +51,10 @@ dedicated **[Terrain & RF analysis](terrain-analysis.md)** guide for the full fe
 ## Keep-in & keep-out areas
 
 Both firmware families let you define areas the aircraft should stay inside (**inclusion / flight
-zones**) or out of (**exclusion / no-fly zones**). Kite edits them on the map and uploads them, but the
+zones**) or out of (**exclusion / no-fly zones**). Tailwind edits them on the map and uploads them, but the
 two models differ enough to be worth understanding.
 
-Throughout Kite, the colours are consistent: **inclusion = blue**, **exclusion = amber**.
+Throughout Tailwind, the colours are consistent: **inclusion = blue**, **exclusion = amber**.
 
 ### INAV — Geozones
 
@@ -87,7 +87,7 @@ click an edge to insert a vertex, or type exact coordinates in the popup. The pa
 altitude band, reference and action. Editing is **locked while armed**.
 
 **Saving** writes every zone to the FC, stores it to EEPROM and **reboots** the flight controller —
-geozones only take effect after a restart, so the link drops and reconnects. Kite checks your zones
+geozones only take effect after a restart, so the link drops and reconnects. Tailwind checks your zones
 first (valid shapes, vertex/zone limits, sensible altitude band) and fixes polygon winding for you.
 
 ### ArduPilot / PX4 — Geofence
@@ -98,7 +98,7 @@ optional **return point** (ArduPilot) — and the on-map editing reuses the geoz
 handles, vertex insert, coordinate popup, armed-lock).
 
 The difference is in the model: on ArduPilot/PX4 the **altitude limits and the breach action are not
-part of each zone** — they're a single set of **global parameters** that apply to the whole fence. Kite
+part of each zone** — they're a single set of **global parameters** that apply to the whole fence. Tailwind
 reads and writes the core ones in the panel's **Fence parameters** block, choosing the right names for
 the connected autopilot:
 
@@ -117,7 +117,7 @@ Saving uploads the fence and writes the changed parameters; no reboot is needed.
 ### Rally points (ArduPilot / PX4)
 
 ArduPilot and PX4 also support **rally points** — alternate return/divert locations the FC can use
-instead of home (e.g. for RTL). Kite edits them on the same **Airspace** panel: green **R** markers you
+instead of home (e.g. for RTL). Tailwind edits them on the same **Airspace** panel: green **R** markers you
 drag on the map, each with a lat/lon and altitude, plus the rally parameters (use limit, include home).
 They load on connect and upload on save. INAV has no separate rally concept — it returns to home or to a
 **safe home** (below).
@@ -128,7 +128,7 @@ They load on connect and upload on save. INAV has no separate rally concept — 
 
 This is an INAV-only system, and one of its more sophisticated ones. A **safe home** is a stored
 landing site (lat/lon); for fixed wings, INAV (**7.1+**) can fly a complete **wind-aware automatic
-landing** there on RTH — loiter, downwind, base, final, glide and flare. Kite gives you the editor for
+landing** there on RTH — loiter, downwind, base, final, glide and flare. Tailwind gives you the editor for
 both. (On ArduPilot and PX4 it works differently: multirotors and VTOLs land automatically on a Land /
 RTL command, while fixed wings autoland only as part of a preloaded mission — so there's no separate
 per-site landing editor like this one.)
@@ -169,7 +169,7 @@ The collapsible **Autoland Config** box holds the global approach parameters: **
 
 ### On the map
 
-For each enabled safe home Kite draws:
+For each enabled safe home Tailwind draws:
 
 - the **safe-home marker** (a green/grey "H" teardrop),
 - a **green max-distance ring** (the `safehome_max_distance` guard) — shown **only while disarmed**,
@@ -189,7 +189,7 @@ whole package (safe homes + approaches + autoland settings) to the FC and saves 
 
 ## Plan-vs-airspace check
 
-When you have geozones (INAV) or a geofence (ArduPilot/PX4) set, Kite checks your **planned mission**
+When you have geozones (INAV) or a geofence (ArduPilot/PX4) set, Tailwind checks your **planned mission**
 against them automatically and flags trouble — these are **hints, never a blocker**:
 
 - A warning bar above the waypoint list (e.g. *launch/home is inside a no-fly zone*, *mission path may
@@ -206,7 +206,7 @@ The plan-vs-airspace check: a warning bar and red legs where the route would bre
 ///
 
 !!! warning "These are previews, not the last word"
-    Kite's checks help you catch mistakes before you fly, but the flight controller is what actually
+    Tailwind's checks help you catch mistakes before you fly, but the flight controller is what actually
     enforces fences, geozones and landings. Always confirm the configuration on the FC and test
     conservatively.
 
