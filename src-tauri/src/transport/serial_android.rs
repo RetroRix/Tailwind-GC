@@ -29,8 +29,8 @@ use jni::objects::{JByteArray, JValue};
 use super::{ByteTransport, PortInfo, TransportError};
 use crate::android::jvm;
 
-/// Binary name of the Kotlin bridge — see `gen/android/app/src/main/java/com/kitegc/app/UsbSerial.kt`.
-const BRIDGE: &str = "com.kitegc.app.UsbSerial";
+/// Binary name of the Kotlin bridge — see `gen/android/app/src/main/java/com/tailwindgc/app/UsbSerial.kt`.
+const BRIDGE: &str = "com.tailwindgc.app.UsbSerial";
 
 /// Matches the desktop transport's read timeout: short on purpose, because it bounds the latency the
 /// protocol handler adds to an outgoing command (it only services a queued write once the current

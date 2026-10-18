@@ -30,22 +30,22 @@
 #
 # Keep the class and every member. `init` is reached from MainActivity and would
 # survive on its own; nothing else would.
--keep class com.kitegc.app.UsbSerial { *; }
+-keep class com.tailwindgc.app.UsbSerial { *; }
 
 # Same JNI-only story for the storage bridge (android/storage.rs → StorageAccess):
 # pickFolder/getLastError/syncDirToTree have no Kotlin caller, so R8 strips them and
 # the folder picker dies with a NoSuchMethodError only in RELEASE builds — the debug
 # build does not minify, which is exactly how this trap stayed invisible in testing.
--keep class com.kitegc.app.StorageAccess { *; }
+-keep class com.tailwindgc.app.StorageAccess { *; }
 
 # And the BLE bridge (transport/ble_android.rs → BleSerial) — JNI-only, same rule.
--keep class com.kitegc.app.BleSerial { *; }
--keep class com.kitegc.app.ScreenLock { *; }
+-keep class com.tailwindgc.app.BleSerial { *; }
+-keep class com.tailwindgc.app.ScreenLock { *; }
 
 # Native-video layer host (android/native_video.rs → NativeVideo) — JNI-only, same rule.
--keep class com.kitegc.app.NativeVideo { *; }
+-keep class com.tailwindgc.app.NativeVideo { *; }
 
 # Active-network transport lookup (android/net.rs → NetInfo) — JNI-only, same rule.
--keep class com.kitegc.app.NetInfo { *; }
+-keep class com.tailwindgc.app.NetInfo { *; }
 # Link foreground-service bridge (android/link_service.rs → LinkService) — JNI-only, same rule.
--keep class com.kitegc.app.LinkService { *; }
+-keep class com.tailwindgc.app.LinkService { *; }

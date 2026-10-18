@@ -10,7 +10,7 @@ use jni::objects::JValue;
 
 use super::jvm;
 
-const CLASS: &str = "com.kitegc.app.NativeVideo";
+const CLASS: &str = "com.tailwindgc.app.NativeVideo";
 
 /// Create (or re-layout) the layer at a window rect (physical pixels — the same convention
 /// as the Windows sink). The sink starts this at 1×1; the frontend pushes the real rect.

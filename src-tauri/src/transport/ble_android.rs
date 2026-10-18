@@ -28,7 +28,7 @@ use super::ble_profiles::known_profiles;
 use super::{ByteTransport, TransportError};
 use crate::android::jvm;
 
-const BRIDGE: &str = "com.kitegc.app.BleSerial";
+const BRIDGE: &str = "com.tailwindgc.app.BleSerial";
 
 /// Sentinel handle for errors that belong to no link (scan, permissions) — mirrors the Kotlin side.
 const NO_HANDLE: i32 = -1;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Marc Hoffmann (b14ckyy)
 
-package com.kitegc.app
+package com.tailwindgc.app
 
 import android.app.Notification
 import android.app.NotificationChannel

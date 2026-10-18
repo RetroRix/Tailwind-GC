@@ -14,7 +14,7 @@ use jni::objects::JValue;
 
 use super::jvm;
 
-const BRIDGE: &str = "com.kitegc.app.LinkService";
+const BRIDGE: &str = "com.tailwindgc.app.LinkService";
 
 /// Notification refresh cadence (every update is a Binder call).
 const TICK: Duration = Duration::from_secs(1);

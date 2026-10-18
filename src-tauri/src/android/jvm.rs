@@ -8,7 +8,7 @@
 //!
 //! 1. **The class loader.** `JNIEnv::find_class` on a thread Rust created resolves against the
 //!    *system* class loader, which knows the platform classes and nothing of the app — so
-//!    `find_class("com/kitegc/app/UsbSerial")` fails with `NoClassDefFoundError` even though the class
+//!    `find_class("com/tailwindgc/app/UsbSerial")` fails with `NoClassDefFoundError` even though the class
 //!    is right there in the APK. The fix is to go through the Activity's own loader, which is what
 //!    [`app_class`] does, caching it for the life of the process.
 //!
@@ -48,7 +48,7 @@ pub fn env() -> Result<JNIEnv<'static>, String> {
         .map_err(|e| format!("could not attach the thread to the Android VM: {e}"))
 }
 
-/// Look up one of the app's own classes by its dotted binary name (`com.kitegc.app.UsbSerial`).
+/// Look up one of the app's own classes by its dotted binary name (`com.tailwindgc.app.UsbSerial`).
 ///
 /// Goes through the Activity's class loader — see the module docs for why `find_class` cannot be used
 /// here. The loader is resolved once and held as a global reference; the class itself is looked up per

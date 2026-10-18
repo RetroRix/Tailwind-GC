@@ -15,7 +15,7 @@ use jni::objects::JString;
 
 use super::jvm;
 
-const BRIDGE: &str = "com.kitegc.app.StorageAccess";
+const BRIDGE: &str = "com.tailwindgc.app.StorageAccess";
 
 /// Open the system folder picker and block until the user answers. Returns the granted **tree URI**
 /// (`content://…`) to store as the setting value; `Ok(None)` = cancelled.

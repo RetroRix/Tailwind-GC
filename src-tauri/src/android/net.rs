@@ -10,7 +10,7 @@ use super::jvm;
 
 pub fn active_net_is_wifi() -> Result<bool, String> {
     let mut env = jvm::env()?;
-    let class = jvm::app_class(&mut env, "com.kitegc.app.NetInfo")?;
+    let class = jvm::app_class(&mut env, "com.tailwindgc.app.NetInfo")?;
     let r = env
         .call_static_method(&class, "activeNetIsWifi", "()Z", &[])
         .and_then(|v| v.z());

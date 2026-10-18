@@ -1,4 +1,4 @@
-package com.kitegc.app
+package com.tailwindgc.app
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * picks Kite when they plug the cable in, which grants permission without a prompt.
  */
 object UsbSerial {
-    private const val ACTION_PERMISSION = "com.kitegc.app.USB_PERMISSION"
+    private const val ACTION_PERMISSION = "com.tailwindgc.app.USB_PERMISSION"
 
     /** How long [open] waits for the user to answer the permission dialog before giving up. */
     private const val PERMISSION_TIMEOUT_MS = 60_000L

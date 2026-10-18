@@ -8,7 +8,7 @@ use jni::objects::JValue;
 
 use super::jvm;
 
-const BRIDGE: &str = "com.kitegc.app.ScreenLock";
+const BRIDGE: &str = "com.tailwindgc.app.ScreenLock";
 
 /// Set or clear the keep-screen-on window flag. Fire-and-forget; the flag change hops to the main
 /// thread on the Kotlin side.

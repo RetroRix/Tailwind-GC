@@ -58,7 +58,7 @@ pub fn app_documents_dir() -> PathBuf {
 
 /// Read the package name from `/proc/self/cmdline` and build the files directory from it.
 ///
-/// Android sets the process name to the package name (`com.kitegc.app`), and `/proc/self/cmdline` is
+/// Android sets the process name to the package name (`com.tailwindgc.app`), and `/proc/self/cmdline` is
 /// the one place a plain Rust process can read it without JNI. `/data/user/0/<pkg>` is the modern path
 /// and what `getFilesDir()` returns on a single-user device; `/data/data/<pkg>` is the pre-multi-user
 /// symlink to the same place, kept as a fallback for the rare device where the former is missing.
@@ -66,7 +66,7 @@ fn derive_data_dir() -> PathBuf {
     let package = read_package_name().unwrap_or_else(|| {
         log::warn!("[android] could not read package name from /proc/self/cmdline; using the default");
         // Matches `identifier` in tauri.conf.json / `applicationId` in app/build.gradle.kts.
-        "com.kitegc.app".to_string()
+        "com.tailwindgc.app".to_string()
     });
 
     for base in ["/data/user/0", "/data/data"] {
@@ -82,7 +82,7 @@ fn derive_data_dir() -> PathBuf {
 }
 
 /// The package name, i.e. `cmdline` up to the first NUL. Android appends `:<name>` for processes other
-/// than the main one (`com.kitegc.app:remote`); we only ever run in the main process, but strip it
+/// than the main one (`com.tailwindgc.app:remote`); we only ever run in the main process, but strip it
 /// anyway so a future service process would still resolve to the same directory.
 fn read_package_name() -> Option<String> {
     let raw = std::fs::read("/proc/self/cmdline").ok()?;
