@@ -121,6 +121,8 @@ object UsbSerial {
                     .put("path", device.deviceName)
                     .put("label", label)
                     .put("type", "USB")
+                    .put("vid", device.vendorId)
+                    .put("pid", device.productId)
             )
         }
         return out.toString()

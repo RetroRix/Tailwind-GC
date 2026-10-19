@@ -30,6 +30,7 @@
     changeAlt, changeSpeed, setLoiterRadius, setHomeHere, abortLanding, setHeading, vtolTransition,
   } from '$lib/controllers/vehicleControl';
   import { frameMissionOnMap } from '$lib/stores/mapCamera';
+  import { settings } from '$lib/stores/settings';
 
   const sys = $derived($autopilotSystem);
   const cls = $derived($arduVehicleClass);
@@ -44,6 +45,18 @@
 
   let showAllModes = $state(false);
   const stickUnlocked = $derived($stickModesUnlocked); // RC transmitter OR engaged RC control
+
+  // Pinned modes (Tailwind) — the pilot's one-tap modes in the status bar. In pin-edit mode the
+  // mode grid toggles pins instead of switching modes.
+  let pinEdit = $state(false);
+  const pins = $derived($settings.pinnedModes ?? []);
+  function isPinned(m: MavMode): boolean { return pins.includes(m.key); }
+  function togglePin(m: MavMode) {
+    settings.patch({
+      pinnedModes: isPinned(m) ? pins.filter((k) => k !== m.key) : [...pins, m.key],
+    });
+  }
+  function modeClick(m: MavMode) { if (pinEdit) togglePin(m); else pickMode(m); }
 
   let takeoffAlt = $state(savedInputs.takeoffAlt);
 
@@ -243,9 +256,13 @@
         <!-- 6. Other modes (quick switch) -->
         <section class="cc-sec">
           <span class="cc-sec-title">{$t('control.section.modes')}</span>
+          <label class="cc-allmodes" title={$t('control.pinHint')}>
+            <input type="checkbox" bind:checked={pinEdit} />
+            <span>{$t('control.pinModes')}</span>
+          </label>
           <div class="cc-modegrid">
             {#each quickModes as m}
-              <Button variant="mode" size="sm" active={activeKey === m.key} onclick={() => pickMode(m)}>{m.name}</Button>
+              <Button variant="mode" size="sm" active={pinEdit ? isPinned(m) : activeKey === m.key} onclick={() => modeClick(m)}>{#if isPinned(m)}📌 {/if}{m.name}</Button>
             {/each}
           </div>
           {#if stickModes.length}

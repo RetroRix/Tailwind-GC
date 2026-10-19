@@ -98,6 +98,10 @@ pub fn list_ports() -> Vec<PortInfo> {
         label: String,
         #[serde(rename = "type")]
         port_type: String,
+        #[serde(default)]
+        vid: Option<u16>,
+        #[serde(default)]
+        pid: Option<u16>,
     }
 
     match serde_json::from_str::<Vec<Entry>>(&json) {
@@ -107,6 +111,8 @@ pub fn list_ports() -> Vec<PortInfo> {
                 path: e.path,
                 label: e.label,
                 port_type: e.port_type,
+                vid: e.vid,
+                pid: e.pid,
             })
             .collect(),
         Err(e) => {

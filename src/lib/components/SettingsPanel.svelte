@@ -48,6 +48,7 @@
     gcsMode = 'manual',
     userLocation = null,
     defaultProtocol = 'last',
+    usbAutoConnect = true,
     attitudeRateHz = 5,
     positionRateHz = 2,
     airspeedEnabled = true,
@@ -103,6 +104,7 @@
     gcsMode?: GcsMode;
     userLocation?: { lat: number; lon: number } | null;
     defaultProtocol?: DefaultProtocol;
+    usbAutoConnect?: boolean;
     attitudeRateHz?: number;
     positionRateHz?: number;
     airspeedEnabled?: boolean;
@@ -618,6 +620,12 @@
           <option value="mavlink">MAVLink</option>
           <option value="telemetry">Telemetry</option>
         </select>
+      </div>
+      <!-- USB auto-connect (Tailwind): plugging in a known flight controller connects by itself. -->
+      <div class="s-row" title={$t('settings.usbAutoConnectHint')}>
+        <label class="s-label" for="usb-autoconnect">{$t('settings.usbAutoConnect')}</label>
+        <input id="usb-autoconnect" type="checkbox" checked={usbAutoConnect}
+          onchange={(e) => onPatch({ usbAutoConnect: (e.target as HTMLInputElement).checked })} />
       </div>
     </div>
 

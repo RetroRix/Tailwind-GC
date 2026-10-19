@@ -8,7 +8,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { open, save } from "@tauri-apps/plugin-dialog";
-  import { connection, availablePorts, bleDevices, defaultNetPort } from "$lib/stores/connection";
+  import { connection, availablePorts, bleDevices, defaultNetPort, lastHotpluggedPort } from "$lib/stores/connection";
   import type { FcInfo, PortInfo, BleDeviceInfo, TransportType, ProtocolType } from "$lib/stores/connection";
   import { settings } from "$lib/stores/settings";
   import { isAndroid, isMobile, isTablet, isPhone as isPhoneDevice, hasSerialPorts, logPlayerWidth } from "$lib/platform";
@@ -2487,6 +2487,39 @@
 
   async function refreshPorts() {
     selectedPort = await refreshSerialPorts(selectedPort);
+    maybeAutoConnectUsb();
+  }
+
+  // ── USB auto-connect (Tailwind, Titan-style) ───────────────────────
+  // When a known flight-controller USB device hot-plugs while we're disconnected, connect to
+  // it with the current protocol/baud selection. FC-native VIDs only (CubePilot, Hex/3DR,
+  // pid.codes, STM32 VCP) — generic USB-serial bridges (FTDI/CP210x/CH340) are deliberately
+  // excluded so a random adapter or radio dongle never hijacks the connection. Each hotplug
+  // gets exactly one attempt: a manual disconnect doesn't re-trigger it, and a failed attempt
+  // isn't retried until the device is unplugged and plugged in again.
+  const FC_USB_VIDS = new Set([0x2dae, 0x26ac, 0x1209, 0x0483]);
+  let consumedHotplug: PortInfo | null = null;
+  let autoConnectBusy = false;
+
+  function maybeAutoConnectUsb() {
+    const hot = get(lastHotpluggedPort);
+    if (!hot) return;
+    // Device went away again — forget it so the next plug-in counts as a fresh hotplug.
+    if (!get(availablePorts).some((p) => p.path === hot.path)) {
+      lastHotpluggedPort.set(null);
+      return;
+    }
+    if (hot === consumedHotplug || autoConnectBusy) return;
+    if (!$settings.usbAutoConnect) return;
+    if (selectedTransport !== 'serial' || connStatus === 'connected' || connStatus === 'connecting' || isConnecting) return;
+    if (hot.vid == null || !FC_USB_VIDS.has(hot.vid)) return;
+    if (selectedPort !== hot.path) return; // refreshSerialPorts auto-selects the new port; stay out if it didn't
+    consumedHotplug = hot;
+    autoConnectBusy = true;
+    void (async () => {
+      try { await handleConnect(); }
+      finally { autoConnectBusy = false; }
+    })();
   }
 
   // ── Auto-discovery while disconnected (Quick Note: auto-discover changed COM ports + auto-scan BLE) ──
@@ -3875,6 +3908,7 @@
             userLocation={$userGeoLocation}
             onGeoCheck={requestUserLocation}
             defaultProtocol={$settings.defaultProtocol}
+            usbAutoConnect={$settings.usbAutoConnect}
             {attitudeRateHz}
             {positionRateHz}
             {airspeedEnabled}

@@ -269,6 +269,8 @@ pub fn list_ports() -> Vec<PortInfo> {
                         path: p.port_name.clone(),
                         label: p.port_name,
                         port_type: "bluetooth-spp".to_string(),
+                        vid: None,
+                        pid: None,
                     });
                 }
 
@@ -279,7 +281,7 @@ pub fn list_ports() -> Vec<PortInfo> {
                     return None;
                 }
 
-                let (label, port_type) = match &p.port_type {
+                let (label, port_type, vid, pid) = match &p.port_type {
                     serialport::SerialPortType::UsbPort(usb) => {
                         let label = match (&usb.manufacturer, &usb.product) {
                             (Some(mfr), Some(prod)) => {
@@ -289,22 +291,24 @@ pub fn list_ports() -> Vec<PortInfo> {
                             (Some(mfr), _) => format!("{} — {}", p.port_name, mfr),
                             _ => p.port_name.clone(),
                         };
-                        (label, "USB".to_string())
+                        (label, "USB".to_string(), Some(usb.vid), Some(usb.pid))
                     }
                     serialport::SerialPortType::BluetoothPort => {
-                        (p.port_name.clone(), "Bluetooth".to_string())
+                        (p.port_name.clone(), "Bluetooth".to_string(), None, None)
                     }
                     serialport::SerialPortType::PciPort => {
-                        (p.port_name.clone(), "PCI".to_string())
+                        (p.port_name.clone(), "PCI".to_string(), None, None)
                     }
                     serialport::SerialPortType::Unknown => {
-                        (p.port_name.clone(), "Unknown".to_string())
+                        (p.port_name.clone(), "Unknown".to_string(), None, None)
                     }
                 };
                 Some(PortInfo {
                     path: p.port_name,
                     label,
                     port_type,
+                    vid,
+                    pid,
                 })
             })
             .collect()

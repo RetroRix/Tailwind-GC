@@ -72,6 +72,9 @@ export interface PortInfo {
   path: string;
   label: string;
   port_type: string;
+  /** USB vendor/product ids (Tailwind auto-connect matches flight-controller VIDs). */
+  vid?: number | null;
+  pid?: number | null;
 }
 
 export interface BleDeviceInfo {
@@ -120,5 +123,9 @@ export const connectionProtocol = writable<{ primary: string; secondary: string 
 export const fcLinkAlive = writable<boolean>(true);
 
 export const availablePorts = writable<PortInfo[]>([]);
+
+/** The most recent serial port that hot-plugged in (Tailwind USB auto-connect watches this).
+ *  Set by refreshSerialPorts when a new port appears; null until the first hotplug. */
+export const lastHotpluggedPort = writable<PortInfo | null>(null);
 
 export const bleDevices = writable<BleDeviceInfo[]>([]);

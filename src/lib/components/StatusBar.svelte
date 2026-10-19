@@ -9,6 +9,7 @@
   import { fcLinkAlive } from '$lib/stores/connection';
   import type { TelemetryData } from '$lib/stores/telemetry';
   import { isArmed } from '$lib/helpers/telemetry';
+  import PinnedModes from './PinnedModes.svelte';
 
   let {
     connStatus,
@@ -61,6 +62,7 @@
       </button>
     {/if}
   </div>
+  <PinnedModes />
   <div class="statusbar-right">
     {#if connStatus === "connected" && telem.lastUpdate > 0}
       <span class="status-arming" class:armed={armed()} class:disarmed={!armed()}>

@@ -6,7 +6,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { get } from 'svelte/store';
 import type { FcInfo, PortInfo, BleDeviceInfo, TransportType, ProtocolType } from '$lib/stores/connection';
 import type { InavStats } from '$lib/stores/flightlogTypes';
-import { connection, connectionProtocol, fcLinkAlive, availablePorts, bleDevices, detectedPlatformType } from '$lib/stores/connection';
+import { connection, connectionProtocol, fcLinkAlive, availablePorts, lastHotpluggedPort, bleDevices, detectedPlatformType } from '$lib/stores/connection';
 import { startTelemetryListeners, stopTelemetryListeners, resetTelemetry } from '$lib/stores/telemetry';
 import { applyRelaysOnConnect, clearRelaysOnDisconnect } from '$lib/controllers/relayController';
 import { loadSafehomeConfig, clearSafehome } from '$lib/stores/safehome';
@@ -42,7 +42,10 @@ export async function refreshSerialPorts(currentPort: string): Promise<string> {
   // Hotplug: select the freshly connected port.
   const prevPaths = new Set(prev.map((p) => p.path));
   const appeared = result.filter((p) => !prevPaths.has(p.path));
-  if (appeared.length > 0) return appeared[appeared.length - 1].path;
+  if (appeared.length > 0) {
+    lastHotpluggedPort.set(appeared[appeared.length - 1]);
+    return appeared[appeared.length - 1].path;
+  }
 
   // Nothing new: keep the current port if it's still there, else deselect (it was unplugged).
   if (currentPort && has(currentPort)) return currentPort;

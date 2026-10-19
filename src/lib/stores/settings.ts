@@ -319,6 +319,9 @@ export type SystemMessagesLevel = 'off' | 'error' | 'warning' | 'all';
 export type LogLevel = 'off' | 'error' | 'warning' | 'debug';
 
 export interface AppSettings {
+  /** USB auto-connect (Tailwind): when a known flight-controller USB device is plugged in
+   *  while disconnected, connect to it automatically with the last-used protocol/baud. */
+  usbAutoConnect: boolean;
   lastPort: string;
   lastBaud: number;
   lastProtocol: string;
@@ -391,6 +394,9 @@ export interface AppSettings {
   interface: InterfaceSettings;
   // Widget panel layout
   panels: PanelConfig;
+  /** Flight-mode keys pinned to the status bar for one-tap switching (Tailwind, Titan-style).
+   *  Intersected with the connected vehicle's available non-stick modes at render time. */
+  pinnedModes: string[];
   /** Phone widget grid (order / size / column / active) — separate from the desktop docks
    *  (Dev-Docs active/PHONE_UI.md D13). */
   phoneWidgets: PhoneWidgetsConfig;
@@ -436,6 +442,7 @@ export interface AppSettings {
 const STORAGE_KEY = 'kite-gc-settings';
 
 const defaults: AppSettings = {
+  usbAutoConnect: true,
   lastPort: '',
   lastBaud: 115200,
   lastProtocol: 'msp',
@@ -486,9 +493,10 @@ const defaults: AppSettings = {
     verticalSpeedUnit: 'ms',
     temperatureUnit: 'c',
   },
+  pinnedModes: ['loiter', 'guided', 'auto'],
   panels: {
     bottom: ['getHome', 'battery', 'speed', 'ahi', 'altitude', 'compass'],
-    right: ['home', 'rcLink', 'gps'],
+    right: ['aoa', 'home', 'rcLink', 'gps'],
   },
   phoneWidgets: DEFAULT_PHONE_WIDGETS,
   locale: 'en',

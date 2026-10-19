@@ -180,6 +180,10 @@ pub struct PortInfo {
     pub path: String,
     pub label: String,
     pub port_type: String,
+    /// USB vendor/product ids when the port is a USB device (Tailwind auto-connect matches
+    /// flight-controller VIDs against these). None for Bluetooth/PCI/unknown ports.
+    pub vid: Option<u16>,
+    pub pid: Option<u16>,
 }
 
 /// Transport type identifier (serializable for frontend communication)
