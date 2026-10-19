@@ -839,9 +839,7 @@ fn dispatch_message(header: &MavHeader, message: &MavMessage, fc_variant: &str, 
         // ArduPilot sends angle-of-attack / sideslip as named floats ("AOA", "SSA", degrees)
         // when an airspeed sensor is fitted. Everything else with this message id is ignored.
         MavMessage::NAMED_VALUE_FLOAT(nvf) => {
-            let name_bytes: &[u8] = &nvf.name;
-            let end = name_bytes.iter().position(|&b| b == 0).unwrap_or(name_bytes.len());
-            let name = std::str::from_utf8(&name_bytes[..end]).unwrap_or("");
+            let name = nvf.name.to_str().unwrap_or("");
             let data = match name {
                 "AOA" => Some(AoaData { aoa_deg: Some(nvf.value as f64), ssa_deg: None }),
                 "SSA" => Some(AoaData { aoa_deg: None, ssa_deg: Some(nvf.value as f64) }),
