@@ -258,6 +258,54 @@ async function evictIfNeeded(): Promise<void> {
   }
 }
 
+/** True when a tile for this exact URL is in the cache (offline-area coverage checks). */
+export async function hasCachedTile(url: string): Promise<boolean> {
+  if (currentMaxBytes === 0) return false;
+  try {
+    const db = await openDb();
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).getKey(url);
+    return await new Promise<boolean>((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result !== undefined);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return false;
+  }
+}
+
+/** Raw tile bytes from the cache (offline-pack export), or null. Does not touch lastAccess. */
+export async function getCachedTileData(url: string): Promise<ArrayBuffer | null> {
+  if (currentMaxBytes === 0) return null;
+  try {
+    const db = await openDb();
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).get(url);
+    const tile = await new Promise<CachedTile | undefined>((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return tile ? tile.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Remove one tile (offline-area delete-with-tiles). Stats are resynced lazily by callers. */
+export async function deleteCachedTile(url: string): Promise<void> {
+  try {
+    const db = await openDb();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).delete(url);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // non-critical
+  }
+}
+
 /** Clear the entire tile cache */
 export async function clearCache(): Promise<void> {
   try {

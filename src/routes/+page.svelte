@@ -52,6 +52,7 @@
   import VirtualSticks from "$lib/components/control/VirtualSticks.svelte";
   import VideoPanel from "$lib/components/video/VideoPanel.svelte";
   import RadarPanel from "$lib/components/RadarPanel.svelte";
+  import OfflineMapsPanel from "$lib/components/OfflineMapsPanel.svelte";
   import AirspaceManagerPanel from "$lib/components/AirspaceManagerPanel.svelte";
   import { geozoneWorking } from "$lib/stores/geozone";
   import { fenceWorking } from "$lib/stores/fence";
@@ -800,6 +801,8 @@
   const ICON_MISSION = '<svg viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2.5C8.4 2.5 5.5 5.4 5.5 9c0 4.8 6.5 12.5 6.5 12.5S18.5 13.8 18.5 9c0-3.6-2.9-6.5-6.5-6.5Zm0 4.1A2.4 2.4 0 1 0 12 11.4 2.4 2.4 0 0 0 12 6.6Z"/></svg>';
   // Two solid peaks, slightly raised (Terrain).
   const ICON_TERRAIN = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M1.5 20 8.5 5 13 14 16.5 8.5 22.5 20Z"/></svg>';
+  // Folded map with a download arrow (Offline Maps).
+  const ICON_OFFLINE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 3.5 21 5.7v14.8l-6-2.2-6 2.2-6-2.2V3.5l6 2.2 6-2.2Zm-6 4.2L5 6.2v10.3l4 1.5V7.7Zm2 0v10.3l2-0.7V7L11 7.7Zm8 10.3V7.7l-2-0.7v10.3l2 0.7Z" opacity="0.55"/><path d="M12 10.5v5m0 0-2.2-2.2M12 15.5l2.2-2.2" stroke="#1c1c1c" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   // Solid flat movie camera (Video): two reels + body + lens funnel.
   const ICON_VIDEO = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="7" cy="7" r="2.9"/><circle cx="12.6" cy="7" r="2.9"/><rect x="2.5" y="9.5" width="13" height="9" rx="1.6"/><path d="M15.5 12 21.5 9.5V18.5L15.5 16Z"/></svg>';
   // Radar dish on a mast with two sweep arcs (Radar / foreign-vehicle tracking).
@@ -849,6 +852,7 @@
     { id: "terrain", label: () => $t('nav.terrain'), icon: ICON_TERRAIN },
     { id: "logbook", label: () => $t('nav.logbook'), icon: ICON_LOGBOOK },
     { id: "radar", label: () => $t('nav.radar'), icon: ICON_RADAR },
+    { id: "offline-maps", label: () => $t('nav.offline'), icon: ICON_OFFLINE },
     { id: "airspace", label: () => $t('nav.airspace'), icon: ICON_AIRSPACE },
     { id: "video", label: () => $t('nav.video'), icon: ICON_VIDEO },
     { id: "settings", label: () => $t('nav.settings'), icon: ICON_SETTINGS },
@@ -4005,6 +4009,8 @@
           {/if}
         {:else if activeTab === 'radar'}
           <RadarPanel radar={radarSettings} {interfaceSettings} referencePoint={radarReference} mspSupported={mspAdsbSupported} onPatch={applySettingsPatch} />
+        {:else if activeTab === 'offline-maps'}
+          <OfflineMapsPanel />
         {:else if activeTab === 'airspace'}
           <!-- Re-init the panel on connect/disconnect + when the FC's geozone/fence capability resolves
                (loaded async after connect) so an already-open panel reflects the new FC without a tab switch. -->

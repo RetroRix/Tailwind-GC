@@ -102,6 +102,7 @@ use commands::video::{
 use video::{MediaMtx, MjpegServer};
 use commands::logging::{set_log_level, get_log_path, log_session_settings, log_frontend};
 use commands::tiles::fetch_tile;
+use commands::files::{binary_file_read_chunk, binary_file_size, binary_file_write_chunk};
 use commands::radar::{radar_configure, radar_set_center, radar_set_node_pos, radar_snapshot};
 use commands::terrain::{
     terrain_cache_clear, terrain_cache_stats, terrain_elevation, terrain_elevations, terrain_fan,
@@ -631,6 +632,9 @@ pub fn run() {
             log_session_settings,
             log_frontend,
             fetch_tile,
+            binary_file_write_chunk,
+            binary_file_size,
+            binary_file_read_chunk,
             mission_get,
             mission_clear,
             mission_set,

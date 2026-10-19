@@ -156,6 +156,7 @@
     "mission": "Mission",
     "terrain": "Terrain",
     "radar": "Radar",
+    "offline": "Offline Maps",
     "airspace": "Airspace",
     "video": "Video",
     "control": "Control",
@@ -2048,5 +2049,32 @@
       "fcVariant": "FC variant",
       "lastUpdate": "Last update"
     }
+  },
+  "offline": {
+    "title": "Offline Maps",
+    "cacheStatus": "Tile cache: {used} of {max} used · {count} tiles",
+    "cacheDisabled": "The map tile cache is disabled (cache size 0 in Settings) — offline areas need it on.",
+    "newArea": "Download a new area",
+    "centeredOn": "Centered on the current map view ({lat}, {lon}) · base map: {provider}",
+    "radius": "Radius",
+    "maxZoom": "Max zoom",
+    "estimate": "About {count} tiles (zooms 11 up to the max). Bigger zooms grow fast — each step down quadruples the count.",
+    "download": "Download area",
+    "cancel": "Cancel",
+    "downloadDone": "Done: {downloaded} downloaded, {skipped} already cached, {failed} failed.",
+    "downloadCancelled": "Download cancelled — the tiles fetched so far stay cached.",
+    "tooBig": "That area is {count} tiles — over the {max} safety cap. Pick a smaller radius or max zoom.",
+    "areas": "Downloaded areas",
+    "none": "No offline areas yet. Download one before heading somewhere without signal.",
+    "export": "Export…",
+    "refresh": "Recount",
+    "delete": "Delete",
+    "deleteTiles": "Also delete its tiles",
+    "deleteConfirm": "Delete",
+    "exportDone": "Pack written: {packed} tiles packed, {missing} not in cache (re-download to fill).",
+    "import": "Import .mappack…",
+    "importDone": "Imported {areas} — {tiles} tiles added to the cache.",
+    "noManifest": "That file has no manifest.json — it isn't a Tailwind .mappack.",
+    "badManifest": "That pack's manifest isn't a Tailwind map pack."
   }
 }
