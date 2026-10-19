@@ -58,6 +58,11 @@ export interface TelemetryData {
   // Airspeed
   airspeed: number;
 
+  // Angle of attack / sideslip (deg, ArduPilot NAMED_VALUE_FLOAT AOA/SSA — Tailwind).
+  // null = never received (no airspeed sensor / firmware doesn't publish them).
+  aoaDeg: number | null;
+  ssaDeg: number | null;
+
   // Wind estimate (ArduPilot WIND live / INAV MSP2_INAV_WIND 10.0+ / blackbox replay).
   windDirFrom: number; // bearing the wind blows FROM (deg)
   windSpeedMs: number; // horizontal wind speed (m/s); 0 = none/invalid
@@ -143,6 +148,8 @@ const defaultTelemetry: TelemetryData = {
   roll: 0, pitch: 0, yaw: 0,
   altitude: 0, vario: 0,
   airspeed: 0,
+  aoaDeg: null,
+  ssaDeg: null,
   windDirFrom: 0, windSpeedMs: 0,
   voltage: 0, current: 0, mAhDrawn: 0, rssi: 0, power: 0, batteryPercentage: 0, cellCount: 0,
   throttle: 0,
@@ -481,6 +488,17 @@ export async function startTelemetryListeners() {
       telemetry.update((t) => ({
         ...t,
         airspeed: event.payload.airspeed,
+        lastUpdate: Date.now(),
+      }));
+    })
+  );
+
+  unlisteners.push(
+    await listen<{ aoa_deg: number | null; ssa_deg: number | null }>('telemetry-aoa', (event) => {
+      telemetry.update((t) => ({
+        ...t,
+        aoaDeg: event.payload.aoa_deg ?? t.aoaDeg,
+        ssaDeg: event.payload.ssa_deg ?? t.ssaDeg,
         lastUpdate: Date.now(),
       }));
     })

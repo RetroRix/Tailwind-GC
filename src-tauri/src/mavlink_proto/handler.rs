@@ -18,7 +18,7 @@ use crate::flightlog::recorder::FlightRecorderHandle;
 use crate::scheduler::rc_tx::{self, RcTxHandle};
 use crate::scheduler::telemetry::{
     AttitudeData, GpsData, AltitudeData, AnalogData, StatusData,
-    SensorStatusData, AirspeedData, WindData, Misc2Data, BatteryInstanceData,
+    SensorStatusData, AirspeedData, AoaData, WindData, Misc2Data, BatteryInstanceData,
 };
 use crate::transport::ByteTransport;
 
@@ -832,6 +832,23 @@ fn dispatch_message(header: &MavHeader, message: &MavMessage, fc_variant: &str, 
 
             if let Some(ref rec) = recorder {
                 if let Ok(mut r) = rec.lock() { r.on_airspeed(&airspeed); r.on_misc2(&misc2); }
+            }
+        }
+
+        // ── NAMED_VALUE_FLOAT → telemetry-aoa (Tailwind) ───────────
+        // ArduPilot sends angle-of-attack / sideslip as named floats ("AOA", "SSA", degrees)
+        // when an airspeed sensor is fitted. Everything else with this message id is ignored.
+        MavMessage::NAMED_VALUE_FLOAT(nvf) => {
+            let name_bytes: &[u8] = &nvf.name;
+            let end = name_bytes.iter().position(|&b| b == 0).unwrap_or(name_bytes.len());
+            let name = std::str::from_utf8(&name_bytes[..end]).unwrap_or("");
+            let data = match name {
+                "AOA" => Some(AoaData { aoa_deg: Some(nvf.value as f64), ssa_deg: None }),
+                "SSA" => Some(AoaData { aoa_deg: None, ssa_deg: Some(nvf.value as f64) }),
+                _ => None,
+            };
+            if let Some(d) = data {
+                let _ = app_handle.emit("telemetry-aoa", &d);
             }
         }
 

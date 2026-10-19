@@ -32,6 +32,7 @@ const ALL_WIDGET_DEFS: WidgetDef[] = [
   { id: 'compass',      label: 'Compass',        labelKey: 'widgets.compass',      shape: 'square', defaultSize: 'L' },
   { id: 'home',         label: 'Home',           labelKey: 'widgets.home',         shape: 'square', defaultSize: 'S' },
   { id: 'getHome',      label: 'Get Home',       labelKey: 'widgets.getHome',      shape: 'square', defaultSize: 'L' },
+  { id: 'aoa',          label: 'AOA',            labelKey: 'widgets.aoa',          shape: 'square', defaultSize: 'S' },
   { id: 'flightMode',   label: 'Flight Mode',    labelKey: 'widgets.flightMode',   shape: 'square', defaultSize: 'S' },
   { id: 'liveAgl',      label: 'Live AGL',       labelKey: 'widgets.liveAgl',      shape: 'wide',   defaultSize: 'W' },
   { id: 'terrainRadar', label: 'Terrain Radar',  labelKey: 'widgets.terrainRadar', shape: 'square', defaultSize: 'L' },

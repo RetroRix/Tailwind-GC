@@ -132,6 +132,16 @@ pub struct AirspeedData {
     pub airspeed: f64, // cm/s → m/s
 }
 
+/// Angle-of-attack / sideslip for the `telemetry-aoa` event (Tailwind). ArduPilot publishes
+/// these as NAMED_VALUE_FLOAT "AOA" / "SSA" (degrees) when an airspeed sensor is fitted.
+/// Each event carries only the value that just arrived; the other field is None and the
+/// frontend keeps its last value.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AoaData {
+    pub aoa_deg: Option<f64>,
+    pub ssa_deg: Option<f64>,
+}
+
 /// One battery monitor instance for the `telemetry-batteries` event. ArduPilot/PX4 report several of
 /// these in parallel (one per configured monitor, keyed by `id`); INAV has a single battery. See
 /// docs/active/MULTI_BATTERY.md.
