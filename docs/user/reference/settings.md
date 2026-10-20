@@ -67,6 +67,7 @@ Altitude and Compass sit in the bottom dock and Home, RC Link and GPS in the rig
 | Setting | What it does | Default |
 |---|---|---|
 | **Default Protocol** | Which protocol the connection bar starts on. **Last used** restores whatever you connected with last time, which is what Tailwind has always done. Pin it to **MSP**, **MAVLink** or **Telemetry** and that choice wins on every launch, whatever the last session used. Tailwind still remembers the last-used protocol, so switching back to **Last used** picks up where you left off. | Last used |
+| **USB Auto-Connect** | Plugging a recognised flight controller (Cube, Pixhawk/Hex, pid.codes, STM32 boards) in over USB while disconnected connects it automatically at the last-used protocol and baud. One attempt per plug-in; generic serial adapters are ignored. | On |
 
 ### Telemetry
 

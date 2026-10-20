@@ -107,6 +107,7 @@ nav:
       - Radar & ADS-B: guides/radar-and-adsb.md
       - Airspace Manager: guides/airspace.md
       - 3D map: guides/map-3d.md
+      - Offline Maps: guides/offline-maps.md
       - Relay & forwarding: guides/relay-and-forwarding.md
   - Reference:
       - Settings: reference/settings.md

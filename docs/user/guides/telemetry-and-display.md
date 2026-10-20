@@ -84,6 +84,7 @@ Edit mode — drag widgets to reorder them or move them between the docks.
 | Widget | What it shows |
 |---|---|
 | **AHI** (artificial horizon) | Pitch and roll against an artificial horizon, plus a flight-path-vector marker. |
+| **AOA** (angle of attack) | Fixed-wing stall instrument: live AOA with a colour stall scale — **green** below 10°, **amber** 10–14°, **red** at 14°+ with a flashing **STALL** cue (typical critical AOA ≈ 15°). While armed it also flashes a **LOW SPD** warning when airspeed drops under 10 m/s. Needs an airspeed sensor on the flight controller feeding ArduPilot's AOA telemetry — without it the widget shows no-data. AOA is the physical stall cue; airspeed alone lies in wind. |
 | **Speed** | Airspeed when available (ground speed otherwise), with ground speed on a second line — or **ground speed only** (no second line) when airspeed is turned off in Settings. A **throttle** bar (0–100 %) sits on the left and a derived **acceleration** bar on the right. |
 | **Altitude** | The aircraft's barometric / navigation altitude (relative to home). |
 | **Compass** | A rotating rose with the heading at the centre and a fixed top pointer. An amber **course-over-ground** bug rides the rim while moving — the gap to the nose is your **crab angle** — with the COG value read out above the heading. When wind is reported, a blue **wind arrow** (pointing downwind) and wind speed appear — see **Wind** in **[Settings](../reference/settings.md)** for which firmware sends it live. |

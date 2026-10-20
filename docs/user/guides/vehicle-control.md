@@ -67,6 +67,20 @@ The current mode is shown large and centred. Below it:
 
 Mode colours match the rest of the app (see the [quick tour](../getting-started/quick-tour.md) legend).
 
+### Pinned flight modes
+
+Your favourite modes can live as one-tap buttons in the **status bar** — RTL, Loiter, FBWA, whatever
+you fly most — instead of buried in the Control panel. Tailwind starts with **Loiter, Guided and
+Auto** pinned.
+
+- To edit the pins, open the **Control** panel's **Modes** section and tick **Pin modes to status
+  bar** — now tapping a mode pins or unpins it instead of switching to it. Untick to go back to
+  normal switching.
+- The pinned buttons switch modes through the same path (and the same safety interlocks) as the
+  Control panel; the active mode highlights.
+- Pins show only for a connected MAVLink vehicle, and only for modes that make sense for it —
+  stick-flown modes can't be pinned, and the buttons hide entirely when nothing relevant applies.
+
 ## Takeoff, return and landing
 
 - **Takeoff** (with a target altitude) is offered for **multirotor, VTOL and PX4** vehicles. A

@@ -83,6 +83,21 @@ Tailwind recognises Windows Bluetooth-SPP ports and:
 The transport dropdown: **Serial**, **TCP**, **UDP**, or **BLE**.
 ///
 
+### USB auto-connect
+
+When **USB Auto-Connect** is on (Settings → **Connection**, on by default), plugging in a known
+flight controller while Tailwind is disconnected connects it by itself — no port-picking, no
+**Connect** button. It uses the protocol and baud rate from your last session.
+
+Recognised boards are the ones whose USB vendor ID says "flight controller": **CubePilot**
+(`0x2DAE`), **Hex / 3DR** (`0x26AC`), **pid.codes** (`0x1209`) and **STM32 VCP** (`0x0483`) boards.
+Generic USB-serial bridges (FTDI, CP210x, CH340 — radio dongles, adapters) are deliberately
+**not** recognised, so a random adapter never hijacks the connection.
+
+Each plug-in gets exactly one attempt: if it fails, unplug and plug in again for another try, and
+a manual disconnect never re-triggers it. Auto-connect only fires while you're disconnected on the
+Serial transport.
+
 ## TCP and UDP (network links)
 
 For network links — a SITL simulator, a companion computer, a Wi-Fi/serial bridge, or a MAVLink router
