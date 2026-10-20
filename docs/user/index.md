@@ -17,6 +17,22 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.5
+
+Four additions aimed at one goal — Tailwind as your all-in-one ground station:
+
+-   **Offline Maps** — download a map area around your flying site before you lose signal, watch its
+    coverage, and share it as a **.mappack** file. → [Offline Maps guide](guides/offline-maps.md)
+-   **AOA widget** — a fixed-wing stall instrument with a colour stall scale, flashing **STALL** and
+    **LOW SPD** warnings (needs an airspeed sensor). → [Telemetry & display](guides/telemetry-and-display.md)
+-   **Pinned flight modes** — your go-to modes as one-tap buttons in the status bar.
+    → [Vehicle control](guides/vehicle-control.md#pinned-flight-modes)
+-   **USB auto-connect** — plug in a Cube or Pixhawk and Tailwind connects by itself.
+    → [Connecting](guides/connecting.md#usb-auto-connect)
+
+Get it: **[Windows](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.5)** ·
+**[Android](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.5-android.1)**
+
 ## Highlights
 
 <div class="grid cards" markdown>

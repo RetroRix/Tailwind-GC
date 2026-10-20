@@ -19,11 +19,15 @@ All of them work **offline** once the tiles have been cached — see below.
 
 ### Can I use the maps offline?
 
-Yes, within limits. Tailwind caches every map tile it downloads (**[Settings → Data → Map →
-Tile Cache](reference/settings.md)**). Pan and zoom over your flying area **while you still have an
-internet connection**, and those tiles stay available offline afterwards. There is **no bulk
-"pre-download this whole region" button** — the cache fills from what you actually view. The default
-cache is 200 MB and can be raised up to 5 GB.
+Yes — two ways. Tailwind caches every map tile it downloads (**[Settings → Data → Map →
+Tile Cache](reference/settings.md)**), so anything you pan and zoom over **while you still have an
+internet connection** stays available offline afterwards. The default cache is 200 MB and can be
+raised up to 5 GB.
+
+For flying sites, use the **[Offline Maps](guides/offline-maps.md)** panel instead: pick a radius
+around your field and a max zoom, and Tailwind downloads the whole area ahead of time, shows a
+coverage bar per area, and can export an area as a **.mappack** file to share with other Tailwind
+users — they import it and get the exact same coverage without downloading anything.
 
 ### Why isn't Google Maps or HERE Maps available?
 
@@ -50,3 +54,30 @@ In both cases the extra setup (account, API key, billing) and the licensing cons
 worth it for a map style you can already get, key-free, from the built-in providers. If a specific,
 properly licensed provider ever adds real value, we would add it as an optional *bring-your-own-key*
 source rather than route around anyone's terms of service.
+
+## Flying & connecting
+
+### Why did Tailwind connect by itself when I plugged in my flight controller?
+
+That's **USB Auto-Connect** (Settings → **Connection**, on by default): when a known flight
+controller — CubePilot, Hex/3DR, pid.codes or STM32-based boards — is plugged in over USB while
+Tailwind is disconnected, it connects automatically at your last-used protocol and baud rate. Each
+plug-in gets one attempt, and a manual disconnect never re-triggers it. Generic USB-serial adapters
+(FTDI/CP210x/CH340 dongles) are ignored on purpose. Turn the setting off if you'd rather always
+connect by hand — see [Connecting](guides/connecting.md#usb-auto-connect).
+
+### Why does the AOA widget show no data?
+
+The **AOA** widget reads ArduPilot's angle-of-attack telemetry, which only exists when the aircraft
+has an **airspeed sensor** fitted and calibrated — no airspeed sensor, no AOA. (Airspeed from a
+pitot is also what makes the widget's **LOW SPD** warning meaningful.) On an aircraft without one,
+leave the widget out of your dock; GPS ground speed is not a substitute — it lies in wind, which is
+exactly why AOA exists. See the widget table in
+[Telemetry & display](guides/telemetry-and-display.md).
+
+### Can I put my favourite flight modes on the main screen?
+
+Yes — **pinned flight modes** put one-tap mode buttons in the status bar. Tailwind starts with
+Loiter, Guided and Auto pinned. To change them, open the **Control** panel's **Modes** section,
+tick **Pin modes to status bar**, then tap the modes you want pinned. Details in
+[Vehicle control](guides/vehicle-control.md#pinned-flight-modes).

@@ -23,7 +23,7 @@ cache is turned off (cache size 0 in Settings), the panel says so — offline ar
 
 ## Your downloaded areas
 
-Each area lists its provider, radius and zoom range, a **coverage bar** (how many of its tiles are
+Each area lists its zoom range and a **coverage bar** (how many of its tiles are
 actually in the cache — it recounts when you open the panel, or hit **Recount**), and three actions:
 
 - **Export…** — writes a `.mappack` file: a portable pack of the area's cached tiles plus a manifest.
