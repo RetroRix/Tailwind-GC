@@ -1121,6 +1121,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../offline-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Offline Maps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../relay-and-forwarding/" class="md-nav__link">
         
   
@@ -2023,6 +2051,10 @@ along the bottom. Each widget is self-contained and updates live.</p>
 <tr>
 <td><strong>AHI</strong> (artificial horizon)</td>
 <td>Pitch and roll against an artificial horizon, plus a flight-path-vector marker.</td>
+</tr>
+<tr>
+<td><strong>AOA</strong> (angle of attack)</td>
+<td>Fixed-wing stall instrument: live AOA with a colour stall scale — <strong>green</strong> below 10°, <strong>amber</strong> 10–14°, <strong>red</strong> at 14°+ with a flashing <strong>STALL</strong> cue (typical critical AOA ≈ 15°). While armed it also flashes a <strong>LOW SPD</strong> warning when airspeed drops under 10 m/s. Needs an airspeed sensor on the flight controller feeding ArduPilot's AOA telemetry — without it the widget shows no-data. AOA is the physical stall cue; airspeed alone lies in wind.</td>
 </tr>
 <tr>
 <td><strong>Speed</strong></td>

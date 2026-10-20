@@ -615,6 +615,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#usb-auto-connect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        USB auto-connect
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1112,6 +1123,34 @@
     
   
     3D map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../offline-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Offline Maps
   
 
     
@@ -1854,6 +1893,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#usb-auto-connect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        USB auto-connect
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2057,6 +2107,17 @@ see <strong><a href="../../troubleshooting/connection/">Troubleshooting → Conn
 <p>The transport dropdown: <strong>Serial</strong>, <strong>TCP</strong>, <strong>UDP</strong>, or <strong>BLE</strong>.</p>
 </figcaption>
 </figure>
+<h3 id="usb-auto-connect">USB auto-connect<a class="headerlink" href="#usb-auto-connect" title="Permanent link">&para;</a></h3>
+<p>When <strong>USB Auto-Connect</strong> is on (Settings → <strong>Connection</strong>, on by default), plugging in a known
+flight controller while Tailwind is disconnected connects it by itself — no port-picking, no
+<strong>Connect</strong> button. It uses the protocol and baud rate from your last session.</p>
+<p>Recognised boards are the ones whose USB vendor ID says "flight controller": <strong>CubePilot</strong>
+(<code>0x2DAE</code>), <strong>Hex / 3DR</strong> (<code>0x26AC</code>), <strong>pid.codes</strong> (<code>0x1209</code>) and <strong>STM32 VCP</strong> (<code>0x0483</code>) boards.
+Generic USB-serial bridges (FTDI, CP210x, CH340 — radio dongles, adapters) are deliberately
+<strong>not</strong> recognised, so a random adapter never hijacks the connection.</p>
+<p>Each plug-in gets exactly one attempt: if it fails, unplug and plug in again for another try, and
+a manual disconnect never re-triggers it. Auto-connect only fires while you're disconnected on the
+Serial transport.</p>
 <h2 id="tcp-and-udp-network-links">TCP and UDP (network links)<a class="headerlink" href="#tcp-and-udp-network-links" title="Permanent link">&para;</a></h2>
 <p>For network links — a SITL simulator, a companion computer, a Wi-Fi/serial bridge, or a MAVLink router
 forwarding to your PC.</p>

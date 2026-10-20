@@ -939,6 +939,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../guides/offline-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Offline Maps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../guides/relay-and-forwarding/" class="md-nav__link">
         
   
@@ -1387,6 +1415,56 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#flying-connecting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flying &amp; connecting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Flying &amp; connecting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-did-tailwind-connect-by-itself-when-i-plugged-in-my-flight-controller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why did Tailwind connect by itself when I plugged in my flight controller?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-does-the-aoa-widget-show-no-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why does the AOA widget show no data?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#can-i-put-my-favourite-flight-modes-on-the-main-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Can I put my favourite flight modes on the main screen?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1746,6 +1824,56 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#flying-connecting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flying &amp; connecting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Flying &amp; connecting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-did-tailwind-connect-by-itself-when-i-plugged-in-my-flight-controller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why did Tailwind connect by itself when I plugged in my flight controller?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-does-the-aoa-widget-show-no-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why does the AOA widget show no data?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#can-i-put-my-favourite-flight-modes-on-the-main-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Can I put my favourite flight modes on the main screen?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1787,11 +1915,14 @@ the 2D map and the 3D globe</strong>:</p>
 </ul>
 <p>All of them work <strong>offline</strong> once the tiles have been cached — see below.</p>
 <h3 id="can-i-use-the-maps-offline">Can I use the maps offline?<a class="headerlink" href="#can-i-use-the-maps-offline" title="Permanent link">&para;</a></h3>
-<p>Yes, within limits. Tailwind caches every map tile it downloads (<strong><a href="../reference/settings/">Settings → Data → Map →
-Tile Cache</a></strong>). Pan and zoom over your flying area <strong>while you still have an
-internet connection</strong>, and those tiles stay available offline afterwards. There is <strong>no bulk
-"pre-download this whole region" button</strong> — the cache fills from what you actually view. The default
-cache is 200 MB and can be raised up to 5 GB.</p>
+<p>Yes — two ways. Tailwind caches every map tile it downloads (<strong><a href="../reference/settings/">Settings → Data → Map →
+Tile Cache</a></strong>), so anything you pan and zoom over <strong>while you still have an
+internet connection</strong> stays available offline afterwards. The default cache is 200 MB and can be
+raised up to 5 GB.</p>
+<p>For flying sites, use the <strong><a href="../guides/offline-maps/">Offline Maps</a></strong> panel instead: pick a radius
+around your field and a max zoom, and Tailwind downloads the whole area ahead of time, shows a
+coverage bar per area, and can export an area as a <strong>.mappack</strong> file to share with other Tailwind
+users — they import it and get the exact same coverage without downloading anything.</p>
 <h3 id="why-isnt-google-maps-or-here-maps-available">Why isn't Google Maps or HERE Maps available?<a class="headerlink" href="#why-isnt-google-maps-or-here-maps-available" title="Permanent link">&para;</a></h3>
 <p>This comes up because other ground stations (Mission Planner, QGroundControl) show Google satellite
 imagery. We looked at both Google and HERE carefully and deliberately chose <strong>not</strong> to integrate them.
@@ -1813,6 +1944,26 @@ the older Bing basemap that ESRI already serves in better quality.</p>
 worth it for a map style you can already get, key-free, from the built-in providers. If a specific,
 properly licensed provider ever adds real value, we would add it as an optional <em>bring-your-own-key</em>
 source rather than route around anyone's terms of service.</p>
+<h2 id="flying-connecting">Flying &amp; connecting<a class="headerlink" href="#flying-connecting" title="Permanent link">&para;</a></h2>
+<h3 id="why-did-tailwind-connect-by-itself-when-i-plugged-in-my-flight-controller">Why did Tailwind connect by itself when I plugged in my flight controller?<a class="headerlink" href="#why-did-tailwind-connect-by-itself-when-i-plugged-in-my-flight-controller" title="Permanent link">&para;</a></h3>
+<p>That's <strong>USB Auto-Connect</strong> (Settings → <strong>Connection</strong>, on by default): when a known flight
+controller — CubePilot, Hex/3DR, pid.codes or STM32-based boards — is plugged in over USB while
+Tailwind is disconnected, it connects automatically at your last-used protocol and baud rate. Each
+plug-in gets one attempt, and a manual disconnect never re-triggers it. Generic USB-serial adapters
+(FTDI/CP210x/CH340 dongles) are ignored on purpose. Turn the setting off if you'd rather always
+connect by hand — see <a href="../guides/connecting/#usb-auto-connect">Connecting</a>.</p>
+<h3 id="why-does-the-aoa-widget-show-no-data">Why does the AOA widget show no data?<a class="headerlink" href="#why-does-the-aoa-widget-show-no-data" title="Permanent link">&para;</a></h3>
+<p>The <strong>AOA</strong> widget reads ArduPilot's angle-of-attack telemetry, which only exists when the aircraft
+has an <strong>airspeed sensor</strong> fitted and calibrated — no airspeed sensor, no AOA. (Airspeed from a
+pitot is also what makes the widget's <strong>LOW SPD</strong> warning meaningful.) On an aircraft without one,
+leave the widget out of your dock; GPS ground speed is not a substitute — it lies in wind, which is
+exactly why AOA exists. See the widget table in
+<a href="../guides/telemetry-and-display/">Telemetry &amp; display</a>.</p>
+<h3 id="can-i-put-my-favourite-flight-modes-on-the-main-screen">Can I put my favourite flight modes on the main screen?<a class="headerlink" href="#can-i-put-my-favourite-flight-modes-on-the-main-screen" title="Permanent link">&para;</a></h3>
+<p>Yes — <strong>pinned flight modes</strong> put one-tap mode buttons in the status bar. Tailwind starts with
+Loiter, Guided and Auto pinned. To change them, open the <strong>Control</strong> panel's <strong>Modes</strong> section,
+tick <strong>Pin modes to status bar</strong>, then tap the modes you want pinned. Details in
+<a href="../guides/vehicle-control/#pinned-flight-modes">Vehicle control</a>.</p>
 
 
 
