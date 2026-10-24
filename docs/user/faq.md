@@ -81,3 +81,11 @@ Yes — **pinned flight modes** put one-tap mode buttons in the status bar. Tail
 Loiter, Guided and Auto pinned. To change them, open the **Control** panel's **Modes** section,
 tick **Pin modes to status bar**, then tap the modes you want pinned. Details in
 [Vehicle control](guides/vehicle-control.md#pinned-flight-modes).
+
+### Why is the status bar quieter — and where did the firmware chatter go?
+
+Since v1.1.0-tailwind.6 the **System messages** feed (Settings → **General**) defaults to
+**Warning** and above, so day-to-day flying only shows warnings and errors. The firmware's
+developer chatter — ArduPilot's `MAV_SEVERITY_DEBUG` lines such as "Sending unknown message (44)"
+— is now its own **Debug** level: pick it when you're troubleshooting on the bench and want the
+full firehose. Your existing setting is kept; only fresh installs get the new Warning default.

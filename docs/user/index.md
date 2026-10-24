@@ -17,6 +17,31 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.6
+
+Caught up with the upstream Kite GC fixes — the app is more honest about dead links and GPS quality, and ArduPilot editing stops fighting you:
+
+-   **Link honesty** — if the flight controller goes quiet on an open link, the status bar says
+    **"Reconnecting…"** after 3 s instead of sitting silent; a real transport loss tears the
+    connection down cleanly, and a UDP peer's "port unreachable" counts as a stall, not a lost link.
+-   **One GPS fix scale** — fix quality (0 none / 1 2D / 2 3D / 3 DGPS-RTK) is now the same on
+    every link, and the ground station's own location falls back to the FC's home instead of being
+    captured from the aircraft's first fix.
+-   **ArduPilot mission editor** — leaving the mission tab ends ArduPilot edit mode, the waypoint
+    popup no longer pans the waypoint under the side panel, and the raw-telemetry popup stops
+    mislabelling an ArduPilot link as INAV.
+-   **Fence / rally / geozone saves** — only changed parameters are written (a parameter the FC
+    doesn't take is now a warning, not a failed save), and a failed save is shown under the Save
+    button instead of failing silently.
+-   **Quieter system messages** — the status feed defaults to **Warning** and above; a new
+    **Debug** level surfaces the firmware's developer chatter when you're troubleshooting.
+-   **Android log sharing** — "Share log file" lists the per-day log files so you can share exactly
+    the right day's log. **SITL managers** (in `tools/simulators/`) run ArduPilot and INAV SITL
+    without Mission Planner, for bench-testing without the real airframe.
+
+Get it: **[Windows](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.6)** ·
+**[Android](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.6-android.1)**
+
 ## What's new in Tailwind v1.1.0-tailwind.5
 
 Four additions aimed at one goal — Tailwind as your all-in-one ground station:

@@ -145,7 +145,7 @@ See **[Missions](../guides/missions.md)**.
 |---|---|---|
 | **Altitude** | The altitude above which the aircraft is flagged (also the reference for altitude track-colouring). | 120 m |
 | **Battery alert** | The charge % at which the battery widget enters its alert state (and multi-battery AUTO drops to the lowest pack). See **[Batteries](../guides/batteries.md)**. | 30 % |
-| **System messages** | How many in-app notifications to show — Off / Error / Warning / All. **Currently MAVLink (ArduPilot / PX4) only** — INAV has no equivalent message source. | All |
+| **System messages** | How many in-app notifications to show — Off / Error / Warning / All / Debug. **Debug** adds the firmware's developer chatter (`MAV_SEVERITY_DEBUG`, e.g. ArduPilot's "Sending unknown message" lines). **Currently MAVLink (ArduPilot / PX4) only** — INAV has no equivalent message source. | Warning |
 
 ## See also
 
