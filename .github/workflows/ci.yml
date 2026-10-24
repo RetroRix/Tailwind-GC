@@ -135,6 +135,11 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Same fix as android.yml: the action's default package list includes the obsolete
+          # `tools` package, which current sdkmanager no longer offers ("Failed to find
+          # package 'tools'" killed this job at SDK setup). Install only what's needed.
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
 
       - name: Install NDK ${{ env.NDK_VERSION }}
         run: sdkmanager --install "ndk;${{ env.NDK_VERSION }}"
