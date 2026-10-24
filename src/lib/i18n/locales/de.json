@@ -529,6 +529,7 @@
     "saveMsg": "Alle Fence-Zonen und Parameter auf den Flight Controller schreiben?",
     "saveConfirm": "Speichern",
     "saveFailed": "Speichern auf dem FC fehlgeschlagen: {error}",
+    "paramsNotWritten": "Fence gespeichert, aber diese Parameter wurden nicht geschrieben: {params}",
     "armedLocked": "Fence-Bearbeitung ist im Armed-Zustand deaktiviert.",
     "breach": "Geofence-Verletzung"
   },
@@ -548,6 +549,7 @@
     "saveMsg": "Alle Rally-Punkte und Parameter auf den Flight Controller schreiben?",
     "saveConfirm": "Speichern",
     "saveFailed": "Speichern auf dem FC fehlgeschlagen: {error}",
+    "paramsNotWritten": "Rally-Punkte gespeichert, aber diese Parameter wurden nicht geschrieben: {params}",
     "armedLocked": "Rally-Bearbeitung ist im Armed-Zustand deaktiviert."
   },
   "about": {

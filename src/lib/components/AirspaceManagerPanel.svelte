@@ -205,7 +205,6 @@
   // flight you never regain control. So fence editing stays available armed (unlike INAV geozones,
   // which apply via reboot and thus can't change in flight anyway).
   let fenceBusy = $state(false);
-  let fenceSaveError = $state<string | null>(null);
   let editFenceRadiusM = $state(0);
   $effect(() => {
     const z = fenceZones[expandedFence ?? -1];
@@ -221,7 +220,7 @@
     deleteFenceZone(i);
     expandedFence = null;
   }
-  function onRevertFence() { revertFenceWorking(); expandedFence = null; fenceSaveError = null; }
+  function onRevertFence() { revertFenceWorking(); expandedFence = null; }
   async function onSaveFence() {
     if (fenceBusy) return;
     const ans = await confirmDialog.show({
@@ -335,7 +334,6 @@
   // fence (a stuck loiter must be editable in the air). See the note on fenceBusy above.
 
   let rallyBusy = $state(false);
-  let rallySaveError = $state<string | null>(null);
   let editRallyAltM = $state(0);
   $effect(() => {
     const p = rallyPoints[expandedRally ?? -1];
@@ -348,7 +346,7 @@
     if (i != null) { expandedRally = i; rallyEditing.set(true); }
   }
   function onDeleteRally(i: number) { deleteRallyPoint(i); expandedRally = null; }
-  function onRevertRally() { revertRallyWorking(); expandedRally = null; rallySaveError = null; }
+  function onRevertRally() { revertRallyWorking(); expandedRally = null; }
   async function onSaveRally() {
     if (rallyBusy) return;
     const ans = await confirmDialog.show({
