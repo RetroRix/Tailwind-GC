@@ -124,6 +124,10 @@ export function toTelemetryData(r: TelemetryRecord, fcVariant = 'INAV'): Telemet
     navState: r.nav_state ?? 0,
     activeWpNumber: r.active_wp_number ?? 0,
 
+    // AOA / SSA — not recorded in the DB (live-only NAMED_VALUE_FLOAT), so replay has no data.
+    aoaDeg: null,
+    ssaDeg: null,
+
     // FC type
     fcVariant,
 
