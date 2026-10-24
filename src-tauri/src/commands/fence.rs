@@ -94,8 +94,10 @@ pub fn fence_read_all(state: State<'_, AppState>) -> Result<FenceConfig, String>
 }
 
 /// "Save to FC": upload the fence geometry (or clear it when empty), then write the provided params.
+/// Returns the parameters that could NOT be written (`NAME: reason`), as a warning for the panel: once
+/// the geometry went up, a slow or unknown parameter must not fail the save.
 #[tauri::command(async)]
-pub fn fence_write_all(config: FenceConfig, state: State<'_, AppState>) -> Result<(), String> {
+pub fn fence_write_all(config: FenceConfig, state: State<'_, AppState>) -> Result<Vec<String>, String> {
     let Some((cmd_tx, fc_sysid)) = mav_handle(&state)? else {
         return Err("FC is not running MAVLink".into());
     };
@@ -105,11 +107,15 @@ pub fn fence_write_all(config: FenceConfig, state: State<'_, AppState>) -> Resul
     } else {
         mavlink_proto::mission::upload(&cmd_tx, fc_sysid, &items, false, MavMissionType::MAV_MISSION_TYPE_FENCE, |_, _| {})?;
     }
+    let mut warnings = Vec::new();
     for p in &config.params {
-        control::set_param(&cmd_tx, fc_sysid, &p.name, p.value)?;
+        if let Err(e) = control::set_param(&cmd_tx, fc_sysid, &p.name, p.value) {
+            log::warn!("[FENCE] parameter {} not written: {}", p.name, e);
+            warnings.push(format!("{}: {}", p.name, e));
+        }
     }
-    eprintln!("[FENCE] saved {} zone(s) + {} params to FC", config.zones.len(), config.params.len());
-    Ok(())
+    eprintln!("[FENCE] saved {} zone(s) + {} params to FC ({} not written)", config.zones.len(), config.params.len(), warnings.len());
+    Ok(warnings)
 }
 
 /// Group raw fence MISSION items into zones. Polygon vertices arrive as consecutive items of the same
