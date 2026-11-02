@@ -28,6 +28,7 @@
     redo: '<path d="M21 8H9a5 5 0 0 0 0 10h5"/><path d="M17 4l4 4-4 4"/>',
     library: '<rect x="4" y="4" width="14" height="16" rx="1.5"/><path d="M8 4v16"/><path d="M11 8.5h4M11 12h4"/>',
     map: '<path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/>',
+    terrain: '<path d="M3 19 9.5 6.5 14 14l2.5-3.5L21 19H3Z"/><path d="M9.5 6.5 8 9.5h3L9.5 6.5Z"/>',
     folder: '<path d="M4 6h5l2 2h9v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6Z"/>',
     link: '<path d="M9.5 12a3 3 0 0 1 3-3h3a3 3 0 0 1 0 6h-1.5"/><path d="M14.5 12a3 3 0 0 1-3 3h-3a3 3 0 0 1 0-6H10"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
