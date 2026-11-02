@@ -45,6 +45,7 @@
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import MissionSaveDialog from '$lib/components/mission/MissionSaveDialog.svelte';
   import MissionManager from '$lib/components/mission/MissionManager.svelte';
+  import MissionTerrainPanel from '$lib/components/mission/MissionTerrainPanel.svelte';
 
   let currentMission  = $state<ArduWaypoint[]>(get(arduMission));
   let currentSelIdx   = $state<number>(get(arduSelectedWpIndex));
@@ -67,11 +68,25 @@
 
   // Survey pattern generator (shared with INAV; the panel only renders it + the entry button).
   let showPatternPanel = $state(false);
+  // Terrain profile / hold-clearance section (replaces the WP table while open, like the pattern panel).
+  let showTerrainPanel = $state(false);
   function togglePattern() {
     if (showPatternPanel) {
       import('$lib/stores/surveyPattern.svelte').then(m => { m.exitPatternMode(); showPatternPanel = false; });
     } else {
+      showTerrainPanel = false;
       import('$lib/stores/surveyPattern.svelte').then(m => { m.enterPatternMode('rectangle'); showPatternPanel = true; });
+    }
+  }
+  function toggleTerrain() {
+    if (showTerrainPanel) {
+      showTerrainPanel = false;
+    } else {
+      if (showPatternPanel) {
+        import('$lib/stores/surveyPattern.svelte').then(m => m.exitPatternMode());
+        showPatternPanel = false;
+      }
+      showTerrainPanel = true;
     }
   }
   // Leaving edit mode closes the pattern panel (mirror the INAV panel).
@@ -85,7 +100,7 @@
   // Keyboard: Ctrl+Z = undo, Ctrl+Y / Ctrl+Shift+Z = redo. Edit-mode only, not while in the pattern
   // panel, and not while a text field is focused (so native input undo keeps working). Mirrors INAV.
   function onKeydown(e: KeyboardEvent) {
-    if (!currentEditing || showPatternPanel) return;
+    if (!currentEditing || showPatternPanel || showTerrainPanel) return;
     if (!(e.ctrlKey || e.metaKey)) return;
     const tgt = e.target as HTMLElement | null;
     const tag = tgt?.tagName;
@@ -380,6 +395,7 @@
     {#if currentEditing}
       <Button variant="mode" active={showPatternPanel} icon="map" onclick={togglePattern}>{$t('survey.pattern')}</Button>
     {/if}
+    <Button variant="mode" active={showTerrainPanel} icon="terrain" onclick={toggleTerrain}>{$t('missionTerrain.toggle')}</Button>
     {#if currentEditing && !showPatternPanel}
       <Button variant="standard" icon="undo" disabled={!$arduCanUndo} onclick={() => arduUndo()} title={$t('mission.undo')} />
       <Button variant="standard" icon="redo" disabled={!$arduCanRedo} onclick={() => arduRedo()} title={$t('mission.redo')} />
@@ -421,6 +437,8 @@
       {:catch error}
         <div class="wp-empty">⚠ {String(error)}</div>
       {/await}
+    {:else if showTerrainPanel}
+      <MissionTerrainPanel editing={currentEditing} />
     {:else if currentMission.length === 0}
       <div class="wp-empty">{currentEditing ? $t('mission.emptyEdit') : $t('mission.emptyView')}</div>
     {:else}

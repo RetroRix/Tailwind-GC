@@ -28,6 +28,7 @@
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import MissionSaveDialog from '$lib/components/mission/MissionSaveDialog.svelte';
   import MissionManager from '$lib/components/mission/MissionManager.svelte';
+  import MissionTerrainPanel from '$lib/components/mission/MissionTerrainPanel.svelte';
   import SafeHomeManager from '$lib/components/mission/SafeHomeManager.svelte';
   import { safeHomeManagerOpen } from '$lib/stores/safehome';
   import { geozoneMissionResult } from '$lib/stores/geozone';
@@ -68,6 +69,8 @@
 
   // Lazy pattern panel state (to avoid loading heavy module on startup)
   let showPatternPanel = $state(false);
+  // Terrain profile / hold-clearance section (replaces the WP table while open, like the pattern panel)
+  let showTerrainPanel = $state(false);
 
   const unsubMission = mission.subscribe(m => { currentMission = m; });
   const unsubSelIdx = selectedWpIndex.subscribe(i => { currentSelIdx = i; });
@@ -92,7 +95,7 @@
   // Keyboard: Ctrl+Z = undo, Ctrl+Y / Ctrl+Shift+Z = redo. Edit-mode only and
   // not while a text field is focused (so native input undo keeps working).
   function onKeydown(e: KeyboardEvent) {
-    if (!currentEditing || showPatternPanel) return;
+    if (!currentEditing || showPatternPanel || showTerrainPanel) return;
     if (!(e.ctrlKey || e.metaKey)) return;
     const tgt = e.target as HTMLElement | null;
     const tag = tgt?.tagName;
@@ -306,7 +309,20 @@
     if (showPatternPanel) {
       import('$lib/stores/surveyPattern.svelte').then(m => { m.exitPatternMode(); showPatternPanel = false; });
     } else {
+      showTerrainPanel = false;
       import('$lib/stores/surveyPattern.svelte').then(m => { m.enterPatternMode('rectangle'); showPatternPanel = true; });
+    }
+  }
+
+  function toggleTerrain() {
+    if (showTerrainPanel) {
+      showTerrainPanel = false;
+    } else {
+      if (showPatternPanel) {
+        import('$lib/stores/surveyPattern.svelte').then(m => m.exitPatternMode());
+        showPatternPanel = false;
+      }
+      showTerrainPanel = true;
     }
   }
 
@@ -448,6 +464,7 @@
     {#if currentEditing}
       <Button variant="mode" active={showPatternPanel} icon="map" onclick={togglePattern}>{$t('survey.pattern')}</Button>
     {/if}
+    <Button variant="mode" active={showTerrainPanel} icon="terrain" onclick={toggleTerrain}>{$t('missionTerrain.toggle')}</Button>
     <div class="tb-spacer"></div>
     {#if currentEditing && currentSel.size > 0}
       <Button variant="danger" icon="close" onclick={removeSelected} title={$t('mission.removeWp')} />
@@ -490,6 +507,8 @@
           <button onclick={() => showPatternPanel = false}>Schließen</button>
         </div>
       {/await}
+    {:else if showTerrainPanel}
+      <MissionTerrainPanel editing={currentEditing} />
     {:else if currentMission.waypoints.length === 0}
       <div class="wp-empty">{currentEditing ? $t('mission.emptyEdit') : $t('mission.emptyView')}</div>
     {:else}
@@ -551,7 +570,7 @@
       </div>
     {/if}
 
-    {#if !showPatternPanel}
+    {#if !showPatternPanel && !showTerrainPanel}
       <div class="ctrl-row">
         <Button variant="data" icon="download" full disabled={downloadLoading} onclick={handleDownload}>{$t('mission.fcDownload')}</Button>
         <Button variant="data" icon="upload" full disabled={uploadLoading} onclick={handleUpload}>{$t('mission.fcUpload')}</Button>
@@ -571,7 +590,7 @@
 
     {#if statusMessage}<div class="mission-status">{statusMessage}</div>{/if}
 
-    {#if !showPatternPanel && stats.geoCount >= 2}
+    {#if !showPatternPanel && !showTerrainPanel && stats.geoCount >= 2}
       <div class="mission-stats">
         <span class="stat" title={$t('mission.statDistance')}>⤢ {fmtDist(stats.legDistanceM)}</span>
         {#if stats.hasInfiniteJump}<span class="stat" title={$t('mission.infiniteRepeatTip')}>↻∞</span>{/if}
