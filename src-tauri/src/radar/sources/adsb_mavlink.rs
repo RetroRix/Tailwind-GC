@@ -177,7 +177,9 @@ fn wait_or_stop(stop: &Arc<AtomicBool>, dur: Duration) -> bool {
 }
 
 /// Map a MAVLink ADSB_VEHICLE to a TrackedVehicle. Skips entries without a usable position.
-fn map_adsb_vehicle(av: &mavlink::ardupilotmega::ADSB_VEHICLE_DATA, now: i64) -> Option<TrackedVehicle> {
+/// `pub(crate)` so the main MAVLink handler can reuse this exact mapping for ADSB_VEHICLE frames
+/// arriving on the FC's primary link (no second decode path to drift apart).
+pub(crate) fn map_adsb_vehicle(av: &mavlink::ardupilotmega::ADSB_VEHICLE_DATA, now: i64) -> Option<TrackedVehicle> {
     let lat = av.lat as f64 / 1e7;
     let lon = av.lon as f64 / 1e7;
     if lat == 0.0 && lon == 0.0 {

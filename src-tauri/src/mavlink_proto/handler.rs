@@ -650,6 +650,26 @@ fn dispatch_message(header: &MavHeader, message: &MavMessage, fc_variant: &str, 
             let _ = app_handle.emit("home-position", &data);
         }
 
+        // ── ADSB_VEHICLE → radar pipeline ───────────────────────────
+        // Traffic from an ADS-B receiver on the FC (ArduPilot ADS-B in, or INAV emitting MAVLink
+        // ADSB_VEHICLE) arrives on the primary link: map it with the same decoder the dedicated
+        // serial-receiver source uses and push it into the radar aggregator (merged by ICAO and
+        // tagged AdsbReceiver — FC-received traffic, never internet/NET). A no-op while the radar
+        // pipeline is stopped (the ingest channel is None then).
+        MavMessage::ADSB_VEHICLE(av) => {
+            if let Some(v) = crate::radar::sources::adsb_mavlink::map_adsb_vehicle(av, crate::radar::now_ms()) {
+                let state = tauri::Manager::state::<crate::state::AppState>(app_handle);
+                if let Ok(guard) = state.radar_ingest.lock() {
+                    if let Some(tx) = guard.as_ref() {
+                        let _ = tx.send(crate::radar::source::SourceUpdate {
+                            source: crate::radar::vehicle::VehicleSource::AdsbReceiver,
+                            vehicles: vec![v],
+                        });
+                    }
+                }
+            }
+        }
+
         // ── POSITION_TARGET_GLOBAL_INT → guided-target ──────────────
         // Requested at 1 Hz (SET_MESSAGE_INTERVAL) — keeps the map's Guided marker on the FC's
         // actual loiter/goto point, including targets set by another GCS. See GuidedTargetEvent.
