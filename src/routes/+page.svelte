@@ -46,6 +46,7 @@
   import PanelPlayground from "$lib/components/panel/PanelPlayground.svelte";
   import UavInfoPanel from "$lib/components/UavInfoPanel.svelte";
   import LogbookPanel from "$lib/components/logbook/LogbookPanel.svelte";
+  import LogViewerPanel from "$lib/components/logbook/LogViewerPanel.svelte";
   import MissionPanel from "$lib/components/mission/MissionPanel.svelte";
   import MavCommandPanel from "$lib/components/control/MavCommandPanel.svelte";
   import RcControlPanel from "$lib/components/control/RcControlPanel.svelte";
@@ -811,6 +812,8 @@
   const ICON_LOGBOOK = '<svg viewBox="0 0 24 24"><defs><mask id="kg-nb"><rect x="4" y="3" width="16" height="18" rx="2" fill="#fff"/><circle cx="7" cy="6.5" r="1"/><circle cx="7" cy="9.7" r="1"/><circle cx="7" cy="12.9" r="1"/><circle cx="7" cy="16.1" r="1"/><rect x="9.8" y="6.5" width="7" height="2" rx="1"/><rect x="9.8" y="11" width="7" height="2" rx="1"/><rect x="9.8" y="15.5" width="5" height="2" rx="1"/></mask></defs><rect x="4" y="3" width="16" height="18" rx="2" fill="currentColor" mask="url(#kg-nb)"/></svg>';
   // Classic filled map marker with a punched-out (transparent) centre dot (Mission).
   const ICON_MISSION = '<svg viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2.5C8.4 2.5 5.5 5.4 5.5 9c0 4.8 6.5 12.5 6.5 12.5S18.5 13.8 18.5 9c0-3.6-2.9-6.5-6.5-6.5Zm0 4.1A2.4 2.4 0 1 0 12 11.4 2.4 2.4 0 0 0 12 6.6Z"/></svg>';
+  // Log Viewer: axis + rising trace with a playhead dot (field graph / replay).
+  const ICON_LOG_VIEWER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 3.5v17h17"/><path d="M7 15.5 11 9.5l3 3 5-7.5"/><circle cx="7" cy="15.5" r="1.5" fill="currentColor" stroke="none"/></svg>';
   // Two solid peaks, slightly raised (Terrain).
   const ICON_TERRAIN = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M1.5 20 8.5 5 13 14 16.5 8.5 22.5 20Z"/></svg>';
   // Folded map with a download arrow (Offline Maps).
@@ -863,6 +866,7 @@
     { id: "rc-control", label: () => $t('nav.rc'), icon: ICON_RC },
     { id: "terrain", label: () => $t('nav.terrain'), icon: ICON_TERRAIN },
     { id: "logbook", label: () => $t('nav.logbook'), icon: ICON_LOGBOOK },
+    { id: "log-viewer", label: () => $t('nav.logViewer'), icon: ICON_LOG_VIEWER },
     { id: "radar", label: () => $t('nav.radar'), icon: ICON_RADAR },
     { id: "offline-maps", label: () => $t('nav.offline'), icon: ICON_OFFLINE },
     { id: "airspace", label: () => $t('nav.airspace'), icon: ICON_AIRSPACE },
@@ -4024,6 +4028,8 @@
             onDismissOpenedFlight={(id) => { void dismissOpenedFlight(id); }}
           />
           </div>
+        {:else if activeTab === 'log-viewer'}
+          <LogViewerPanel />
         {:else if activeTab === 'mission'}
           <MissionPanel />
         {:else if activeTab === 'control'}
