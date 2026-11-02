@@ -128,6 +128,9 @@ export function toTelemetryData(r: TelemetryRecord, fcVariant = 'INAV'): Telemet
     aoaDeg: null,
     ssaDeg: null,
 
+    // GPS jamming — not recorded in the DB (and no live source yet), so replay has no data.
+    gpsJamming: null,
+
     // FC type
     fcVariant,
 

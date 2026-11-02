@@ -63,6 +63,12 @@ export interface TelemetryData {
   aoaDeg: number | null;
   ssaDeg: number | null;
 
+  // GPS jamming indicator (0–255, ArduPilot GPS_RAW_INT jamming_indicator — Tailwind).
+  // null = never received: INAV/MSP has no equivalent, and the pinned MAVLink dialect does
+  // not expose the field yet (see GpsJammingData in the backend), so this stays null and the
+  // GPS widget shows an honest no-data dash rather than a made-up value.
+  gpsJamming: number | null;
+
   // Wind estimate (ArduPilot WIND live / INAV MSP2_INAV_WIND 10.0+ / blackbox replay).
   windDirFrom: number; // bearing the wind blows FROM (deg)
   windSpeedMs: number; // horizontal wind speed (m/s); 0 = none/invalid
@@ -151,6 +157,7 @@ const defaultTelemetry: TelemetryData = {
   airspeed: 0,
   aoaDeg: null,
   ssaDeg: null,
+  gpsJamming: null,
   windDirFrom: 0, windSpeedMs: 0,
   voltage: 0, current: 0, mAhDrawn: 0, rssi: 0, power: 0, batteryPercentage: 0, cellCount: 0,
   throttle: 0,
@@ -506,6 +513,19 @@ export async function startTelemetryListeners() {
         ...t,
         aoaDeg: event.payload.aoa_deg ?? t.aoaDeg,
         ssaDeg: event.payload.ssa_deg ?? t.ssaDeg,
+        lastUpdate: Date.now(),
+      }));
+    })
+  );
+
+  // GPS jamming (same keep-last pattern as AOA): a null payload field leaves the last value.
+  // No backend source emits this yet — the pinned MAVLink dialect lacks GPS_RAW_INT's
+  // jamming_indicator field and MSP has no equivalent — so the store simply stays null.
+  unlisteners.push(
+    await listen<{ jamming_indicator: number | null }>('telemetry-gps-jamming', (event) => {
+      telemetry.update((t) => ({
+        ...t,
+        gpsJamming: event.payload.jamming_indicator ?? t.gpsJamming,
         lastUpdate: Date.now(),
       }));
     })

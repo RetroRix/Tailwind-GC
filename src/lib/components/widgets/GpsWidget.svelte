@@ -40,6 +40,20 @@
   let hdopText = $derived(
     telem.lastUpdate && telem.gpsHdop > 0 ? `HDOP ${telem.gpsHdop.toFixed(1)}` : 'HDOP -'
   );
+
+  // GPS jamming indicator (0–255). gpsJamming stays null until a backend source reports it —
+  // INAV/MSP has no equivalent and the pinned MAVLink dialect doesn't expose GPS_RAW_INT's
+  // jamming_indicator yet — so the honest state is a dash, never an invented 0. Bands are a
+  // plain reading of the receiver scale: low = normal, middle = elevated, high = severe.
+  let jamText = $derived(
+    telem.lastUpdate && telem.gpsJamming != null ? `JAM ${telem.gpsJamming}` : 'JAM —'
+  );
+  let jamColor = $derived(
+    telem.gpsJamming == null ? '#9fb3bd'
+      : telem.gpsJamming >= 100 ? '#e74c3c'
+      : telem.gpsJamming >= 40 ? '#f39c12'
+      : '#27ae60'
+  );
 </script>
 
 <div class="widget-card" style="--ws: {size}px">
@@ -52,6 +66,9 @@
     </span>
     <span class="w-meta w-meta-hdop">
       {hdopText}
+    </span>
+    <span class="w-meta w-meta-jam" style="color: {jamColor}">
+      {jamText}
     </span>
   </div>
 </div>
@@ -112,6 +129,10 @@
 
   .w-meta-hdop {
     color: #9fb3bd;
+    font-weight: 600;
+  }
+
+  .w-meta-jam {
     font-weight: 600;
   }
 </style>

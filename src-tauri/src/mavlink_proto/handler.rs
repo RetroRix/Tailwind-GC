@@ -783,6 +783,15 @@ fn dispatch_message(header: &MavHeader, message: &MavMessage, fc_variant: &str, 
                 }));
             }
 
+            // GPS jamming indicator — BLOCKED on the pinned dialect: current common.xml defines
+            // GPS_RAW_INT.jamming_indicator (u8, 0–255), but mavlink 0.17.1's bundled common.xml
+            // ends GPS_RAW_INT's extension fields at `yaw`, so the generated GPS_RAW_INT_DATA has
+            // no such field and there is nothing to parse here yet. The payload type
+            // (`GpsJammingData`, scheduler::telemetry) and the frontend `telemetry-gps-jamming`
+            // listener + GPS-widget indicator already exist with an honest no-data state; when a
+            // crate bump exposes the field, emit it here as
+            // `GpsJammingData { jamming_indicator: Some(gps.jamming_indicator) }`.
+
             // Per-sensor hardware health is owned by SYS_STATUS (real present/health bitmasks); the
             // GPS fix nuance (amber on <3D) is layered on top frontend-side from this message's fix.
 

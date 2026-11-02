@@ -154,6 +154,19 @@ pub struct AoaData {
     pub ssa_deg: Option<f64>,
 }
 
+/// GPS jamming indicator for the `telemetry-gps-jamming` event (Tailwind). Current MAVLink
+/// common.xml carries the receiver's jamming level as GPS_RAW_INT.jamming_indicator
+/// (0 = none … 255 = severe), but the pinned mavlink crate (0.17.1) generates GPS_RAW_INT from
+/// a bundled common.xml whose extension fields end at `yaw` — the generated struct has no such
+/// field, so no MAVLink handler can fill this yet, and INAV/MSP GPS data has no equivalent at
+/// all. The event shape is defined now (mirroring `AoaData`) so the frontend indicator exists
+/// with an honest no-data state; the GPS_RAW_INT emit lands in the handler as soon as a
+/// crate/dialect bump exposes the field.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GpsJammingData {
+    pub jamming_indicator: Option<u8>,
+}
+
 /// One battery monitor instance for the `telemetry-batteries` event. ArduPilot/PX4 report several of
 /// these in parallel (one per configured monitor, keyed by `id`); INAV has a single battery. See
 /// docs/active/MULTI_BATTERY.md.
