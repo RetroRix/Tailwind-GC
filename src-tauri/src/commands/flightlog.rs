@@ -1633,3 +1633,19 @@ pub fn flightlog_recover_continue(
         .map_err(|_| "Resume-session lock poisoned".to_string())? = Some(session);
     Ok(())
 }
+// ─── Log Viewer (standalone .bin / .tlog viewer — no logbook import) ────────
+
+/// Parse a `.bin` (ArduPilot DataFlash) or `.tlog` (MAVLink) file into the structured
+/// dataset the Log Viewer tab renders (generic field series + GPS track + mode timeline).
+/// Read-only: nothing is written to the logbook DB and no live store is touched.
+/// Runs on a blocking thread — a large .bin parse must not stall the UI.
+#[tauri::command]
+pub async fn flightlog_open(
+    file_path: String,
+) -> Result<crate::flightlog::viewer::ViewerDataset, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::flightlog::viewer::open_log_viewer(std::path::Path::new(&file_path))
+    })
+    .await
+    .map_err(|e| format!("Log viewer task failed: {}", e))?
+}
