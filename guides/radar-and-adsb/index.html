@@ -1923,7 +1923,9 @@ kinds of feed at once and merges them into <strong>one ADS-B list</strong> (de-d
 address, so the same plane seen by two feeds appears once):</p>
 <ul>
 <li><strong>Online services</strong> — public ADS-B aggregators over the internet. Two are <strong>built-in</strong> (adsb.lol and
-  adsb.fi — just toggle them on). You can <strong>add more</strong> as custom rows (name + URL template + optional API
+  adsb.fi — just toggle them on; adsb.fi is <strong>off by default</strong> and has its own <strong>Internet traffic
+  (adsb.fi)</strong> switch in Settings too). Contacts heard <strong>only</strong> online are tagged <strong>NET</strong> in the list
+  and on the map. You can <strong>add more</strong> as custom rows (name + URL template + optional API
   key); <strong>adsb.one</strong> comes <strong>pre-filled as an example</strong> custom row (it's there for convenience but left
   off by default, as that service has had server-side reliability issues). Set the <strong>download radius</strong>
   (10–100 km) and the <strong>poll interval</strong> (2–30 s) under <strong>Online service</strong>. Online feeds are fetched
@@ -1937,6 +1939,9 @@ address, so the same plane seen by two feeds appears once):</p>
 <li><strong>From your UAV</strong> — on <strong>INAV 8.0+</strong>, if your aircraft has its own ADS-B receiver, Tailwind can download
   its traffic list over the existing flight link (the <strong>UAV Source</strong> toggle). This appears only when the
   connected FC supports it; ArduPilot and PX4 don't offer this path.</li>
+<li><strong>Forwarded by your flight controller</strong> — if the FC itself receives ADS-B and forwards the contacts
+  as MAVLink <code>ADSB_VEHICLE</code> over the main flight link (the usual ArduPilot ADS-B-in setup), those
+  contacts join the same list, counted as receiver traffic.</li>
 </ul>
 <h3 id="reading-the-ads-b-tab">Reading the ADS-B tab<a class="headerlink" href="#reading-the-ads-b-tab" title="Permanent link">&para;</a></h3>
 <p>Top to bottom, the ADS-B tab is organized into:</p>

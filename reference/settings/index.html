@@ -2241,6 +2241,11 @@ Altitude and Compass sit in the bottom dock and Home, RC Link and GPS in the rig
 <td>Plugging a recognised flight controller (Cube, Pixhawk/Hex, pid.codes, STM32 boards) in over USB while disconnected connects it automatically at the last-used protocol and baud. One attempt per plug-in; generic serial adapters are ignored.</td>
 <td>On</td>
 </tr>
+<tr>
+<td><strong>NTRIP / RTK Corrections</strong></td>
+<td>Stream RTCM corrections from an NTRIP caster (<strong>host</strong>, <strong>port</strong>, <strong>mountpoint</strong>, <strong>username</strong>, <strong>password</strong>) and forward them to the aircraft over MAVLink (<code>GPS_RTCM_DATA</code>). The status line shows the caster state, bytes/frames received and whether corrections are actually flowing — with no MAVLink vehicle connected it receives only and says so. The password is stored as a plain settings field, like the other keys in this app.</td>
+<td>Off</td>
+</tr>
 </tbody>
 </table>
 <h3 id="telemetry">Telemetry<a class="headerlink" href="#telemetry" title="Permanent link">&para;</a></h3>
@@ -2296,6 +2301,11 @@ how smooth the instruments feel; the rest is automatic.</p>
 <td><strong>Radar tracking</strong></td>
 <td>Master switch for foreign-vehicle radar, with per-system enables (<strong>ADS-B</strong>, <strong>FormationFlight</strong>). See <strong><a href="../../guides/radar-and-adsb/">Radar &amp; ADS-B</a></strong>.</td>
 <td>On (ADS-B on)</td>
+</tr>
+<tr>
+<td><strong>Internet traffic (adsb.fi)</strong></td>
+<td>Also fetch internet ADS-B traffic (adsb.fi open data) around your position and show it on the map and radar, tagged <strong>NET</strong> and merged with receiver traffic (a contact heard by a receiver wins). Polled at most every 10 s while on. Same switch as the adsb.fi row in the Radar panel.</td>
+<td>Off</td>
 </tr>
 <tr>
 <td><strong>RC Control</strong></td>

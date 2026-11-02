@@ -770,6 +770,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#terrain-profile-holding-clearance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terrain profile &amp; holding clearance
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2075,6 +2086,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#terrain-profile-holding-clearance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terrain profile &amp; holding clearance
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2355,12 +2377,20 @@ parameters, and press <strong>Generate &amp; Append</strong>.</p>
 <li><strong>Polygon</strong> — drag a <strong>yellow corner</strong> to move a vertex; click a <strong>grey midpoint</strong> to <strong>add</strong> a vertex;
   to <strong>remove</strong> one, drag a corner onto the red <strong>"Drop here to delete vertex"</strong> banner or <strong>right-click</strong>
   it (a polygon keeps at least three corners). A self-intersecting shape snaps back.</li>
+<li><strong>Polygon, drawn by clicking</strong> — the polygon pattern also offers <strong>Draw Polygon on Map</strong>: click each
+  corner on the map (with <strong>Undo Point</strong> / <strong>Clear</strong> while you draw), then <strong>Finish</strong> — at least three
+  points, no self-intersections, and the scan orientation snaps to the polygon's longest edge.</li>
 </ul>
 <p>The pattern settings <strong>persist</strong>, so you can move the shape and press <strong>Generate &amp; Append</strong> again to drop
 <strong>another</strong> copy elsewhere — each Generate appends to the current mission.</p>
 <h3 id="key-parameters">Key parameters<a class="headerlink" href="#key-parameters" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Line spacing</strong> — distance between adjacent legs (your camera footprint / desired overlap).</li>
+<li><strong>Crosshatch</strong> (polygon zig-zag) — adds a second pass at 90°, so the area is flown in both
+  directions for denser coverage.</li>
+<li><strong>Camera spacing</strong> — instead of typing line spacing, enter <strong>sensor width</strong>, <strong>focal length</strong> and
+  <strong>side overlap %</strong> and the panel computes the spacing from your altitude (footprint =
+  altitude × sensor ÷ focal).</li>
 <li><strong>Altitude</strong> and <strong>Speed</strong> — applied to every generated waypoint.</li>
 <li><strong>Orientation</strong> — rotates the pattern; for zig-zags you can rotate the <strong>scan lines</strong> independently of
   the shape.</li>
@@ -2414,6 +2444,15 @@ turns and any gap.</p>
 attaches, but its waypoints can't be dragged or edited until you leave the generator (the same on all
 three stacks). Generating <strong>appends</strong> the pattern as a <strong>single undo step</strong>, so one <strong>Ctrl+Z</strong> removes
 the whole pattern. On INAV the 120-waypoint limit is checked, with the option to truncate.</p>
+<h3 id="terrain-profile-holding-clearance">Terrain profile &amp; holding clearance<a class="headerlink" href="#terrain-profile-holding-clearance" title="Permanent link">&para;</a></h3>
+<p>The mission panel's <strong>Terrain</strong> tab samples the ground under the whole mission and draws the
+<strong>elevation profile</strong> against your planned altitudes (each waypoint resolved to sea level by its
+altitude mode), flagging any leg that dips below the <strong>minimum clearance</strong> you set. <strong>Hold
+clearance</strong> rewrites the violating waypoints — <strong>raising only, never lowering</strong> — so each leg
+keeps at least that clearance over the highest ground on the way in, honouring each waypoint's
+altitude mode (relative, absolute, AGL / terrain frame). Waypoints whose incoming leg has no
+terrain data are skipped and listed, never guessed, and the rewrite lands as a <strong>single undo
+step</strong>. For the full-screen terrain tools see <strong><a href="../terrain-analysis/">Terrain &amp; RF analysis</a></strong>.</p>
 <h2 id="sending-it-to-the-aircraft">Sending it to the aircraft<a class="headerlink" href="#sending-it-to-the-aircraft" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

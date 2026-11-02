@@ -640,6 +640,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="TCP and UDP (network links)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#named-presets-dronebridge-and-expresslrs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Named presets: DroneBridge and ExpressLRS
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1918,6 +1935,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="TCP and UDP (network links)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#named-presets-dronebridge-and-expresslrs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Named presets: DroneBridge and ExpressLRS
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2182,6 +2216,45 @@ simulator or router, <strong>MSP</strong> for an MSP-over-TCP bridge.</p>
 <p>With TCP or UDP selected, the port fields become a <strong>host</strong> and a <strong>port</strong>.</p>
 </figcaption>
 </figure>
+<h3 id="named-presets-dronebridge-and-expresslrs">Named presets: DroneBridge and ExpressLRS<a class="headerlink" href="#named-presets-dronebridge-and-expresslrs" title="Permanent link">&para;</a></h3>
+<p>Two well-known Wi-Fi telemetry links have a <strong>Preset</strong> dropdown next to the protocol selector.
+Picking a preset fills in the <strong>protocol</strong>, <strong>transport</strong> and <strong>port</strong> with that link's standard
+endpoint — nothing connects by itself, and the <strong>Host</strong> field is left exactly as it is: both links
+get their address from the module's own setup, so you type it once and Tailwind remembers it like
+any other network connection.</p>
+<table>
+<thead>
+<tr>
+<th>Preset</th>
+<th>Fills in</th>
+<th>Use it for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>DroneBridge (ESP32)</strong></td>
+<td>MAVLink · UDP · <code>14550</code></td>
+<td>A DroneBridge ESP32 module bridging the FC's MAVLink over Wi-Fi</td>
+</tr>
+<tr>
+<td><strong>ExpressLRS MAVLink</strong></td>
+<td>MAVLink · UDP · <code>14550</code></td>
+<td>An ExpressLRS receiver's Wi-Fi MAVLink stream</td>
+</tr>
+</tbody>
+</table>
+<ol>
+<li><strong>Preset</strong> → <strong>DroneBridge (ESP32)</strong> or <strong>ExpressLRS MAVLink</strong>.</li>
+<li><strong>Host</strong> — the module's IP address on your network (check its configuration page or your
+   router's client list; a module in access-point mode is usually its network's gateway address).</li>
+<li><strong>Connect</strong>.</li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">ExpressLRS over a cable</p>
+<p>The preset covers the ExpressLRS <strong>Wi-Fi</strong> MAVLink link. An ELRS receiver wired to a
+USB-serial adapter instead stays a manual pick: protocol <strong>MAVLink</strong>, transport <strong>Serial</strong>,
+and the adapter's port.</p>
+</div>
 <h2 id="ble-bluetooth-low-energy">BLE (Bluetooth Low Energy)<a class="headerlink" href="#ble-bluetooth-low-energy" title="Permanent link">&para;</a></h2>
 <p>For BLE-to-serial adapters — the same kind INAV Configurator supports.</p>
 <ol>

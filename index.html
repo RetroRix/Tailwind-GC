@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#whats-new-in-tailwind-v110-tailwind6" class="md-skip">
+        <a href="#whats-new-in-tailwind-v110-tailwind7" class="md-skip">
           Skip to content
         </a>
       
@@ -332,6 +332,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.7
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind6" class="md-nav__link">
@@ -1755,6 +1766,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.7
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind6" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1886,6 +1908,31 @@ right next to the map.</p>
 <p>Tailwind Ground Control flying in 3D mode.</p>
 </figcaption>
 </figure>
+<h2 id="whats-new-in-tailwind-v110-tailwind7">What's new in Tailwind v1.1.0-tailwind.7<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind7" title="Permanent link">&para;</a></h2>
+<p>The rivals release — the best ideas from the other ground stations, built into Tailwind:</p>
+<ul>
+<li><strong>Survey patterns, finished</strong> — draw the survey polygon by <strong>clicking on the map</strong>, fly it as a
+    <strong>crosshatch</strong> (both directions) as well as a grid, compute line spacing from your <strong>camera</strong>
+    (sensor + focal length + overlap), and append to the mission or replace it. A new <strong>Terrain</strong>
+    tab profiles the ground under the whole mission and can <strong>rewrite waypoint altitudes to hold
+    the clearance you set</strong> over high ground — raising only, never lowering.</li>
+<li><strong>NTRIP / RTK corrections</strong> — a built-in NTRIP client (<strong>Settings → Connection</strong>) streams RTCM
+    corrections from your caster and forwards them to the aircraft over MAVLink. No second app
+    babysitting the RTK feed.</li>
+<li><strong>Traffic on the map</strong> — ADS-B targets show <strong>callsign + altitude</strong> right on the 2D map, the
+    flight controller's own ADS-B-in over the main link is displayed too, and an optional
+    <strong>internet traffic feed (adsb.fi)</strong> — off by default — adds surrounding traffic tagged <strong>NET</strong>.</li>
+<li><strong>Log Viewer</strong> — open any ArduPilot <strong><code>.bin</code></strong> or <strong><code>.tlog</code></strong>, graph <strong>any logged field</strong>, see
+    the track coloured by flight mode, and <strong>replay</strong> the flight with a scrubbing playhead.</li>
+<li><strong>FPV video (wfb-ng)</strong> — a new video source listens for <strong>RTP/H.264 on UDP 5600</strong> (the
+    wfb-ng/OpenHD receive contract), with a <strong>ground-rendered OSD</strong> that stays readable while the
+    picture breaks up and a <strong>link-health strip</strong> graphing bitrate, RTP loss and telemetry signal.</li>
+<li><strong>Connection presets</strong> — one-click <strong>DroneBridge (ESP32)</strong> and <strong>ExpressLRS MAVLink</strong> presets
+    in the connection bar. The GPS widget also gains a <strong>JAM</strong> readout for GPS jamming level when
+    the firmware provides it (a dash when it doesn't).</li>
+</ul>
+<p>Get it: <strong><a href="https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.7">Windows</a></strong> ·
+<strong><a href="https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.7-android.1">Android</a></strong></p>
 <h2 id="whats-new-in-tailwind-v110-tailwind6">What's new in Tailwind v1.1.0-tailwind.6<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind6" title="Permanent link">&para;</a></h2>
 <p>Caught up with the upstream Kite GC fixes — the app is more honest about dead links and GPS quality, and ArduPilot editing stops fighting you:</p>
 <ul>

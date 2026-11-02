@@ -877,6 +877,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#fpv-link-wfb-ng-rtp-on-udp-5600" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FPV link (wfb-ng / RTP on UDP 5600)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1832,6 +1843,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#fpv-link-wfb-ng-rtp-on-udp-5600" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FPV link (wfb-ng / RTP on UDP 5600)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2056,6 +2078,25 @@ on Linux) uses ffmpeg alone and never needs MediaMTX. Tailwind downloads whichev
 <strong>automatically</strong> the first time you use that source — no manual install. On macOS ffmpeg is
 shipped with the app.</p>
 </div>
+<h3 id="fpv-link-wfb-ng-rtp-on-udp-5600">FPV link (wfb-ng / RTP on UDP 5600)<a class="headerlink" href="#fpv-link-wfb-ng-rtp-on-udp-5600" title="Permanent link">&para;</a></h3>
+<p>The <strong>FPV link (wfb-ng)</strong> source listens for a raw <strong>RTP/H.264</strong> stream on <strong>UDP port 5600</strong> — the
+receive contract used by wfb-ng and OpenHD ground stations (and by QGroundControl). Point your
+link's ground unit at this machine's IP, port 5600 (listen interface and port are configurable in
+the Video panel), or send from a laptop, e.g. GStreamer <code>rtph264pay config-interval=-1</code> → <code>udpsink</code>.
+The sender must repeat its SPS/PPS in-band (wfb-ng does) so a mid-stream start locks onto the next
+keyframe. The picture appears on the same surfaces as every other source — widget, floating and
+detached windows, map swap.</p>
+<p>Two FPV extras ride on top of the picture:</p>
+<ul>
+<li><strong>Ground OSD</strong> — an overlay drawn by Tailwind itself (flight mode, armed state, battery, GPS,
+  altitude, speed, distance home, artificial horizon), so it stays crisp while the video breaks
+  up. If the telemetry goes quiet it dims and shows <strong>STALE</strong> instead of pretending the numbers
+  are live. Toggle it in the Video panel.</li>
+<li><strong>Link health</strong> — a strip under the picture graphing the last minute of <strong>video bitrate</strong> and
+  <strong>RTP packet loss</strong> (both measured on the stream Tailwind actually received) plus the vehicle
+  link's signal (RSSI / link quality) and message rate. A metric a link doesn't provide shows as
+  a dash — never a made-up number.</li>
+</ul>
 <h2 id="where-the-video-shows">Where the video shows<a class="headerlink" href="#where-the-video-shows" title="Permanent link">&para;</a></h2>
 <p>The same feed can appear in several places at once (they all share one stream):</p>
 <ul>

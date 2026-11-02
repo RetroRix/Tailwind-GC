@@ -809,6 +809,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#the-log-viewer-graph-anything" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Log Viewer (graph anything)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1872,6 +1883,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#the-log-viewer-graph-anything" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Log Viewer (graph anything)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2050,6 +2072,16 @@ duplicate check and linking included — and drops it from the temporary list, w
 simply removes it. <strong>Import Logs</strong> in the toolbar imports every opened file at once, <strong>Close</strong>
 discards them all; both return you to the regular logbook, as does dismissing the last opened
 flight. The temporary store is also cleared when you restart Tailwind.</p>
+<h3 id="the-log-viewer-graph-anything">The Log Viewer (graph anything)<a class="headerlink" href="#the-log-viewer-graph-anything" title="Permanent link">&para;</a></h3>
+<p>Separate from the logbook, the <strong>Log Viewer</strong> (its own entry in the nav rail) opens an ArduPilot
+<code>.bin</code> or a <code>.tlog</code> purely for analysis. Pick a <strong>message type and field</strong> — up to three at once —
+and Tailwind graphs it over the flight, draws the <strong>GPS track coloured by flight mode</strong>, and gives
+you a <strong>player</strong>: press play or drag the playhead and the marker on the track, the current mode and
+the graphed values all follow. <code>.bin</code> files expose <strong>every</strong> message type and field the log defines,
+units included, per instance (<code>GPS</code> and <code>GPS2</code> stay separate series); <code>.tlog</code> files expose the core
+telemetry (position, attitude, battery, HUD speeds, GPS) plus the mode timeline. Files up to
+512 MB open; very dense fields are thinned for display — first and last points are always kept —
+and the panel says so when that happens. Nothing is imported into the logbook.</p>
 <h2 id="importing-logs">Importing logs<a class="headerlink" href="#importing-logs" title="Permanent link">&para;</a></h2>
 <p>Use <strong>Import</strong> to pull in logs from outside Tailwind (one file or a batch). Supported formats:</p>
 <table>
