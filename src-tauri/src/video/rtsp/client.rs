@@ -125,6 +125,126 @@ pub struct RtspStats {
     pub dropped_frames: u64,
 }
 
+/// A raw RTP/UDP video session with NO RTSP control channel — the wfb-ng / OpenHD
+/// ground-station contract (Tailwind FPV link): the sender pushes RTP/H.264 to a fixed
+/// UDP port (5600 by convention, the same socket QGroundControl listens on) and the GCS
+/// simply binds and receives. There is no SDP, so the payload type is the dynamic one
+/// every such sender uses (96) unless configured otherwise, and the SPS/PPS must ride
+/// in-band — wfb-ng's `rtph264pay config-interval=-1` (and OpenHD's equivalent) repeats
+/// them, and the depacketizer passes them through to the decoder.
+#[derive(Debug, Clone)]
+pub struct RtpUdpConfig {
+    /// Local interface to bind (`0.0.0.0` = listen on all — the norm for a ground station).
+    pub bind_host: String,
+    /// Local UDP port to listen on (wfb-ng default: 5600).
+    pub port: u16,
+    /// RTP payload type carrying the H.264 (dynamic PT 96 unless the sender differs).
+    pub payload_type: u8,
+    /// Give up when NO RTP packet at all arrives within this window — the caller's start
+    /// verdict ("is anything sending?"), mirroring `first_packet_timeout` for RTSP.
+    pub first_packet_timeout: Duration,
+    /// Optional live-counter sink (same counters as the RTSP path — the Debug Monitor
+    /// and the FPV link-health strip read bitrate/loss from them).
+    pub live: Option<std::sync::Arc<LiveRtspStats>>,
+    /// As `RtspConfig::resync_on_loss` (unused for H.264; kept for symmetry).
+    pub resync_on_loss: bool,
+}
+
+impl Default for RtpUdpConfig {
+    fn default() -> Self {
+        Self {
+            bind_host: "0.0.0.0".into(),
+            port: 5600,
+            payload_type: 96,
+            first_packet_timeout: Duration::from_secs(10),
+            live: None,
+            resync_on_loss: false,
+        }
+    }
+}
+
+/// Listen on a raw RTP/UDP socket and stream H.264 until `stop` flips; frames arrive via
+/// `on_frame` as Annex-B access units — the exact same delivery contract as `run_rtsp`,
+/// so every downstream route (native decode sink, stats) works unchanged. Blocking —
+/// run it on a dedicated thread.
+pub fn run_rtp_udp(
+    config: &RtpUdpConfig,
+    stop: &AtomicBool,
+    on_frame: &mut dyn FnMut(VideoFrame),
+) -> Result<RtspStats, String> {
+    let sock = UdpSocket::bind((config.bind_host.as_str(), config.port))
+        .map_err(|e| format!("FPV UDP bind {}:{} failed: {e}", config.bind_host, config.port))?;
+    sock.set_read_timeout(Some(Duration::from_millis(100)))
+        .map_err(|e| format!("FPV UDP socket: {e}"))?;
+    log::info!(
+        "FPV link: listening for RTP/H.264 (PT {}) on UDP {}:{}",
+        config.payload_type,
+        config.bind_host,
+        config.port
+    );
+
+    let mut depack = Depack::new(VideoCodec::H264, None, config.resync_on_loss);
+    let mut reorder = Reorderer::new();
+    let mut ordered: Vec<RtpPacket> = Vec::new();
+    let mut buf = vec![0u8; 65536];
+    let started = Instant::now();
+    let mut got_first = false;
+    let mut bytes: u64 = 0;
+    let mut last_live = Instant::now();
+
+    while !stop.load(Ordering::Relaxed) {
+        match sock.recv(&mut buf) {
+            Ok(n) => {
+                // Payload-type filter on the raw header byte: `rtp::parse` deliberately
+                // doesn't carry the PT (an RTSP session negotiates exactly one); here a
+                // stray sender on another PT (an RTCP packet, a second stream) must not
+                // reach the H.264 depacketizer.
+                if n < 12 || (buf[1] & 0x7F) != config.payload_type {
+                    continue;
+                }
+                if !got_first {
+                    got_first = true;
+                    log::info!(
+                        "FPV link: first RTP packet after {} ms (UDP {})",
+                        started.elapsed().as_millis(),
+                        config.port
+                    );
+                }
+                bytes += n as u64;
+                if let Some(pkt) = rtp::parse(&buf[..n]) {
+                    reorder.push(pkt, &mut ordered);
+                    deliver(&mut ordered, &mut depack, on_frame);
+                }
+            }
+            Err(e) if is_timeout(&e) => {
+                if !got_first && started.elapsed() > config.first_packet_timeout {
+                    return Err(format!(
+                        "no RTP video received on UDP port {} within {} s — is the FPV sender (wfb-ng / OpenHD ground unit) running and sending to this machine?",
+                        config.port,
+                        config.first_packet_timeout.as_secs()
+                    ));
+                }
+            }
+            Err(e) => return Err(format!("FPV UDP receive error: {e}")),
+        }
+
+        if let Some(live) = &config.live {
+            if last_live.elapsed() >= Duration::from_millis(250) {
+                last_live = Instant::now();
+                publish_live(live, 1, &reorder.stats, &depack, bytes);
+            }
+        }
+    }
+
+    let (frames, dropped_frames) = depack.totals();
+    Ok(RtspStats {
+        transport: RtspTransport::Udp,
+        rtp: reorder.stats.clone(),
+        frames,
+        dropped_frames,
+    })
+}
+
 /// Connect, negotiate and stream until `stop` flips; frames arrive via `on_frame`.
 /// Blocking — run it on a dedicated thread.
 pub fn run_rtsp(

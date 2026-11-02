@@ -661,7 +661,28 @@
     "kind": {
       "camera": "Camera (device)",
       "rtsp": "RTSP (network)",
-      "native": "Native Capture (Advanced)"
+      "native": "Native Capture (Advanced)",
+      "fpv": "FPV link (wfb-ng)"
+    },
+    "fpvHint": "wfb-ng / OpenHD ground link: the sender pushes RTP/H.264 to this computer — there is no connection to make. Listening can start before or after the ground unit; the link re-listens on its own when the stream drops.",
+    "fpvHost": "Listen interface",
+    "fpvPort": "UDP port (RTP/H.264)",
+    "fpvOsd": "OSD overlay",
+    "fpvOsdHint": "Ground-rendered on-screen display over the video (altitude, speed, battery, GPS, mode, armed state, horizon) — drawn here, not sent by the aircraft, so it stays up and readable when the video breaks up.",
+    "osd": {
+      "armed": "ARMED",
+      "disarmed": "DISARMED",
+      "noGps": "NO GPS",
+      "home": "HOME",
+      "stale": "STALE"
+    },
+    "link": {
+      "video": "Video",
+      "telemetry": "Telemetry",
+      "loss": "loss",
+      "rtpLoss": "RTP loss",
+      "rssi": "RSSI",
+      "lq": "LQ"
     },
     "device": "Video Device",
     "defaultDevice": "Default device",

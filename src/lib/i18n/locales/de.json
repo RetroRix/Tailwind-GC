@@ -659,7 +659,28 @@
     "kind": {
       "camera": "Kamera (Gerät)",
       "rtsp": "RTSP (Netzwerk)",
-      "native": "Native Capture (Erweitert)"
+      "native": "Native Capture (Erweitert)",
+      "fpv": "FPV-Link (wfb-ng)"
+    },
+    "fpvHint": "wfb-ng-/OpenHD-Bodenlink: Der Sender sendet RTP/H.264 an diesen Computer — es ist keine Verbindung aufzubauen. Das Mithören kann vor oder nach der Bodenstation starten; bei Abriss beginnt es von selbst erneut.",
+    "fpvHost": "Empfangs-Schnittstelle",
+    "fpvPort": "UDP-Port (RTP/H.264)",
+    "fpvOsd": "OSD-Overlay",
+    "fpvOsdHint": "Am Boden gerendertes On-Screen-Display über dem Video (Höhe, Geschwindigkeit, Akku, GPS, Modus, Scharf-Status, Horizont) — hier gezeichnet, nicht vom Fluggerät gesendet, daher auch bei Bildausfall sichtbar und lesbar.",
+    "osd": {
+      "armed": "SCHARF",
+      "disarmed": "UNSCHARF",
+      "noGps": "KEIN GPS",
+      "home": "HOME",
+      "stale": "VERALTET"
+    },
+    "link": {
+      "video": "Video",
+      "telemetry": "Telemetrie",
+      "loss": "Verlust",
+      "rtpLoss": "RTP-Verlust",
+      "rssi": "RSSI",
+      "lq": "LQ"
     },
     "device": "Video-Gerät",
     "defaultDevice": "Standardgerät",

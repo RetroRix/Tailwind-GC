@@ -42,7 +42,7 @@ export type VideoResolution = 'auto' | '480p' | '720p' | '1080p';
 export type CameraFps = 'auto' | '30' | '60';
 /** Source kind: local camera (getUserMedia MediaStream), RTSP bridge (MediaMTX), or native hardware
  *  capture (V4L2 / DirectShow / AVFoundation → embedded MJPEG server). */
-export type VideoKind = 'camera' | 'rtsp' | 'native';
+export type VideoKind = 'camera' | 'rtsp' | 'native' | 'fpv';
 /** Which reader served the live RTSP feed: the engine's native client, the ffmpeg fallback, or
  *  Kite's own in-process RTSP client ('kite'). */
 export type RtspEngine = 'native' | 'ffmpeg' | 'kite' | null;
@@ -106,6 +106,14 @@ export interface VideoState {
   /** Experimental: use Kite's own in-process RTSP client — no MediaMTX, no ffmpeg (MJPEG
    *  sources only until the P2.1 native decode sinks land). Persisted. */
   rtspNativeClient: boolean;
+  // ── FPV link (wfb-ng) ────────────────────────────────────────────
+  /** Local bind interface for the raw RTP/UDP listen ('0.0.0.0' = all interfaces). */
+  fpvHost: string;
+  /** Local UDP port the FPV sender pushes RTP/H.264 to (wfb-ng convention: 5600). */
+  fpvPort: number;
+  /** Ground-rendered OSD overlay on the video surfaces for the FPV link (DOM/SVG, so it
+   *  survives video breakup). Persisted. */
+  fpvOsd: boolean;
   /** Active RTSP reader once live (native engine client vs ffmpeg fallback); runtime-only. */
   rtspEngine: RtspEngine;
   /** Runtime-only: the in-process client decodes this feed natively (H264/HEVC →
@@ -195,6 +203,9 @@ interface VideoPrefs {
   rtspConnections: RtspConnection[];
   rtspBufferFrames: number;
   rtspNativeClient: boolean;
+  fpvHost: string;
+  fpvPort: number;
+  fpvOsd: boolean;
   nativeDevice: string | null;
   nativeCodec: string;
   nativeDeviceName: string | null;
@@ -226,6 +237,9 @@ const PREF_DEFAULTS: VideoPrefs = {
   rtspConnections: [],
   rtspBufferFrames: 0,
   rtspNativeClient: false,
+  fpvHost: '0.0.0.0',
+  fpvPort: 5600,
+  fpvOsd: true,
   nativeDevice: null,
   nativeCodec: 'mjpeg',
   nativeDeviceName: null,
@@ -268,6 +282,9 @@ function loadPrefs(): VideoPrefs {
         // Clamped to the stepper's range — a hand-edited pref must not park the buffer at 4000 ms.
         rtspBufferFrames: Math.min(3, Math.max(0, Math.round(p.rtspBufferFrames ?? 0))),
         rtspNativeClient: p.rtspNativeClient ?? false,
+        fpvHost: p.fpvHost ?? '0.0.0.0',
+        fpvPort: Math.min(65535, Math.max(1, Math.round(p.fpvPort ?? 5600))),
+        fpvOsd: p.fpvOsd ?? true,
         nativeDevice: p.nativeDevice ?? p.v4l2Device ?? null,
         nativeCodec: p.nativeCodec ?? 'mjpeg',
         nativeDeviceName: p.nativeDeviceName ?? null,
@@ -302,6 +319,9 @@ function savePrefs(): void {
         rtspConnections: s.rtspConnections,
         rtspBufferFrames: get(rtspBufferFrames),
         rtspNativeClient: s.rtspNativeClient,
+        fpvHost: s.fpvHost,
+        fpvPort: s.fpvPort,
+        fpvOsd: s.fpvOsd,
         nativeDevice: s.nativeDevice,
         nativeCodec: s.nativeSel.codec,
         nativeDeviceName: s.nativeDeviceName,
@@ -355,6 +375,9 @@ const INITIAL: VideoState = {
   rtspTransport: boot.rtspTransport,
   rtspConnections: boot.rtspConnections,
   rtspNativeClient: boot.rtspNativeClient,
+  fpvHost: boot.fpvHost,
+  fpvPort: boot.fpvPort,
+  fpvOsd: boot.fpvOsd,
   rtspEngine: null,
   nativeSink: false,
   nativeSinkCodec: null,
@@ -940,6 +963,8 @@ function stopKiteRtsp(): void {
   stopNativeSurfaceRouter();
   if (get(videoState).nativeSink) patch({ nativeSink: false, nativeSinkCodec: null });
   void invoke('video_rtsp_native_stop').catch(() => {});
+  // The FPV link shares the native client's one running session — stopping either stops both.
+  void invoke('video_fpv_udp_stop').catch(() => {});
 }
 
 /** Presented-fps readout of the native decode sink (updated by the 1 Hz monitor below);
@@ -1114,6 +1139,92 @@ async function startKiteRtspPath(url: string, transport: RtspTransport): Promise
     }
     return 'retry';
   }
+}
+
+/** Bring the FPV link up: the backend binds the configured UDP socket and listens for raw
+ *  RTP/H.264 (wfb-ng contract — no RTSP handshake). H.264 goes into the same native decode
+ *  sink route as the Kite RTSP client, so surfaces, stats and stall detection are shared.
+ *  Returns 'live' or 'retry' (no sender yet / socket busy — the reconnect loop keeps
+ *  listening; a ground unit that powers up after the GCS is the normal case). */
+async function startFpvPath(): Promise<'live' | 'retry'> {
+  const st = get(videoState);
+  try {
+    const res = await invoke<{ mode?: string; url?: string; transcode: string; codec?: string }>(
+      'video_fpv_udp_start',
+      { host: st.fpvHost, port: st.fpvPort },
+    );
+    // Stopped — or switched source — while the backend waited for the first frame?
+    if (get(videoState).kind !== 'fpv' || !get(videoState).enabled) {
+      stopKiteRtsp();
+      return 'live'; // not a failure — the user stopped or rerouted it
+    }
+    if (res.mode === 'sink') {
+      patch({ status: 'live', mjpegUrl: null, nativeSink: true, nativeSinkCodec: res.codec ?? 'H.264', activeTranscode: res.transcode, error: null, rtspEngine: 'kite', reconnecting: false, reconnectAttempt: 0 });
+      startNativeSurfaceRouter();
+      syncNativeSinkOrient();
+      void invoke('video_rtsp_native_sink_buffer', { frames: get(rtspBufferFrames) }).catch(() => {});
+    } else {
+      patch({ status: 'live', mjpegUrl: res.url ?? null, activeTranscode: res.transcode, error: null, rtspEngine: 'kite', reconnecting: false, reconnectAttempt: 0 });
+    }
+    startKiteStatsMonitor(); // bitrate / RTP loss for the link-health strip + Debug Monitor
+    return 'live';
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    logVideo('warn', `FPV link (RTP/UDP) failed: ${message}`);
+    return 'retry';
+  }
+}
+
+/** Open (or re-open) the FPV link listener. Once live, the shared kite stats monitor watches
+ *  for a frame stall; any failure enters the same infinite reconnect loop as RTSP (until
+ *  frames return or the user stops). `reconnect` distinguishes a loop retry from a fresh start. */
+export async function startFpv(opts?: { reconnect?: boolean }): Promise<void> {
+  const reconnect = opts?.reconnect ?? false;
+  clearRtspTimers();
+  stopTracks(); // release the camera / previous peer connection
+  const st = get(videoState);
+  const port = Math.min(65535, Math.max(1, Math.round(st.fpvPort || 5600)));
+  if (port !== st.fpvPort) patch({ fpvPort: port });
+  patch({
+    kind: 'fpv',
+    enabled: true,
+    status: 'starting',
+    error: null,
+    rtspEngine: null,
+    mjpegUrl: null,
+    ...(reconnect ? {} : { reconnecting: false, reconnectAttempt: 0 }),
+  });
+  if (!reconnect) {
+    savePrefs();
+    logVideo('info', `FPV link start: listening for RTP/H.264 on udp://${st.fpvHost || '0.0.0.0'}:${port} (wfb-ng mode, engine=kite-native)`);
+  }
+  // Release any classic-path readers: the engine's pull and the image path's ffmpeg would
+  // be second consumers of a source that isn't theirs.
+  void invoke('video_webrtc_stop').catch(() => {});
+  void stopNativeMjpeg();
+  if ((await startFpvPath()) === 'retry') scheduleRtspReconnect();
+}
+
+/** FPV listen interface; restarts a live FPV feed so the change applies immediately. */
+export function setFpvHost(host: string): void {
+  patch({ fpvHost: host });
+  savePrefs();
+  const st = get(videoState);
+  if (st.enabled && st.kind === 'fpv') void startFpv();
+}
+
+/** FPV listen port (wfb-ng default 5600); restarts a live FPV feed. */
+export function setFpvPort(port: number): void {
+  patch({ fpvPort: Math.min(65535, Math.max(1, Math.round(port || 5600))) });
+  savePrefs();
+  const st = get(videoState);
+  if (st.enabled && st.kind === 'fpv') void startFpv();
+}
+
+/** Ground-rendered OSD overlay on/off for the FPV link (persisted; display-only). */
+export function setFpvOsd(on: boolean): void {
+  patch({ fpvOsd: on });
+  savePrefs();
 }
 
 /** Bring the source up in MediaMTX and complete one WebRTC (WHEP) negotiation. Throws on failure —
@@ -1439,12 +1550,17 @@ function startRtspStallMonitor(pc: RTCPeerConnection): void {
  *  after a short backoff. Guarded so an explicit stop (kind changed / disabled) ends it. */
 function scheduleRtspReconnect(): void {
   const st = get(videoState);
-  if (st.kind !== 'rtsp' || !st.enabled) return; // user stopped → do not reconnect
+  if ((st.kind !== 'rtsp' && st.kind !== 'fpv') || !st.enabled) return; // user stopped → do not reconnect
   // The loop is unbounded by design, so logging every attempt would fill the file on a source that
   // never comes back. Log the first few, then every tenth — enough to see it is still going.
   const attempt = st.reconnectAttempt + 1;
   if (attempt <= 3 || attempt % 10 === 0) {
-    logVideo('warn', `RTSP reconnect attempt ${attempt} (${st.rtspUrl}, transport=${st.rtspTransport})`);
+    logVideo(
+      'warn',
+      st.kind === 'fpv'
+        ? `FPV link reconnect attempt ${attempt} (RTP/UDP port ${st.fpvPort})`
+        : `RTSP reconnect attempt ${attempt} (${st.rtspUrl}, transport=${st.rtspTransport})`,
+    );
   }
   clearRtspTimers();
   closeRtc();
@@ -1460,7 +1576,9 @@ function scheduleRtspReconnect(): void {
     rtspEngine: null,
     mjpegUrl: null,
   });
-  rtspReconnectTimer = setTimeout(() => { void startRtsp({ reconnect: true }); }, RTSP_RECONNECT_BACKOFF_MS);
+  rtspReconnectTimer = setTimeout(() => {
+    void (get(videoState).kind === 'fpv' ? startFpv({ reconnect: true }) : startRtsp({ reconnect: true }));
+  }, RTSP_RECONNECT_BACKOFF_MS);
 }
 
 /** Negotiate the RTSP source honouring the connection's transport. All three ride MediaMTX' native
@@ -1646,7 +1764,7 @@ export function reportMjpegError(): void {
   // The backend's ended event covers the native decode sink too (its RTSP thread ending
   // drops the broadcast sender either way), so a dead sink feed re-enters the loop here.
   if (!st.enabled || (!st.mjpegUrl && !st.nativeSink)) return;
-  if (st.kind === 'rtsp') {
+  if (st.kind === 'rtsp' || st.kind === 'fpv') {
     logVideo(
       'warn',
       st.mjpegUrl
@@ -1728,13 +1846,15 @@ export async function startNative(): Promise<void> {
 export function startActive(): Promise<void> {
   const kind = get(videoState).kind;
   if (kind === 'rtsp') return startRtsp();
+  if (kind === 'fpv') return startFpv();
   if (kind === 'native') return startNative();
   return startVideo();
 }
 
 /** Stop the source and release the camera / streaming engine. */
 export function stopVideo(): void {
-  const wasBackend = get(videoState).kind === 'rtsp' || get(videoState).kind === 'native';
+  const wasBackend =
+    get(videoState).kind === 'rtsp' || get(videoState).kind === 'native' || get(videoState).kind === 'fpv';
   clearRtspTimers(); // end the RTSP reconnect loop on an explicit stop
   stopTracks();
   if (wasBackend) {

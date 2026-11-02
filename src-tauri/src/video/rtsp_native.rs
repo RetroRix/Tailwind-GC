@@ -28,7 +28,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use super::mjpeg_server::{accept_loop, broadcast_loop, Client, EndedHook};
-use super::rtsp::{run_rtsp, LiveRtspStats, RtspConfig, RtspTransport, VideoCodec};
+use super::rtsp::{run_rtp_udp, run_rtsp, LiveRtspStats, RtpUdpConfig, RtspConfig, RtspTransport, VideoCodec};
 use super::surface::{SinkSurface, SurfaceRect};
 #[cfg(target_os = "android")]
 use super::android_sink::AndroidVideoSink;
@@ -97,6 +97,15 @@ impl Read for ChannelRead {
         self.pos += n;
         Ok(n)
     }
+}
+
+/// What the receive thread runs: a negotiated RTSP session, or a raw RTP/UDP listen
+/// (the wfb-ng FPV link — no control channel, the sender pushes to a fixed port).
+/// Both deliver `VideoFrame`s through the identical routing below (decode sink for
+/// H264/HEVC, multipart broadcast for MJPEG), so the routes don't care which ran.
+enum RunSource {
+    Rtsp(RtspConfig),
+    RtpUdp(RtpUdpConfig),
 }
 
 /// What `start` brought up — decides how the frontend renders the feed.
@@ -189,18 +198,6 @@ impl NativeRtsp {
         transport: &str,
         parent_hwnd: Option<isize>,
     ) -> Result<Started, String> {
-        self.stop();
-        // The main window hosts every surface until the detached video window registers itself.
-        if let Some(h) = parent_hwnd {
-            self.parents.lock().unwrap().insert("main".to_string(), h);
-        }
-
-        let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| format!("bind: {e}"))?;
-        listener
-            .set_nonblocking(true)
-            .map_err(|e| format!("set_nonblocking: {e}"))?;
-        let port = listener.local_addr().map_err(|e| format!("addr: {e}"))?.port();
-
         #[cfg(target_os = "windows")]
         let accept = if parent_hwnd.is_some() {
             vec![VideoCodec::Mjpeg, VideoCodec::H264, VideoCodec::H265]
@@ -220,9 +217,6 @@ impl NativeRtsp {
             vec![VideoCodec::Mjpeg]
         };
 
-        let live = Arc::new(LiveRtspStats::default());
-        *self.live.lock().unwrap() = Some(live.clone());
-
         let cfg = RtspConfig {
             url: url.to_string(),
             transport: match transport {
@@ -231,11 +225,73 @@ impl NativeRtsp {
                 _ => RtspTransport::Auto,
             },
             accept,
-            live: Some(live),
-            #[cfg(target_os = "linux")]
-            resync_on_loss: super::linux_sink::hevc_decoder_is_stateless(),
             ..Default::default()
         };
+        self.start_source(on_ended, RunSource::Rtsp(cfg), parent_hwnd)
+    }
+
+    /// Start the FPV link (Tailwind): listen for raw RTP/H.264 on a local UDP socket —
+    /// the wfb-ng / OpenHD ground-station contract, no RTSP control channel. `host` is
+    /// the local bind interface (`0.0.0.0` = all), `port` the listen port (5600 by
+    /// convention). The frames take the same route as an RTSP H.264 session's: straight
+    /// into the platform decode sink. Same first-frame verdict as `start`.
+    pub fn start_rtp_udp(
+        &self,
+        on_ended: EndedHook,
+        host: &str,
+        port: u16,
+        parent_hwnd: Option<isize>,
+    ) -> Result<Started, String> {
+        let cfg = RtpUdpConfig {
+            bind_host: if host.trim().is_empty() {
+                "0.0.0.0".into()
+            } else {
+                host.trim().to_string()
+            },
+            port,
+            ..Default::default()
+        };
+        self.start_source(on_ended, RunSource::RtpUdp(cfg), parent_hwnd)
+    }
+
+    /// Shared bring-up for both sources: broadcast machinery (its EOF is the ended
+    /// signal), the receive thread, and the first-frame verdict.
+    fn start_source(
+        &self,
+        on_ended: EndedHook,
+        source: RunSource,
+        parent_hwnd: Option<isize>,
+    ) -> Result<Started, String> {
+        self.stop();
+        // The main window hosts every surface until the detached video window registers itself.
+        if let Some(h) = parent_hwnd {
+            self.parents.lock().unwrap().insert("main".to_string(), h);
+        }
+
+        let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| format!("bind: {e}"))?;
+        listener
+            .set_nonblocking(true)
+            .map_err(|e| format!("set_nonblocking: {e}"))?;
+        let port = listener.local_addr().map_err(|e| format!("addr: {e}"))?.port();
+
+        let live = Arc::new(LiveRtspStats::default());
+        *self.live.lock().unwrap() = Some(live.clone());
+
+        #[cfg(target_os = "linux")]
+        let resync = super::linux_sink::hevc_decoder_is_stateless();
+        #[cfg(not(target_os = "linux"))]
+        let resync = false;
+        let mut source = source;
+        match &mut source {
+            RunSource::Rtsp(cfg) => {
+                cfg.live = Some(live);
+                cfg.resync_on_loss = resync;
+            }
+            RunSource::RtpUdp(cfg) => {
+                cfg.live = Some(live);
+                cfg.resync_on_loss = resync;
+            }
+        }
 
         let stop = Arc::new(AtomicBool::new(false));
         let shutdown = Arc::new(AtomicBool::new(false));
@@ -275,7 +331,7 @@ impl NativeRtsp {
                 #[cfg(target_os = "linux")]
                 let mut aus_without_sps = 0u32;
                 let stop_flag = stop.clone();
-                let result = run_rtsp(&cfg, &stop, &mut |frame| match frame.codec {
+                let mut on_frame = |frame| match frame.codec {
                     VideoCodec::Mjpeg => {
                         let part = mpjpeg_part(&frame.data, first);
                         first = false;
@@ -359,7 +415,11 @@ impl NativeRtsp {
                     // Not on the accept list — the client never selects such a track.
                     #[cfg(not(any(target_os = "windows", target_os = "android", target_os = "linux", target_os = "macos")))]
                     _ => {}
-                });
+                };
+                let result = match &source {
+                    RunSource::Rtsp(cfg) => run_rtsp(cfg, &stop, &mut on_frame),
+                    RunSource::RtpUdp(cfg) => run_rtp_udp(cfg, &stop, &mut on_frame),
+                };
                 match result {
                     Ok(stats) => log::info!(
                         "[video] native RTSP client ended: {:?}, {} frames ({} dropped), rtp recv={} lost={} reordered={} late={}",

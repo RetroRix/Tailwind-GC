@@ -29,6 +29,10 @@
     setUnobstructedFullscreen,
     setDisableHwAccel,
     setVideoKind,
+    setFpvHost,
+    setFpvPort,
+    setFpvOsd,
+    nativeRtspStats,
     setRtspUrl,
     setRtspTransport,
     setRtspNativeClient,
@@ -169,7 +173,7 @@
   // AVFoundation) — all through ffmpeg, which cannot run on mobile. There, the OS's own capture
   // devices (USB/OTG included) already arrive through the camera kind (getUserMedia), so the native
   // kind would add nothing and is not offered.
-  const KINDS: VideoKind[] = isMobile ? ['camera', 'rtsp'] : ['camera', 'rtsp', 'native'];
+  const KINDS: VideoKind[] = isMobile ? ['camera', 'rtsp', 'fpv'] : ['camera', 'rtsp', 'native', 'fpv'];
 
   // MediaMTX is only needed for the WebRTC path. A WebView without it (WebKitGTK builds with WebRTC
   // compiled out — Raspberry Pi OS among them) runs RTSP entirely on ffmpeg now, so demanding the
@@ -232,15 +236,17 @@
   // what a live RTSP input costs.
   const streamCodec = $derived.by(() => {
     const s = $videoState;
-    if (s.kind !== 'rtsp' || s.status !== 'live') return null;
+    if ((s.kind !== 'rtsp' && s.kind !== 'fpv') || s.status !== 'live') return null;
     if (s.nativeSink) return s.nativeSinkCodec ?? 'H.264';
     if (!s.mjpegUrl) return $videoRtcStats?.codec ?? null;
     return s.activeTranscode === 'copy' ? 'MJPEG' : 'H.264 → MJPEG';
   });
   const streamBitrate = $derived.by(() => {
     const s = $videoState;
-    if (s.kind !== 'rtsp' || s.status !== 'live') return null;
-    const kbps = s.mjpegUrl ? $mjpegStats?.kbps : $videoRtcStats?.kbps;
+    if ((s.kind !== 'rtsp' && s.kind !== 'fpv') || s.status !== 'live') return null;
+    // The FPV link's bitrate is measured by the backend's RTP counters (bytes received on
+    // the UDP socket) — published through the same native-client stats as the RTSP route.
+    const kbps = s.kind === 'fpv' ? $nativeRtspStats?.kbps : s.mjpegUrl ? $mjpegStats?.kbps : $videoRtcStats?.kbps;
     if (!kbps) return null;
     return kbps >= 1000 ? `${(kbps / 1000).toFixed(1)} Mbit/s` : `${Math.round(kbps)} kbit/s`;
   });
@@ -494,6 +500,47 @@
           {/if}
         </div>
       {/if}
+    {:else if $videoState.kind === 'fpv'}
+      <!-- FPV link (wfb-ng): no URL, no handshake — the ground unit SENDS to us. We bind a
+           local UDP socket and receive RTP/H.264; listen mode is the norm, so the fields
+           are the local bind interface + port (5600 = the wfb-ng / QGroundControl socket). -->
+      <p class="hint">{$t('video.fpvHint')}</p>
+
+      <label class="field">
+        <span class="label">{$t('video.fpvHost')}</span>
+        <input
+          class="text-input"
+          type="text"
+          placeholder="0.0.0.0"
+          value={$videoState.fpvHost}
+          onchange={(e) => setFpvHost(inputVal(e))}
+        />
+      </label>
+
+      <label class="field">
+        <span class="label">{$t('video.fpvPort')}</span>
+        <input
+          class="text-input"
+          type="number"
+          min="1"
+          max="65535"
+          step="1"
+          value={$videoState.fpvPort}
+          onchange={(e) => setFpvPort(Number(inputVal(e)))}
+        />
+      </label>
+
+      <div class="field-row" title={$t('video.fpvOsdHint')}>
+        <Toggle checked={$videoState.fpvOsd} onchange={(c) => setFpvOsd(c)} id="vp-fpv-osd" />
+        <span class="label">{$t('video.fpvOsd')}</span>
+      </div>
+
+      <!-- Same smoothing-buffer stepper as RTSP: it paces the native decode sink's
+           presentation queue (0 = present on decode). -->
+      <div class="field buffer-row" title={$t('video.bufferHint')}>
+        <span class="label">{$t('video.bufferLabel')}</span>
+        <NumberStepper bind:value={$rtspBufferFrames} min={0} max={3} step={1} />
+      </div>
     {:else}
       <!-- Direct connect: URL + transport, with an explicit Save-to-list button (never auto-saved). -->
       <div class="field">
@@ -678,7 +725,7 @@
          a live feed. Hardware stays the default; this forces the software transcode. It only steers
          the ffmpeg transcode path — the native RTSP client decodes through the OS (Media Foundation),
          where this switch has no say, so it is hidden there. -->
-    {#if !($videoState.kind === 'rtsp' && $videoState.rtspNativeClient)}
+    {#if !(($videoState.kind === 'rtsp' && $videoState.rtspNativeClient) || $videoState.kind === 'fpv')}
       <div class="field-row">
         <Toggle
           checked={$videoState.disableHwAccel}

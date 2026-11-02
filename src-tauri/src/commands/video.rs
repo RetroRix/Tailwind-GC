@@ -309,6 +309,52 @@ pub fn video_rtsp_native_start(
     }
 }
 
+/// Start the FPV link (Tailwind): listen for raw RTP/H.264 on a local UDP socket — the
+/// wfb-ng / OpenHD ground-station contract (no RTSP control channel; the sender pushes
+/// to UDP 5600 by convention, the same socket QGroundControl listens on). Frames decode
+/// through the same native sink route as an RTSP H.264 session (`mode: "sink"`), so
+/// every surface, the stats poll and the reconnect wiring work unchanged. `host` is the
+/// local bind interface (empty = all interfaces), `port` the listen port.
+#[tauri::command(async)]
+pub fn video_fpv_udp_start(
+    app: AppHandle,
+    host: String,
+    port: u16,
+    native_rtsp: State<'_, crate::video::rtsp_native::NativeRtsp>,
+) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "windows")]
+    let parent = {
+        use tauri::Manager;
+        app.get_webview_window("main")
+            .and_then(|w| w.hwnd().ok())
+            .map(|h| h.0 as isize)
+    };
+    #[cfg(not(target_os = "windows"))]
+    let parent: Option<isize> = None;
+    match native_rtsp.start_rtp_udp(ended_hook(&app), &host, port, parent)? {
+        crate::video::rtsp_native::Started::Mjpeg { port } => Ok(serde_json::json!({
+            "mode": "mjpeg",
+            "url": format!("http://127.0.0.1:{port}/"),
+            "transcode": "copy",
+        })),
+        crate::video::rtsp_native::Started::Sink { codec } => Ok(serde_json::json!({
+            "mode": "sink",
+            "transcode": "none",
+            "codec": codec,
+        })),
+    }
+}
+
+/// Stop the FPV link listener if running. Idempotent — it shares the native client's
+/// one running session with the RTSP route, so this is the same teardown.
+#[tauri::command(async)]
+pub fn video_fpv_udp_stop(
+    native_rtsp: State<'_, crate::video::rtsp_native::NativeRtsp>,
+) -> Result<(), String> {
+    native_rtsp.stop();
+    Ok(())
+}
+
 /// Publish the calling window's video surfaces to the native decode sink: every DOM hole it wants
 /// the picture in, with the surface's FULL box `x/y/w/h` (the video's aspect-fit layout) and its
 /// VISIBLE box `cx/cy/cw/ch` (what is left after the DOM's clipping ancestors — the sink CUTS the
