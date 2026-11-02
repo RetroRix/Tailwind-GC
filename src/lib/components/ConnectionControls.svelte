@@ -15,7 +15,7 @@
   import ConnectionStatusBox from '$lib/components/ConnectionStatusBox.svelte';
   import { hasSerialPorts } from '$lib/platform';
   import { settings } from '$lib/stores/settings';
-  import { defaultNetPort } from '$lib/stores/connection';
+  import { defaultNetPort, CONNECTION_PRESETS } from '$lib/stores/connection';
   import type { PortInfo, BleDeviceInfo, TransportType, ProtocolType } from '$lib/stores/connection';
   import type { TelemetryData } from '$lib/stores/telemetry';
 
@@ -122,10 +122,39 @@
     const next = defaultNetPort(selectedProtocol, selectedTransport);
     if (next) tcpPort = next;
   }
+
+  // ── Named connection presets ───────────────────────────────────────
+  // One-shot action menu (it always falls back to the placeholder): picking a preset fills the
+  // protocol / transport / port fields with that link's standard endpoint. The host is left
+  // exactly as it is — the module's IP depends on its own setup, and whatever the pilot typed
+  // there (or a previous session remembered) is the best guess available. Nothing is connected
+  // automatically; the pilot still presses Connect, so the manual flow and USB auto-connect
+  // (which only fires on the Serial transport) are untouched.
+  function applyPreset(e: Event) {
+    const select = e.currentTarget as HTMLSelectElement;
+    const preset = CONNECTION_PRESETS.find((p) => p.id === select.value);
+    select.value = '';
+    if (!preset) return;
+    selectedProtocol = preset.protocol;
+    selectedTransport = preset.transport;
+    tcpPort = preset.port;
+    // The preset port IS the standard port for this selection, so hand the port back to the
+    // auto-default logic (same rule as typing the standard port by hand — see notePortEdit).
+    portIsAuto = preset.port === defaultNetPort(preset.protocol, preset.transport);
+  }
 </script>
 
 <!-- Protocol selector + transport type (row 1 when stacked). -->
 {#snippet protocolAndTransport()}
+  <!-- Named presets for known Wi-Fi telemetry links (DroneBridge ESP32, ExpressLRS MAVLink):
+       fills protocol / transport / port, leaves the host and the Connect press to the pilot. -->
+  <select class="tb-select preset-select" value="" onchange={applyPreset} title={$t('connection.presetTitle')}>
+    <option value="" disabled>{$t('connection.preset')}</option>
+    {#each CONNECTION_PRESETS as preset}
+      <option value={preset.id}>{preset.label}</option>
+    {/each}
+  </select>
+
   <!-- The passive "Telemetry" mode is listen-only (auto-detect). -->
   <SegmentedToggle
     options={[{ value: 'msp', label: 'MSP' }, { value: 'mavlink', label: 'MAVLink' }, { value: 'telemetry', label: 'Telemetry' }]}
@@ -283,6 +312,7 @@
 
   /* Fixed widths + ellipsis so long device names never stretch the bar. */
   .transport-select { width: 90px; }
+  .preset-select { width: 96px; }
   .baud-select { width: 92px; }
   .port-select {
     width: 180px;

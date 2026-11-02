@@ -136,6 +136,29 @@ way it follows the selectors.
 With TCP or UDP selected, the port fields become a **host** and a **port**.
 ///
 
+### Named presets: DroneBridge and ExpressLRS
+
+Two well-known Wi-Fi telemetry links have a **Preset** dropdown next to the protocol selector.
+Picking a preset fills in the **protocol**, **transport** and **port** with that link's standard
+endpoint — nothing connects by itself, and the **Host** field is left exactly as it is: both links
+get their address from the module's own setup, so you type it once and Tailwind remembers it like
+any other network connection.
+
+| Preset | Fills in | Use it for |
+|---|---|---|
+| **DroneBridge (ESP32)** | MAVLink · UDP · `14550` | A DroneBridge ESP32 module bridging the FC's MAVLink over Wi-Fi |
+| **ExpressLRS MAVLink** | MAVLink · UDP · `14550` | An ExpressLRS receiver's Wi-Fi MAVLink stream |
+
+1. **Preset** → **DroneBridge (ESP32)** or **ExpressLRS MAVLink**.
+2. **Host** — the module's IP address on your network (check its configuration page or your
+   router's client list; a module in access-point mode is usually its network's gateway address).
+3. **Connect**.
+
+!!! note "ExpressLRS over a cable"
+    The preset covers the ExpressLRS **Wi-Fi** MAVLink link. An ELRS receiver wired to a
+    USB-serial adapter instead stays a manual pick: protocol **MAVLink**, transport **Serial**,
+    and the adapter's port.
+
 ## BLE (Bluetooth Low Energy)
 
 For BLE-to-serial adapters — the same kind INAV Configurator supports.

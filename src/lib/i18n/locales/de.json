@@ -62,7 +62,9 @@
     "btNamePlaceholder": "Eigener Name",
     "btNameSave": "Name speichern",
     "btNameCancel": "Abbrechen",
-    "panelTitle": "Verbindung"
+    "panelTitle": "Verbindung",
+    "preset": "Voreinstellung…",
+    "presetTitle": "Verbindungsfelder für eine bekannte Telemetrieverbindung ausfüllen"
   },
   "cesiumKey": {
     "title": "3D-Terrain benötigt einen Cesium-Ion-Key",

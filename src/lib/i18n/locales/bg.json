@@ -62,7 +62,9 @@
     "btNamePlaceholder": "Персонализирано име",
     "btNameSave": "Запази името",
     "btNameCancel": "Отказ",
-    "panelTitle": "Връзка"
+    "panelTitle": "Връзка",
+    "preset": "Преднастройка…",
+    "presetTitle": "Попълване на полетата за връзка за позната телеметрична връзка"
   },
   "cesiumKey": {
     "title": "За 3D терена е необходим API ключ за Cesium Ion",

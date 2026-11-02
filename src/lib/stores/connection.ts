@@ -29,6 +29,29 @@ export function defaultNetPort(protocol: string, transport: string): number | un
   return NET_PORT_DEFAULTS[`${protocol}:${transport}`];
 }
 
+/** A named connection preset: one click fills the protocol / transport / port fields with the
+ *  standard endpoint for a known MAVLink Wi-Fi telemetry link. Only fields the connection UI
+ *  actually has are prefilled — the host is deliberately NOT part of a preset: both links below
+ *  get their IP from the module's own setup (access-point vs. station mode, DHCP), so there is
+ *  no single address that would be right for everyone. The pilot types it once and it is then
+ *  remembered like any manual network connection. */
+export interface ConnectionPreset {
+  id: string;
+  label: string;
+  protocol: ProtocolType;
+  transport: TransportType;
+  port: number;
+}
+
+export const CONNECTION_PRESETS: ConnectionPreset[] = [
+  // DroneBridge for ESP32: a Wi-Fi telemetry bridge whose standard MAVLink endpoint is UDP 14550.
+  { id: 'dronebridge-esp32', label: 'DroneBridge (ESP32)', protocol: 'mavlink', transport: 'udp', port: 14550 },
+  // ExpressLRS MAVLink: an ELRS receiver's Wi-Fi MAVLink stream, also UDP 14550. (A wired ELRS
+  // MAVLink link over a USB-serial adapter stays a manual Serial + MAVLink selection — a preset
+  // picks exactly one transport, and Wi-Fi is the one both of these links share.)
+  { id: 'elrs-mavlink', label: 'ExpressLRS MAVLink', protocol: 'mavlink', transport: 'udp', port: 14550 },
+];
+
 export interface InavVersion {
   major: number;
   minor: number;

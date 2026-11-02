@@ -62,7 +62,9 @@
     "btNamePlaceholder": "自定义名称",
     "btNameSave": "保存名称",
     "btNameCancel": "取消",
-    "panelTitle": "连接"
+    "panelTitle": "连接",
+    "preset": "预设…",
+    "presetTitle": "为已知的遥测链路填入连接字段"
   },
   "cesiumKey": {
     "title": "3D地形需要Cesium Ion密钥",

@@ -56,7 +56,9 @@
     "btNamePlaceholder": "Nom personnalisé",
     "btNameSave": "Enregistrer le nom",
     "btNameCancel": "Annuler",
-    "panelTitle": "Connexion"
+    "panelTitle": "Connexion",
+    "preset": "Préréglage…",
+    "presetTitle": "Remplir les champs de connexion pour une liaison de télémétrie connue"
   },
   "cesiumKey": {
     "title": "Le relief 3D nécessite une clé Cesium Ion",

@@ -62,7 +62,9 @@
     "btNamePlaceholder": "Custom name",
     "btNameSave": "Save name",
     "btNameCancel": "Cancel",
-    "panelTitle": "Connection"
+    "panelTitle": "Connection",
+    "preset": "Preset…",
+    "presetTitle": "Fill in the connection fields for a known telemetry link"
   },
   "cesiumKey": {
     "title": "3D Terrain Needs a Cesium Ion Key",
