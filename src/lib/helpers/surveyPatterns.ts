@@ -1381,6 +1381,93 @@ export function generatePolygonLawnmower(
 
 // ──────────────────────────────────────────────────────
 
+// ──────────────────────────────────────────────────────
+//  SURVEY GRID EXTRAS (crosshatch, longest edge, camera spacing, distance)
+// ──────────────────────────────────────────────────────
+
+/**
+ * Track orientation (degrees, 0 = north, clockwise, normalized to [0, 180))
+ * of the polygon's longest edge. Survey tracks parallel to the longest edge
+ * minimize the number of turns, so this is the sensible default grid angle.
+ * Track direction is bidirectional, hence the 180° wrap.
+ */
+export function polygonLongestEdgeOrientation(points: LngLat[]): number {
+  if (points.length < 2) return 0;
+  const c = polygonCentroid(points);
+  const cosLat = Math.cos((c.lat * Math.PI) / 180);
+  let bestLen = -1;
+  let bestDeg = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    const dE = (b.lng - a.lng) * 111320 * cosLat;
+    const dN = (b.lat - a.lat) * 111320;
+    const len = Math.hypot(dE, dN);
+    if (len > bestLen) {
+      bestLen = len;
+      bestDeg = ((Math.atan2(dE, dN) * 180) / Math.PI + 180) % 180;
+    }
+  }
+  return Math.round(bestDeg * 10) / 10;
+}
+
+/**
+ * Crosshatch survey: a boustrophedon grid flown twice — the second pass is
+ * the same grid rotated +90°, so the area is covered in both directions.
+ * Implemented as two polygon-zigzag passes concatenated in flight order;
+ * consumers flatten survey segments exactly as for a single grid pass.
+ */
+export function generatePolygonCrosshatch(
+  params: PolygonPatternParams
+): SurveyPathSegment[] {
+  const first = generatePolygonZigzag(params);
+  const second = generatePolygonZigzag({
+    ...params,
+    trackOrientation: ((params.trackOrientation ?? 0) + 90) % 360,
+  });
+  return [...first, ...second];
+}
+
+/**
+ * Camera-based line spacing (standard survey math):
+ * ground footprint across track = altitude × sensor width / focal length;
+ * spacing = footprint × (1 − side overlap). All lengths in metres except
+ * sensor width / focal length, which share a unit (mm) and cancel out.
+ */
+export function cameraLineSpacingM(
+  altitudeM: number,
+  sensorWidthMm: number,
+  focalLengthMm: number,
+  sideOverlapPct: number
+): number {
+  if (altitudeM <= 0 || sensorWidthMm <= 0 || focalLengthMm <= 0) return 0;
+  const overlap = Math.min(95, Math.max(0, sideOverlapPct));
+  const footprint = (altitudeM * sensorWidthMm) / focalLengthMm;
+  return footprint * (1 - overlap / 100);
+}
+
+/** Ground footprint width (m) across track for the camera math above. */
+export function cameraFootprintM(altitudeM: number, sensorWidthMm: number, focalLengthMm: number): number {
+  if (altitudeM <= 0 || sensorWidthMm <= 0 || focalLengthMm <= 0) return 0;
+  return (altitudeM * sensorWidthMm) / focalLengthMm;
+}
+
+/** Total path length (m) through an ordered point list (haversine). */
+export function pathDistanceM(points: LngLat[]): number {
+  const R = 6371000;
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    total += 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  return total;
+}
+
 /** Simple bounding box helper */
 export function getRectangleBounds(corners: LngLat[]) {
   let minLat = Infinity, maxLat = -Infinity;
