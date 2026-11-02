@@ -286,6 +286,30 @@ export const DEFAULT_TELEMETRY_API: TelemetryApiSettings = {
   rateHz: 5,
 };
 
+// ── NTRIP / RTK corrections ────────────────────────────────────────────────────
+/** `settings.ntrip`: pushed to the backend on every change (`ntrip_configure`). The client streams
+ *  RTCM3 from the caster and forwards it to a connected MAVLink vehicle as GPS_RTCM_DATA.
+ *  NOTE: `password` is a plain settings field in localStorage — the app has no secret-storage
+ *  mechanism (the OpenAIP API key is stored the same way). */
+export interface NtripSettings {
+  enabled: boolean;
+  host: string;
+  /** Caster port (NTRIP default 2101). */
+  port: number;
+  mountpoint: string;
+  username: string;
+  password: string;
+}
+
+export const DEFAULT_NTRIP: NtripSettings = {
+  enabled: false,
+  host: '',
+  port: 2101,
+  mountpoint: '',
+  username: '',
+  password: '',
+};
+
 // ── Connection ─────────────────────────────────────────────────────────────────────────────────────
 /** Which protocol the connection bar starts on. `last` restores the last-used one, which is the
  *  historic behaviour and stays the default; a fixed value overrides that stored choice on every
@@ -437,6 +461,8 @@ export interface AppSettings {
   /** Startup update check (GitHub releases) — channel + skipped version. */
   updateCheck: UpdateCheckSettings;
   telemetryApi: TelemetryApiSettings;
+  /** NTRIP / RTK corrections client (caster connection + credentials). */
+  ntrip: NtripSettings;
 }
 
 const STORAGE_KEY = 'kite-gc-settings';
@@ -520,6 +546,7 @@ const defaults: AppSettings = {
   rcControl: DEFAULT_RC_CONTROL,
   updateCheck: DEFAULT_UPDATE_CHECK,
   telemetryApi: DEFAULT_TELEMETRY_API,
+  ntrip: DEFAULT_NTRIP,
 };
 
 function load(): AppSettings {
@@ -595,6 +622,10 @@ function load(): AppSettings {
             : (typeof pt.udp === 'boolean' ? pt.udp : DEFAULT_TELEMETRY_API.udp);
           return { ...DEFAULT_TELEMETRY_API, ...pt, udp };
         })(),
+        ntrip: {
+          ...DEFAULT_NTRIP,
+          ...(parsed.ntrip ?? {}),
+        },
       };
     }
   } catch {

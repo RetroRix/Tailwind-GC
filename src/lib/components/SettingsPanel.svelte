@@ -9,14 +9,15 @@
   // labelled subsections. On/off switches use the shared <Toggle>, actions use <Button>, selects
   // match the framework height. All tiny italic hints are dropped except the Cesium-token one.
   import { invoke } from '@tauri-apps/api/core';
+  import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { t, locale } from 'svelte-i18n';
   import { SUPPORTED_LOCALES } from '$lib/i18n';
   import { MAP_PROVIDERS } from '$lib/config/mapProviders';
   import { WIDGET_DEFS } from '$lib/config/widgetRegistry';
-  import { DEFAULT_RADAR, DEFAULT_AIRSPACE, DEFAULT_RC_CONTROL, DEFAULT_UPDATE_CHECK, DEFAULT_TELEMETRY_API } from '$lib/stores/settings';
+  import { DEFAULT_RADAR, DEFAULT_AIRSPACE, DEFAULT_RC_CONTROL, DEFAULT_UPDATE_CHECK, DEFAULT_TELEMETRY_API, DEFAULT_NTRIP } from '$lib/stores/settings';
   import { panelState } from '$lib/stores/panelState';
   import { resetGcsManual, gcsManuallySet } from '$lib/stores/gcsLocation';
-  import type { AppSettings, InterfaceSettings, RadarSettings, GcsMode, AirspaceSettings, AirspaceProvider, SystemMessagesLevel, LogLevel, RcControlSettings, TelemetryApiSettings, UpdateCheckSettings, UpdateCheckMode, DefaultProtocol } from '$lib/stores/settings';
+  import type { AppSettings, InterfaceSettings, RadarSettings, GcsMode, AirspaceSettings, AirspaceProvider, SystemMessagesLevel, LogLevel, RcControlSettings, TelemetryApiSettings, UpdateCheckSettings, UpdateCheckMode, DefaultProtocol, NtripSettings } from '$lib/stores/settings';
   import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
   import { isAndroid, isMobile } from '$lib/platform';
   import { blackboxDecoderVersion, downloadBlackboxDecode } from '$lib/stores/flightlog';
@@ -75,6 +76,7 @@
     airspace = DEFAULT_AIRSPACE,
     rcControl = DEFAULT_RC_CONTROL,
     telemetryApi = DEFAULT_TELEMETRY_API,
+    ntrip = DEFAULT_NTRIP,
     updateCheck = DEFAULT_UPDATE_CHECK,
     isWidgetActive = (_widgetId: string) => false,
     getWidgetPanelLabel = (_widgetId: string) => '',
@@ -131,6 +133,7 @@
     airspace?: AirspaceSettings;
     rcControl?: RcControlSettings;
     telemetryApi?: TelemetryApiSettings;
+    ntrip?: NtripSettings;
     updateCheck?: UpdateCheckSettings;
     isWidgetActive?: (widgetId: string) => boolean;
     getWidgetPanelLabel?: (widgetId: string) => string;
@@ -300,6 +303,33 @@
   });
   function patchAirspace(partial: Partial<AirspaceSettings>) {
     onPatch({ airspace: { ...airspace, ...partial } });
+  }
+
+  /** Patch the nested NTRIP settings (whole object, onPatch merges shallowly). */
+  function patchNtrip(partial: Partial<NtripSettings>) {
+    onPatch({ ntrip: { ...ntrip, ...partial } });
+  }
+  // Live NTRIP client status — fed by the backend's `ntrip-status` event, with an initial snapshot
+  // fetch (the panel can mount long after the client started). The event fires on every change and
+  // at least once a second while streaming, so no polling is needed.
+  type NtripStatus = { state: string; message: string | null; bytesReceived: number; framesReceived: number; framesForwarded: number; vehicleLinked: boolean };
+  let ntripStatus = $state<NtripStatus | null>(null);
+  $effect(() => {
+    let unlisten: UnlistenFn | undefined;
+    let alive = true;
+    void invoke<NtripStatus>('ntrip_status').then((st) => { if (alive) ntripStatus = st; }).catch(() => {});
+    void listen<NtripStatus>('ntrip-status', (e) => { ntripStatus = e.payload; }).then((u) => { unlisten = u; });
+    return () => { alive = false; unlisten?.(); };
+  });
+  /** Localised label for the backend's status-state string. */
+  function ntripStateLabel(state: string): string {
+    switch (state) {
+      case 'connecting': return $t('settings.ntripStateConnecting');
+      case 'streaming': return $t('settings.ntripStateStreaming');
+      case 'error': return $t('settings.ntripStateError');
+      case 'disconnected': return $t('settings.ntripStateDisconnected');
+      default: return $t('settings.ntripStateDisabled');
+    }
   }
 
   function handleLocaleChange(event: Event) {
@@ -643,6 +673,57 @@
         <input id="usb-autoconnect" type="checkbox" checked={usbAutoConnect}
           onchange={(e) => onPatch({ usbAutoConnect: (e.target as HTMLInputElement).checked })} />
       </div>
+
+      <!-- NTRIP / RTK corrections: RTCM3 from a caster, forwarded to a connected MAVLink vehicle
+           as GPS_RTCM_DATA. The backend client (src-tauri/src/ntrip.rs) is configured from
+           +page.svelte on every settings change; this section only edits + displays. -->
+      <div class="s-row" title={$t('settings.ntripHint')}>
+        <label class="s-label" for="ntrip-enabled">{$t('settings.ntrip')}</label>
+        <Toggle checked={ntrip.enabled} id="ntrip-enabled" onchange={(c) => patchNtrip({ enabled: c })} />
+      </div>
+      <div class="s-row s-indent" class:s-disabled={!ntrip.enabled}>
+        <label class="s-label" for="ntrip-host">{$t('settings.ntripHost')}</label>
+        <input id="ntrip-host" class="s-input" type="text" placeholder="rtk.example.com" disabled={!ntrip.enabled}
+          value={ntrip.host} onchange={(e) => patchNtrip({ host: (e.target as HTMLInputElement).value.trim() })} />
+      </div>
+      <div class="s-row s-indent" class:s-disabled={!ntrip.enabled}>
+        <label class="s-label" for="ntrip-port">{$t('settings.ntripPort')}</label>
+        <input id="ntrip-port" class="s-input" type="number" min="1" max="65535" disabled={!ntrip.enabled}
+          value={ntrip.port} onchange={(e) => patchNtrip({ port: Number((e.target as HTMLInputElement).value) || 2101 })} />
+      </div>
+      <div class="s-row s-indent" class:s-disabled={!ntrip.enabled}>
+        <label class="s-label" for="ntrip-mountpoint">{$t('settings.ntripMountpoint')}</label>
+        <input id="ntrip-mountpoint" class="s-input" type="text" placeholder="MSM" disabled={!ntrip.enabled}
+          value={ntrip.mountpoint} onchange={(e) => patchNtrip({ mountpoint: (e.target as HTMLInputElement).value.trim() })} />
+      </div>
+      <div class="s-row s-indent" class:s-disabled={!ntrip.enabled}>
+        <label class="s-label" for="ntrip-username">{$t('settings.ntripUsername')}</label>
+        <input id="ntrip-username" class="s-input" type="text" autocomplete="off" disabled={!ntrip.enabled}
+          value={ntrip.username} onchange={(e) => patchNtrip({ username: (e.target as HTMLInputElement).value.trim() })} />
+      </div>
+      <div class="s-row s-indent" class:s-disabled={!ntrip.enabled} title={$t('settings.ntripPasswordHint')}>
+        <label class="s-label" for="ntrip-password">{$t('settings.ntripPassword')}</label>
+        <input id="ntrip-password" class="s-input" type="password" autocomplete="off" disabled={!ntrip.enabled}
+          value={ntrip.password} onchange={(e) => patchNtrip({ password: (e.target as HTMLInputElement).value })} />
+      </div>
+      {#if ntrip.enabled}
+        <div class="s-row s-indent api-status" class:api-error={ntripStatus?.state === 'error'}>
+          {#if ntripStatus}
+            <span class="s-hint">
+              {ntripStateLabel(ntripStatus.state)}
+              · {$t('settings.ntripStats', { values: { bytes: ntripStatus.bytesReceived, frames: ntripStatus.framesReceived, forwarded: ntripStatus.framesForwarded } })}
+              {#if ntripStatus.state === 'streaming'}
+                · {ntripStatus.vehicleLinked ? $t('settings.ntripForwarding') : $t('settings.ntripNoLink')}
+              {/if}
+              {#if ntripStatus.message && ntripStatus.state === 'error'}
+                · {ntripStatus.message}
+              {/if}
+            </span>
+          {:else}
+            <span class="s-hint">{$t('settings.ntripStateConnecting')}</span>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <!-- ── Telemetry ─────────────────────────────────── -->

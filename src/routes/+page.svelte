@@ -1217,6 +1217,13 @@
     const cfg = $settings.telemetryApi;
     void invoke('telemetry_api_configure', { config: cfg }).catch((e) => console.warn('[telemetry-api] configure failed:', e));
   });
+  // NTRIP / RTK corrections: same pattern — push the persisted config on start + every change.
+  // The start-up push is what auto-starts the client on launch when it was left enabled; the
+  // backend treats an unchanged config as a no-op.
+  $effect(() => {
+    const cfg = $settings.ntrip;
+    void invoke('ntrip_configure', { config: cfg }).catch((e) => console.warn('[ntrip] configure failed:', e));
+  });
   // ...and the one value only the frontend knows: the resolved GCS marker position (null = marker off).
   $effect(() => {
     const g = $gcsLocation;
@@ -3957,6 +3964,7 @@
             airspace={airspaceSettings}
             rcControl={$settings.rcControl}
             telemetryApi={$settings.telemetryApi}
+            ntrip={$settings.ntrip}
             updateCheck={$settings.updateCheck}
             {isWidgetActive}
             {getWidgetPanelLabel}
