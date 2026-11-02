@@ -27,6 +27,7 @@ mod logging;
 mod mavlink_proto;
 mod mission;
 mod msp;
+mod ntrip;
 mod passive_telemetry;
 mod radar;
 mod scheduler;
@@ -130,6 +131,7 @@ use commands::updater::{install_update, update_kind};
 use hid::HidManager;
 use mission::store::MissionStore;
 use state::AppState;
+use ntrip::{ntrip_configure, ntrip_status, NtripService};
 use telemetry_api::{telemetry_api_configure, telemetry_api_set_gcs, telemetry_api_status, TelemetryApi};
 use telemetry_forward::{relay_configure, relay_clear, RelayHub};
 
@@ -606,6 +608,7 @@ pub fn run() {
         .manage(TerrainProvider::new())
         .manage(RelayHub::new())
         .manage(TelemetryApi::new())
+        .manage(NtripService::new())
         .manage(HidManager::new())
         // As an `Arc` so the start command can hand it to a blocking task (process spawn +
         // readiness poll) without pinning an async runtime thread.
@@ -818,6 +821,8 @@ pub fn run() {
             telemetry_api_configure,
             telemetry_api_status,
             telemetry_api_set_gcs,
+            ntrip_configure,
+            ntrip_status,
             hid_start,
             hid_stop,
             hid_select_device,
@@ -854,6 +859,7 @@ pub fn run() {
                 use tauri::Manager;
                 app.state::<std::sync::Arc<MediaMtx>>().stop();
                 app.state::<MjpegServer>().stop();
+                app.state::<NtripService>().stop();
                 app.state::<video::rtsp_native::NativeRtsp>().stop();
             }
             // The detached video window keeps the app alive on its own (Tauri exits when the LAST
