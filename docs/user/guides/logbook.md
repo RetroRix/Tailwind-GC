@@ -105,6 +105,18 @@ simply removes it. **Import Logs** in the toolbar imports every opened file at o
 discards them all; both return you to the regular logbook, as does dismissing the last opened
 flight. The temporary store is also cleared when you restart Tailwind.
 
+### The Log Viewer (graph anything)
+
+Separate from the logbook, the **Log Viewer** (its own entry in the nav rail) opens an ArduPilot
+`.bin` or a `.tlog` purely for analysis. Pick a **message type and field** — up to three at once —
+and Tailwind graphs it over the flight, draws the **GPS track coloured by flight mode**, and gives
+you a **player**: press play or drag the playhead and the marker on the track, the current mode and
+the graphed values all follow. `.bin` files expose **every** message type and field the log defines,
+units included, per instance (`GPS` and `GPS2` stay separate series); `.tlog` files expose the core
+telemetry (position, attitude, battery, HUD speeds, GPS) plus the mode timeline. Files up to
+512 MB open; very dense fields are thinned for display — first and last points are always kept —
+and the panel says so when that happens. Nothing is imported into the logbook.
+
 ## Importing logs
 
 Use **Import** to pull in logs from outside Tailwind (one file or a batch). Supported formats:

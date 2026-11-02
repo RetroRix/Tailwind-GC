@@ -17,6 +17,33 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.7
+
+The rivals release — the best ideas from the other ground stations, built into Tailwind:
+
+-   **Survey patterns, finished** — draw the survey polygon by **clicking on the map**, fly it as a
+    **crosshatch** (both directions) as well as a grid, compute line spacing from your **camera**
+    (sensor + focal length + overlap), and append to the mission or replace it. A new **Terrain**
+    tab profiles the ground under the whole mission and can **rewrite waypoint altitudes to hold
+    the clearance you set** over high ground — raising only, never lowering.
+-   **NTRIP / RTK corrections** — a built-in NTRIP client (**Settings → Connection**) streams RTCM
+    corrections from your caster and forwards them to the aircraft over MAVLink. No second app
+    babysitting the RTK feed.
+-   **Traffic on the map** — ADS-B targets show **callsign + altitude** right on the 2D map, the
+    flight controller's own ADS-B-in over the main link is displayed too, and an optional
+    **internet traffic feed (adsb.fi)** — off by default — adds surrounding traffic tagged **NET**.
+-   **Log Viewer** — open any ArduPilot **`.bin`** or **`.tlog`**, graph **any logged field**, see
+    the track coloured by flight mode, and **replay** the flight with a scrubbing playhead.
+-   **FPV video (wfb-ng)** — a new video source listens for **RTP/H.264 on UDP 5600** (the
+    wfb-ng/OpenHD receive contract), with a **ground-rendered OSD** that stays readable while the
+    picture breaks up and a **link-health strip** graphing bitrate, RTP loss and telemetry signal.
+-   **Connection presets** — one-click **DroneBridge (ESP32)** and **ExpressLRS MAVLink** presets
+    in the connection bar. The GPS widget also gains a **JAM** readout for GPS jamming level when
+    the firmware provides it (a dash when it doesn't).
+
+Get it: **[Windows](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.7)** ·
+**[Android](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.7-android.1)**
+
 ## What's new in Tailwind v1.1.0-tailwind.6
 
 Caught up with the upstream Kite GC fixes — the app is more honest about dead links and GPS quality, and ArduPilot editing stops fighting you:

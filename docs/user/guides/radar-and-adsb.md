@@ -36,7 +36,9 @@ kinds of feed at once and merges them into **one ADS-B list** (de-duplicated by 
 address, so the same plane seen by two feeds appears once):
 
 - **Online services** — public ADS-B aggregators over the internet. Two are **built-in** (adsb.lol and
-  adsb.fi — just toggle them on). You can **add more** as custom rows (name + URL template + optional API
+  adsb.fi — just toggle them on; adsb.fi is **off by default** and has its own **Internet traffic
+  (adsb.fi)** switch in Settings too). Contacts heard **only** online are tagged **NET** in the list
+  and on the map. You can **add more** as custom rows (name + URL template + optional API
   key); **adsb.one** comes **pre-filled as an example** custom row (it's there for convenience but left
   off by default, as that service has had server-side reliability issues). Set the **download radius**
   (10–100 km) and the **poll interval** (2–30 s) under **Online service**. Online feeds are fetched
@@ -50,6 +52,9 @@ address, so the same plane seen by two feeds appears once):
 - **From your UAV** — on **INAV 8.0+**, if your aircraft has its own ADS-B receiver, Tailwind can download
   its traffic list over the existing flight link (the **UAV Source** toggle). This appears only when the
   connected FC supports it; ArduPilot and PX4 don't offer this path.
+- **Forwarded by your flight controller** — if the FC itself receives ADS-B and forwards the contacts
+  as MAVLink `ADSB_VEHICLE` over the main flight link (the usual ArduPilot ADS-B-in setup), those
+  contacts join the same list, counted as receiver traffic.
 
 ### Reading the ADS-B tab
 

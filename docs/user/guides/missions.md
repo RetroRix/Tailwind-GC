@@ -151,6 +151,9 @@ Most of the shaping happens directly on the map:
 - **Polygon** — drag a **yellow corner** to move a vertex; click a **grey midpoint** to **add** a vertex;
   to **remove** one, drag a corner onto the red **"Drop here to delete vertex"** banner or **right-click**
   it (a polygon keeps at least three corners). A self-intersecting shape snaps back.
+- **Polygon, drawn by clicking** — the polygon pattern also offers **Draw Polygon on Map**: click each
+  corner on the map (with **Undo Point** / **Clear** while you draw), then **Finish** — at least three
+  points, no self-intersections, and the scan orientation snaps to the polygon's longest edge.
 
 The pattern settings **persist**, so you can move the shape and press **Generate & Append** again to drop
 **another** copy elsewhere — each Generate appends to the current mission.
@@ -158,6 +161,11 @@ The pattern settings **persist**, so you can move the shape and press **Generate
 ### Key parameters
 
 - **Line spacing** — distance between adjacent legs (your camera footprint / desired overlap).
+- **Crosshatch** (polygon zig-zag) — adds a second pass at 90°, so the area is flown in both
+  directions for denser coverage.
+- **Camera spacing** — instead of typing line spacing, enter **sensor width**, **focal length** and
+  **side overlap %** and the panel computes the spacing from your altitude (footprint =
+  altitude × sensor ÷ focal).
 - **Altitude** and **Speed** — applied to every generated waypoint.
 - **Orientation** — rotates the pattern; for zig-zags you can rotate the **scan lines** independently of
   the shape.
@@ -194,6 +202,17 @@ The existing mission stays **visible but non-interactive** — you can see it to
 attaches, but its waypoints can't be dragged or edited until you leave the generator (the same on all
 three stacks). Generating **appends** the pattern as a **single undo step**, so one **Ctrl+Z** removes
 the whole pattern. On INAV the 120-waypoint limit is checked, with the option to truncate.
+
+### Terrain profile & holding clearance
+
+The mission panel's **Terrain** tab samples the ground under the whole mission and draws the
+**elevation profile** against your planned altitudes (each waypoint resolved to sea level by its
+altitude mode), flagging any leg that dips below the **minimum clearance** you set. **Hold
+clearance** rewrites the violating waypoints — **raising only, never lowering** — so each leg
+keeps at least that clearance over the highest ground on the way in, honouring each waypoint's
+altitude mode (relative, absolute, AGL / terrain frame). Waypoints whose incoming leg has no
+terrain data are skipped and listed, never guessed, and the rewrite lands as a **single undo
+step**. For the full-screen terrain tools see **[Terrain & RF analysis](terrain-analysis.md)**.
 
 ## Sending it to the aircraft
 

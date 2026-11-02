@@ -112,6 +112,27 @@ signal dips don't interrupt the stream unnecessarily.
     **automatically** the first time you use that source — no manual install. On macOS ffmpeg is
     shipped with the app.
 
+### FPV link (wfb-ng / RTP on UDP 5600)
+
+The **FPV link (wfb-ng)** source listens for a raw **RTP/H.264** stream on **UDP port 5600** — the
+receive contract used by wfb-ng and OpenHD ground stations (and by QGroundControl). Point your
+link's ground unit at this machine's IP, port 5600 (listen interface and port are configurable in
+the Video panel), or send from a laptop, e.g. GStreamer `rtph264pay config-interval=-1` → `udpsink`.
+The sender must repeat its SPS/PPS in-band (wfb-ng does) so a mid-stream start locks onto the next
+keyframe. The picture appears on the same surfaces as every other source — widget, floating and
+detached windows, map swap.
+
+Two FPV extras ride on top of the picture:
+
+- **Ground OSD** — an overlay drawn by Tailwind itself (flight mode, armed state, battery, GPS,
+  altitude, speed, distance home, artificial horizon), so it stays crisp while the video breaks
+  up. If the telemetry goes quiet it dims and shows **STALE** instead of pretending the numbers
+  are live. Toggle it in the Video panel.
+- **Link health** — a strip under the picture graphing the last minute of **video bitrate** and
+  **RTP packet loss** (both measured on the stream Tailwind actually received) plus the vehicle
+  link's signal (RSSI / link quality) and message rate. A metric a link doesn't provide shows as
+  a dash — never a made-up number.
+
 ## Where the video shows
 
 The same feed can appear in several places at once (they all share one stream):

@@ -68,6 +68,7 @@ Altitude and Compass sit in the bottom dock and Home, RC Link and GPS in the rig
 |---|---|---|
 | **Default Protocol** | Which protocol the connection bar starts on. **Last used** restores whatever you connected with last time, which is what Tailwind has always done. Pin it to **MSP**, **MAVLink** or **Telemetry** and that choice wins on every launch, whatever the last session used. Tailwind still remembers the last-used protocol, so switching back to **Last used** picks up where you left off. | Last used |
 | **USB Auto-Connect** | Plugging a recognised flight controller (Cube, Pixhawk/Hex, pid.codes, STM32 boards) in over USB while disconnected connects it automatically at the last-used protocol and baud. One attempt per plug-in; generic serial adapters are ignored. | On |
+| **NTRIP / RTK Corrections** | Stream RTCM corrections from an NTRIP caster (**host**, **port**, **mountpoint**, **username**, **password**) and forward them to the aircraft over MAVLink (`GPS_RTCM_DATA`). The status line shows the caster state, bytes/frames received and whether corrections are actually flowing — with no MAVLink vehicle connected it receives only and says so. The password is stored as a plain settings field, like the other keys in this app. | Off |
 
 ### Telemetry
 
@@ -86,6 +87,7 @@ how smooth the instruments feel; the rest is automatic.
 | **Full MAVLink Telemetry** | MAVLink only — hand rate control to the flight controller (streams everything at its own rates, ignoring the two rates above). For fast links / full `.tlog` capture. See **[Telemetry & display](../guides/telemetry-and-display.md)**. | Off |
 | **Telemetry API** | Serve the live telemetry to other programs as JSON, read-only: a **TCP stream** (port 27300), an **HTTP snapshot** (port 27301) and/or **UDP subscribers** (port 27300, a client subscribes by sending the word `subscribe`); **Reachable on the network** switches the listeners from loopback to all interfaces; **Update rate** 1–10 Hz. The status line shows the endpoints and connected clients. Full contract: **[Telemetry API](telemetry-api.md)**. | Off |
 | **Radar tracking** | Master switch for foreign-vehicle radar, with per-system enables (**ADS-B**, **FormationFlight**). See **[Radar & ADS-B](../guides/radar-and-adsb.md)**. | On (ADS-B on) |
+| **Internet traffic (adsb.fi)** | Also fetch internet ADS-B traffic (adsb.fi open data) around your position and show it on the map and radar, tagged **NET** and merged with receiver traffic (a contact heard by a receiver wins). Polled at most every 10 s while on. Same switch as the adsb.fi row in the Radar panel. | Off |
 | **RC Control** | Enable GCS RC control (reveals the RC tool). See **[RC control](../guides/rc-control.md)**. | Off |
 
 **Airspeed** and **Wind** each request **extra messages** over the link, so they're separate toggles —
