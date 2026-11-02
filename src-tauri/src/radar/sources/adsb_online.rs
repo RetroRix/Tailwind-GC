@@ -7,6 +7,9 @@
 // within a radius of the user location and maps them to TrackedVehicles. Runs as an async task on
 // the Tauri runtime (reqwest), pushing batches into the manager's aggregator channel; the aggregator
 // merges providers by ICAO. Provider URLs are templates with {lat}/{lon}/{dist} placeholders.
+// Response shapes differ per provider generation: readsb v2/v3 use an `ac` array, while the
+// adsb.fi v2 open-data endpoint (…/api/v2/lat/{lat}/lon/{lon}/dist/{dist}) returns the same
+// per-aircraft objects under an `aircraft` array — the parser accepts both.
 // See docs/active/RADAR_TRACKING_CORE.md §7.1.
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,6 +40,10 @@ const FT_TO_M: f64 = 0.3048;
 const KT_TO_MS: f64 = 0.514_444;
 const FPM_TO_MS: f64 = 0.00508;
 const POLL_GRANULARITY: Duration = Duration::from_millis(200);
+/// Minimum poll interval (s) while an adsb.fi provider is active — its open-data rate guidance is
+/// far stricter than the other providers' (≈1 req/s), and adsb.fi counts 429s toward a temporary
+/// IP ban, so the configured interval is clamped up to this floor for the whole poll loop.
+const ADSB_FI_MIN_POLL_SEC: f64 = 10.0;
 /// Cap for the per-provider failure backoff (poll interval × 2^n, never beyond this).
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
 
@@ -84,12 +91,18 @@ impl AdsbOnlineSource {
         last_fetch: Arc<Mutex<Option<Instant>>>,
         app: AppHandle,
     ) -> Self {
+        // adsb.fi active ⇒ polite floor on the shared poll interval (see ADSB_FI_MIN_POLL_SEC).
+        let floor = if providers.iter().any(|p| p.url.contains("adsb.fi")) {
+            ADSB_FI_MIN_POLL_SEC
+        } else {
+            1.0
+        };
         Self {
             providers,
             center,
             radius,
             radius_km,
-            poll: Duration::from_secs_f64(poll_sec.max(1.0)),
+            poll: Duration::from_secs_f64(poll_sec.max(floor)),
             last_fetch,
             app,
         }
@@ -257,10 +270,15 @@ async fn fetch(
     resp.json::<Value>().await.map_err(|e| e.to_string())
 }
 
-/// Map the provider's `ac[]` array (readsb v2 shape) into TrackedVehicles. Defensive: ADS-B JSON is
-/// messy (fields missing, `alt_baro` may be the string "ground"), so every field is optional.
+/// Map the provider's aircraft array into TrackedVehicles: `ac` (readsb v2/v3 shape) or `aircraft`
+/// (adsb.fi v2 open data — same per-aircraft fields). Defensive: ADS-B JSON is messy (fields
+/// missing, `alt_baro` may be the string "ground"), so every field is optional.
 fn parse_into(root: &Value, now: i64, out: &mut Vec<TrackedVehicle>) {
-    let Some(ac) = root.get("ac").and_then(Value::as_array) else {
+    let Some(ac) = root
+        .get("ac")
+        .and_then(Value::as_array)
+        .or_else(|| root.get("aircraft").and_then(Value::as_array))
+    else {
         return;
     };
     for a in ac {
@@ -281,7 +299,22 @@ fn parse_into(root: &Value, now: i64, out: &mut Vec<TrackedVehicle>) {
             continue;
         }
 
-        let mut v = TrackedVehicle::new(hex, VehicleSystem::Adsb, VehicleSource::AdsbOnline, lat, lon, now);
+        // `seen` = seconds since the provider last saw this aircraft: backdate the stamp so the
+        // aggregator's TTL expiry and the UI age reflect the contact's real freshness, not the
+        // moment our poll happened to land (a stale feed then ages out on schedule).
+        let seen_ms = a
+            .get("seen")
+            .and_then(Value::as_f64)
+            .map(|s| (s.max(0.0) * 1000.0) as i64)
+            .unwrap_or(0);
+        let mut v = TrackedVehicle::new(
+            hex,
+            VehicleSystem::Adsb,
+            VehicleSource::AdsbOnline,
+            lat,
+            lon,
+            now - seen_ms,
+        );
         v.callsign = a
             .get("flight")
             .and_then(Value::as_str)

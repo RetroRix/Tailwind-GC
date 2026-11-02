@@ -820,6 +820,17 @@
         <label class="s-label" for="radar-adsb">{$t('settings.radarAdsb')}</label>
         <Toggle checked={radar.adsb.enabled} id="radar-adsb" disabled={!radar.enabled} onchange={(c) => patchRadar({ adsb: { ...radar.adsb, enabled: c } })} />
       </div>
+      <!-- Internet ADS-B feed (adsb.fi open data) — opt-in, OFF by default. Same switch as the
+           Radar panel's built-in provider toggle; the Rust poller clamps its poll to ≥ 10 s. -->
+      <div class="s-row s-indent" class:s-disabled={!radar.enabled || !radar.adsb.enabled}>
+        <label class="s-label" for="radar-adsb-fi">{$t('settings.internetTrafficAdsbFi')}</label>
+        <Toggle
+          checked={radar.adsb.builtins['adsb.fi'] ?? false}
+          id="radar-adsb-fi"
+          disabled={!radar.enabled || !radar.adsb.enabled}
+          onchange={(c) => patchRadar({ adsb: { ...radar.adsb, builtins: { ...radar.adsb.builtins, 'adsb.fi': c } } })}
+        />
+      </div>
       <div class="s-row s-indent" class:s-disabled={!radar.enabled}>
         <label class="s-label" for="radar-ff">{$t('settings.radarFormationFlight')}</label>
         <Toggle checked={radar.formationFlight.enabled} id="radar-ff" disabled={!radar.enabled} onchange={(c) => patchRadar({ formationFlight: { ...radar.formationFlight, enabled: c } })} />

@@ -300,6 +300,13 @@
         </div>
       {/each}
 
+      <!-- Feed status + attribution: per-provider dots above show errors; this line shows when the
+           consolidated traffic snapshot last updated, so a stale/empty feed never looks live. -->
+      {#if $radarVehicles.lastUpdate > 0}
+        <p class="radar-hint">{$t('radar.lastTrafficUpdate')}: {new Date($radarVehicles.lastUpdate).toLocaleTimeString()}</p>
+      {/if}
+      <p class="radar-hint">{$t('radar.trafficDataCredit')}</p>
+
       <!-- Custom providers: editable + removable (same heading — all are online sources). Delete on
            the left, toggle on the right to match the built-in rows. -->
       {#each radar.adsb.online as p, i (i)}

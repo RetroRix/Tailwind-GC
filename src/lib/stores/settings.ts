@@ -68,7 +68,9 @@ export interface AdsbLocalSource {
  *  on/off state is persisted (in `radar.adsb.builtins`). */
 export const BUILTIN_ADSB_PROVIDERS: { name: string; url: string }[] = [
   { name: 'adsb.lol', url: 'https://api.adsb.lol/v2/point/{lat}/{lon}/{dist}' },
-  { name: 'adsb.fi', url: 'https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{dist}' },
+  // adsb.fi open data (v2 point endpoint). OFF by default — see DEFAULT_RADAR. The Rust poller
+  // clamps the poll interval to ≥ 10 s whenever this provider is active (adsb.fi rate guidance).
+  { name: 'adsb.fi', url: 'https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{dist}' },
 ];
 
 /** Radar (foreign-vehicle tracking) settings: master switch + per-system enables + per-system
@@ -150,13 +152,14 @@ export interface RadarMapSettings {
   visible: { adsb: boolean; formationFlight: boolean; radio: boolean };
 }
 
-/** Default radar settings — built-ins (adsb.lol/.fi) on; adsb.one as a custom (off — currently
- *  unreachable). */
+/** Default radar settings — adsb.lol on; adsb.fi OFF by default (opt-in via Settings →
+ *  "Internet traffic (adsb.fi)" or the Radar panel's Online sources); adsb.one as a custom
+ *  (off — currently unreachable). */
 export const DEFAULT_RADAR: RadarSettings = {
   enabled: true,
   adsb: {
     enabled: true,
-    builtins: { 'adsb.lol': true, 'adsb.fi': true },
+    builtins: { 'adsb.lol': true, 'adsb.fi': false },
     online: [
       { name: 'adsb.one', url: 'https://api.adsb.one/v2/point/{lat}/{lon}/{dist}', enabled: false },
     ],
