@@ -12,11 +12,18 @@
     updateRectangleParams,
     updateCircleParams,
     updatePolygonParams,
+    surveyDraw,
+    startSurveyDraw,
+    undoSurveyDrawPoint,
+    clearSurveyDraw,
+    cancelSurveyDraw,
+    finishSurveyDraw,
     type RectanglePatternParams,
     type CirclePatternParams,
     type PolygonPatternParams,
     type BasePatternParams,
     type ArduAction,
+    type LngLat,
   } from '$lib/stores/surveyPattern.svelte';
   import { get } from 'svelte/store';
   import {
@@ -26,7 +33,12 @@
     generateCircleStepped,
     generateSpiral,
     generatePolygonZigzag,
+    generatePolygonCrosshatch,
     generatePolygonLawnmower,
+    polygonLongestEdgeOrientation,
+    cameraLineSpacingM,
+    cameraFootprintM,
+    pathDistanceM,
     type SurveyWaypoint,
     type SurveyPathSegment,
   } from '$lib/helpers/surveyPatterns';
@@ -73,6 +85,9 @@
     ongenerate?: () => void;
   }
   let { ongenerate }: Props = $props();
+
+  // ── Insert mode: append to the current mission or replace it ──
+  let insertMode = $state<'append' | 'replace'>('append');
 
   // ── Rectangle state ───────────────────────────────────
   let rectangleParams = $state<RectanglePatternParams>({
@@ -144,6 +159,33 @@
     userActionTrackFlags: 0,
     userActionEndFlags: 0,
   });
+
+  // ── Camera-based line spacing (polygon): spacing from footprint + side overlap ──
+  let camEnabled = $state(false);
+  let camSensorWidth = $state(13.2);   // mm
+  let camFocalLength = $state(8.8);    // mm
+  let camSideOverlap = $state(70);     // %
+  const camFootprint = $derived(cameraFootprintM(polygonParams.baseAltitude, camSensorWidth, camFocalLength));
+  const camSpacing = $derived(cameraLineSpacingM(polygonParams.baseAltitude, camSensorWidth, camFocalLength, camSideOverlap));
+
+  function applyCamSpacing() {
+    if (camSpacing <= 0) return;
+    polygonParams.targetLineSpacing = Math.max(5, Math.round(camSpacing));
+    handlePolygonParamChange();
+  }
+
+  /** Default grid angle: tracks parallel to the polygon's longest edge. */
+  function applyLongestEdge() {
+    if (polygonParams.points.length < 3) return;
+    polygonParams.trackOrientation = polygonLongestEdgeOrientation(polygonParams.points);
+    handlePolygonParamChange();
+  }
+
+  async function handleFinishDraw() {
+    if (!finishSurveyDraw()) {
+      await showDialog($t('survey.title'), $t('survey.drawInvalid'));
+    }
+  }
 
   // Full list of supported shapes (visualization for non-Rectangle comes progressively)
   const availableShapes = [
@@ -220,7 +262,7 @@
       }
     } else if (cfg.shape === 'polygon') {
       const p = cfg.params as PolygonPatternParams;
-      segments = generatePolygonZigzag(p);
+      segments = p.crosshatch ? generatePolygonCrosshatch(p) : generatePolygonZigzag(p);
       for (const seg of segments) {
         if (seg.kind === 'survey') {
           for (const pt of seg.points) wps.push(pt);
@@ -294,8 +336,9 @@
         if (isLast && a.arduActionEnd) items.push(doItem(a.arduActionEnd));
       });
 
-      arduRecordUndo(); // the whole append is one undo step
-      arduMission.update((cur) => [...cur, ...items]);
+      arduRecordUndo(); // the whole insert is one undo step
+      if (insertMode === 'replace') arduMission.set(items);
+      else arduMission.update((cur) => [...cur, ...items]);
       arduSelectedWpIndex.set(-1);
       console.log(`[Pattern] Added ${items.length} ArduPilot/PX4 mission items for ${cfg.shape}`);
       exitPatternMode();
@@ -303,9 +346,9 @@
       return;
     }
 
-    // Check 120 WP limit
+    // Check 120 WP limit (replace mode starts from an empty mission)
     const { getTotalWpCount, MAX_WAYPOINTS_TOTAL } = await import('$lib/stores/mission');
-    const currentCount = getTotalWpCount();
+    const currentCount = insertMode === 'replace' ? 0 : getTotalWpCount();
     const remaining = MAX_WAYPOINTS_TOTAL - currentCount;
 
     if (wps.length > remaining) {
@@ -324,8 +367,9 @@
 
     // Convert SurveyWaypoint[] → INAV Waypoint[] and append to active mission
     try {
-      const { missionAddWp, WpAction, altFromM, fromDeg, ALT_MODE_REL, ALT_MODE_AMSL, ALT_MODE_AGL, beginUndoGroup, endUndoGroup } = await import('$lib/stores/mission');
-      // Whole pattern append = a single undo step.
+      const { missionAddWp, missionClear, WpAction, altFromM, fromDeg, ALT_MODE_REL, ALT_MODE_AMSL, ALT_MODE_AGL, beginUndoGroup, endUndoGroup } = await import('$lib/stores/mission');
+      if (insertMode === 'replace') await missionClear();
+      // Whole pattern insert = a single undo step.
       beginUndoGroup();
       try {
         for (const swp of wps) {
@@ -408,19 +452,33 @@
   // Mission WP count at pattern-mode entry (static: mission can't change while editing)
   const missionWpCount = getTotalWpCount();
 
-  // Reactive WP count for the current pattern — recomputes on any param change
-  let patternWpCount = $derived.by(() => {
+  // Reactive preview segments for the current pattern — recompute on any param change
+  let patternSegments = $derived.by((): SurveyPathSegment[] => {
     const cfg = activeSurveyPattern.config;
-    if (!cfg) return 0;
-    const segs =
+    if (!cfg) return [];
+    return (
       cfg.shape === 'rectangle'          ? generateRectangleZigzag(rectangleParams) :
       cfg.shape === 'rectangle-lawnmower'? generateRectangleLawnmower(rectangleParams) :
       cfg.shape === 'circle'             ? generateCircleStepped(circleParams) :
       cfg.shape === 'spiral'             ? generateSpiral(circleParams) :
-      cfg.shape === 'polygon' && polygonParams.points.length >= 3 ? generatePolygonZigzag(polygonParams) :
+      cfg.shape === 'polygon' && polygonParams.points.length >= 3 ? (polygonParams.crosshatch ? generatePolygonCrosshatch(polygonParams) : generatePolygonZigzag(polygonParams)) :
       cfg.shape === 'polygon-lawnmower' && polygonParams.points.length >= 3 ? generatePolygonLawnmower(polygonParams) :
-      [];
-    return segs.reduce((s, seg) => seg.kind === 'survey' ? s + seg.points.length : s, 0);
+      []
+    );
+  });
+
+  // Reactive WP count for the current pattern
+  let patternWpCount = $derived(
+    patternSegments.reduce((s, seg) => seg.kind === 'survey' ? s + seg.points.length : s, 0)
+  );
+
+  // Estimated flown distance: the survey waypoints in flight order (what Generate inserts)
+  let patternDistanceM = $derived.by(() => {
+    const pts: LngLat[] = [];
+    for (const seg of patternSegments) {
+      if (seg.kind === 'survey') for (const pt of seg.points) pts.push(pt);
+    }
+    return pathDistanceM(pts);
   });
 
   console.log('[DEBUG] SurveyPatternPanel mounted');
@@ -461,6 +519,7 @@
             <div class="info-row">
               <span class="spacing-info">≈{fmtLen(rectangleParams.actualLineSpacing)}</span>
               <span class="spacing-info" class:over-limit={missionWpCount + patternWpCount > MAX_WAYPOINTS_TOTAL}>{_t('survey.wpCount', { count: String(patternWpCount) })}</span>
+              <span class="spacing-info">{_t('survey.estDistance', { dist: fmtLen(patternDistanceM) })}</span>
             </div>
           {/if}
         </div>
@@ -694,9 +753,34 @@
 
     {:else if activeSurveyPattern.config?.shape === 'polygon' || activeSurveyPattern.config?.shape === 'polygon-lawnmower'}
 
+      <!-- Click-to-draw polygon definition -->
+      {#if surveyDraw.active}
+        <div class="draw-box">
+          <div class="draw-hint">{_t('survey.drawHint', { count: String(surveyDraw.points.length) })}</div>
+          <div class="param-row">
+            <button class="btn-ctrl" onclick={undoSurveyDrawPoint} disabled={surveyDraw.points.length === 0}>{$t('survey.drawUndo')}</button>
+            <button class="btn-ctrl" onclick={clearSurveyDraw} disabled={surveyDraw.points.length === 0}>{$t('survey.drawClear')}</button>
+            <button class="btn-ctrl" onclick={cancelSurveyDraw}>{$t('survey.drawCancel')}</button>
+            <button class="btn-ctrl btn-finish" onclick={handleFinishDraw} disabled={surveyDraw.points.length < 3}>{$t('survey.drawFinish')}</button>
+          </div>
+        </div>
+      {:else}
+        <button class="btn-ctrl btn-draw" onclick={() => startSurveyDraw()}>✏️ {$t('survey.drawPolygon')}</button>
+      {/if}
+
       {#if activeSurveyPattern.config?.shape === 'polygon'}
+        <!-- Pattern: boustrophedon grid or crosshatch (grid flown both directions) -->
+        <div class="param-row seg-row">
+          <span class="alt-type-label">{$t('survey.patternType')}</span>
+          <button class="btn-ctrl seg-btn" class:seg-active={!polygonParams.crosshatch} onclick={() => { polygonParams.crosshatch = false; handlePolygonParamChange(); }}>{$t('survey.patternGrid')}</button>
+          <button class="btn-ctrl seg-btn" class:seg-active={!!polygonParams.crosshatch} onclick={() => { polygonParams.crosshatch = true; handlePolygonParamChange(); }}>{$t('survey.patternCrosshatch')}</button>
+        </div>
+
         <!-- ZigZag only: track orientation + stay-inside toggle -->
-        <NumberStepper label={$t('survey.trackOrientationVal')} bind:value={polygonParams.trackOrientation} min={0} max={360} step={5} decimals={0} onchange={handlePolygonParamChange} />
+        <div class="param-row">
+          <NumberStepper label={$t('survey.trackOrientationVal')} bind:value={polygonParams.trackOrientation} min={0} max={360} step={5} decimals={0} onchange={handlePolygonParamChange} />
+          <button class="btn-ctrl" onclick={applyLongestEdge} disabled={polygonParams.points.length < 3}>{$t('survey.longestEdge')}</button>
+        </div>
 
         <label class="toggle-row">
           <input type="checkbox" bind:checked={polygonParams.stayInsideArea} onchange={handlePolygonParamChange} />
@@ -710,9 +794,31 @@
         {#if polygonParams.targetLineSpacing > 0 && polygonParams.points.length >= 3}
           <div class="info-row">
             <span class="spacing-info" class:over-limit={missionWpCount + patternWpCount > MAX_WAYPOINTS_TOTAL}>{_t('survey.wpCount', { count: String(patternWpCount) })}</span>
+            <span class="spacing-info">{_t('survey.estDistance', { dist: fmtLen(patternDistanceM) })}</span>
           </div>
         {/if}
       </div>
+
+      <!-- Camera-based spacing (grid only): footprint from altitude/sensor/focal, spacing from side overlap -->
+      {#if activeSurveyPattern.config?.shape === 'polygon'}
+        <label class="toggle-row">
+          <input type="checkbox" bind:checked={camEnabled} />
+          <span>{$t('survey.cameraSpacing')}</span>
+        </label>
+        {#if camEnabled}
+          <div class="param-row">
+            <NumberStepper label={$t('survey.sensorWidth')} bind:value={camSensorWidth} min={1} max={100} step={0.1} decimals={1} />
+            <NumberStepper label={$t('survey.focalLength')} bind:value={camFocalLength} min={1} max={200} step={0.1} decimals={1} />
+          </div>
+          <div class="param-row">
+            <NumberStepper label={$t('survey.sideOverlap')} bind:value={camSideOverlap} min={0} max={95} step={5} decimals={0} />
+            <button class="btn-ctrl" onclick={applyCamSpacing} disabled={camSpacing <= 0}>{_t('survey.applySpacing', { spacing: camSpacing.toFixed(1) })}</button>
+          </div>
+          <div class="info-row">
+            <span class="spacing-info">{_t('survey.footprint', { width: camFootprint.toFixed(1) })}</span>
+          </div>
+        {/if}
+      {/if}
 
       <!-- Turn Distance (zigzag only) + Reverse -->
       <div class="param-row">
@@ -822,10 +928,17 @@
     {/if}
   </div>
 
-  <!-- Generate & Append + Load/Save buttons -->
+  <!-- Insert mode + Generate + Load/Save buttons -->
   <div class="pattern-bottom-actions">
+    <div class="param-row alt-type-row">
+      <span class="alt-type-label">{$t('survey.insertMode')}</span>
+      <select class="alt-type-select" bind:value={insertMode}>
+        <option value="append">{$t('survey.insertAppend')}</option>
+        <option value="replace">{$t('survey.insertReplace')}</option>
+      </select>
+    </div>
     <button class="btn-primary" onclick={handleGenerate}>
-      ➕ {$t('survey.generateAppend')}
+      ➕ {insertMode === 'replace' ? $t('survey.generateReplace') : $t('survey.generateAppend')}
     </button>
     <div class="pattern-file-row">
       <button class="btn-ctrl btn-file" onclick={() => {}} disabled title={$t('survey.loadPatternSoon')}>📂 {$t('survey.loadPattern')}</button>
@@ -1057,4 +1170,27 @@
   .btn-ctrl:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-ctrl.btn-file { border-color: #555; background: #2a2a2a; color: #ccc; }
   .btn-ctrl.btn-file:hover { background: #3a3a3a; }
+
+  .draw-box {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    border: 1px dashed #37a8db;
+    border-radius: 4px;
+    padding: 6px;
+    box-sizing: border-box;
+  }
+
+  .draw-hint {
+    font-size: 12px;
+    color: #9fd4ee;
+  }
+
+  .btn-draw { align-self: flex-start; }
+  .btn-finish { border-color: #2ecc71; color: #2ecc71; background: #14301f; }
+  .btn-finish:hover:not(:disabled) { background: #2ecc71; color: #fff; }
+
+  .seg-row { align-items: center; }
+  .seg-btn.seg-active { background: #37a8db; color: #fff; }
 </style>
