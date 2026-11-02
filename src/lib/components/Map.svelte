@@ -41,7 +41,7 @@
   import { editMode, geoWaypoints, launchPoint, replayActive, toDeg } from "$lib/stores/mission";
   import { autopilotSystem } from "$lib/stores/autopilotContext";
   import { arduMission, arduVehicleClass, arduEditMode } from "$lib/stores/missionArdupilot";
-  import { activeSurveyPattern } from "$lib/stores/surveyPattern.svelte";
+  import { activeSurveyPattern, surveyDraw, addSurveyDrawPoint } from "$lib/stores/surveyPattern.svelte";
   import { guidedActive, guidedTarget, repositionTo, activeMode, guidedParams, fcLoiterRadius, type GuidedParams } from "$lib/controllers/vehicleControl";
   import GuidedTargetForm from "$lib/components/control/GuidedTargetForm.svelte";
   import { cmdHasLocation } from "$lib/helpers/arduCommandCatalog";
@@ -2000,6 +2000,11 @@
     map.on("moveend", updateAirspace);
     map.on("click", onGuidedClick); // Guided "fly here" target popup (vehicle control)
     map.on("click", onAirspaceClick); // click empty map / airspace fill → list all airspaces there
+    // Survey click-to-draw: while drawing a survey polygon, map clicks append vertices.
+    // (Guided/airspace handlers already bail out while the survey generator is active.)
+    map.on("click", (e: L.LeafletMouseEvent) => {
+      if (surveyDraw.active) addSurveyDrawPoint({ lat: e.latlng.lat, lng: e.latlng.lng });
+    });
 
     // Auto night mode: physical location + re-check every minute so wall-clock drift fades day↔night.
     ensureUserLocation(); // OS geolocation (resolves async)

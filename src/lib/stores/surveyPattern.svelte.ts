@@ -5,6 +5,7 @@
 // Top-level runes like $state are allowed here.
 
 import type { LngLat, AltMode } from '$lib/helpers/surveyPatterns';
+import { polygonLongestEdgeOrientation, isPolygonSelfIntersecting } from '$lib/helpers/surveyPatterns';
 export type { LngLat, AltMode };
 
 export type SurveyShape = 'rectangle' | 'rectangle-lawnmower' | 'polygon' | 'polygon-lawnmower' | 'circle' | 'spiral';
@@ -65,6 +66,7 @@ export interface CirclePatternParams extends BasePatternParams {
 export interface PolygonPatternParams extends BasePatternParams {
   points: LngLat[];           // in order
   stayInsideArea: boolean;    // false = cross gaps (area mode), true = connected fill (no-fly gaps)
+  crosshatch?: boolean;       // true = fly the grid twice, second pass at track orientation + 90°
 }
 
 export type SurveyPatternConfig =
@@ -242,7 +244,69 @@ export function switchShape(newShape: SurveyShape) {
 
 export function exitPatternMode() {
   activeSurveyPattern.isActive = false;
+  surveyDraw.active = false;
+  surveyDraw.points = [];
   // Keep config alive so params persist when re-entering pattern mode
+}
+
+// ──────────────────────────────────────────────────────
+//  CLICK-TO-DRAW POLYGON
+//  While active, map clicks append vertices instead of editing the default
+//  polygon. Finish (≥3 points, non-self-intersecting) installs the drawn
+//  points as the polygon and defaults the track orientation to the longest
+//  edge — the pilot can still adjust it in the panel afterwards.
+// ──────────────────────────────────────────────────────
+
+export const surveyDraw = $state<{ active: boolean; points: LngLat[] }>({
+  active: false,
+  points: [],
+});
+
+/** Start click-draw: switches the active pattern to the polygon shape first. */
+export function startSurveyDraw() {
+  const cfg = activeSurveyPattern.config;
+  if (!cfg || (cfg.shape !== 'polygon' && cfg.shape !== 'polygon-lawnmower')) {
+    switchShape('polygon');
+  }
+  surveyDraw.points = [];
+  surveyDraw.active = true;
+}
+
+export function addSurveyDrawPoint(p: LngLat) {
+  if (!surveyDraw.active) return;
+  if (surveyDraw.points.length >= 50) return; // same cap as the vertex editor
+  surveyDraw.points = [...surveyDraw.points, { lat: p.lat, lng: p.lng }];
+}
+
+export function undoSurveyDrawPoint() {
+  surveyDraw.points = surveyDraw.points.slice(0, -1);
+}
+
+export function clearSurveyDraw() {
+  surveyDraw.points = [];
+}
+
+export function cancelSurveyDraw() {
+  surveyDraw.active = false;
+  surveyDraw.points = [];
+}
+
+/**
+ * Install the drawn points as the survey polygon.
+ * Returns false (and keeps drawing) when there are <3 points or the polygon
+ * self-intersects — the panel tells the pilot why.
+ */
+export function finishSurveyDraw(): boolean {
+  const pts = surveyDraw.points;
+  if (pts.length < 3 || isPolygonSelfIntersecting(pts)) return false;
+  updatePolygonParams({
+    points: pts.map(p => ({ ...p })),
+    trackOrientation: polygonLongestEdgeOrientation(pts),
+    trackOrientationEnabled: true,
+  });
+  surveyDraw.active = false;
+  surveyDraw.points = [];
+  return true;
 }
 
 export function updateRectangleParams(updates: Partial<RectanglePatternParams>) {

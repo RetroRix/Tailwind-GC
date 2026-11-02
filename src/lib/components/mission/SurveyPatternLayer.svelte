@@ -10,7 +10,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import L from 'leaflet';
-  import { activeSurveyPattern, applyRectangleDragUpdate, applyCircleDragUpdate, applyPolygonDragUpdate, type LngLat, type CirclePatternParams, type PolygonPatternParams } from '$lib/stores/surveyPattern.svelte';
+  import { activeSurveyPattern, surveyDraw, applyRectangleDragUpdate, applyCircleDragUpdate, applyPolygonDragUpdate, type LngLat, type CirclePatternParams, type PolygonPatternParams } from '$lib/stores/surveyPattern.svelte';
   import {
     computeRectangleCorners,
     generateRectangleZigzag,
@@ -18,6 +18,7 @@
     generateCircleStepped,
     generateSpiral,
     generatePolygonZigzag,
+    generatePolygonCrosshatch,
     generatePolygonLawnmower,
     polygonCentroid,
     isPolygonSelfIntersecting,
@@ -30,6 +31,40 @@
     map: L.Map;
   }
   let { map }: Props = $props();
+
+  /** Polygon preview segments — crosshatch = grid + second pass at +90°. */
+  function polygonSegments(p: PolygonPatternParams): SurveyPathSegment[] {
+    return p.crosshatch ? generatePolygonCrosshatch(p) : generatePolygonZigzag(p);
+  }
+
+  // ── Click-draw rendering ────────────────────────────
+  let drawGroup: L.LayerGroup | undefined;
+
+  function renderDraw() {
+    if (!drawGroup) drawGroup = L.layerGroup().addTo(map);
+    drawGroup.clearLayers();
+    if (!surveyDraw.active || surveyDraw.points.length === 0) return;
+    const ll = surveyDraw.points.map(p => [p.lat, p.lng] as [number, number]);
+    if (ll.length >= 2) {
+      drawGroup.addLayer(L.polyline(ll, { color: '#37a8db', weight: 2, interactive: false }));
+    }
+    if (ll.length >= 3) {
+      // Dashed closing edge back to the first point — what Finish will install.
+      drawGroup.addLayer(L.polyline([...ll, ll[0]], { color: '#37a8db', weight: 1, dashArray: '4 4', opacity: 0.7, interactive: false }));
+    }
+    for (const p of ll) {
+      drawGroup.addLayer(L.circleMarker(p, {
+        radius: 5, color: '#ffffff', weight: 2, fillColor: '#f1c40f', fillOpacity: 1, interactive: false,
+      }));
+    }
+  }
+
+  $effect(() => {
+    // Re-render on any draw-state change (active flag + every point coordinate).
+    const _sig = surveyDraw.active + '|' + surveyDraw.points.map(p => `${p.lat},${p.lng}`).join(';');
+    void _sig;
+    renderDraw();
+  });
 
   // ── Layers ──────────────────────────────────────────
   let shapeLayer: L.Polygon | L.Circle | undefined;
@@ -479,6 +514,9 @@
   function updatePreview() {
     const config = activeSurveyPattern.config;
     if (!activeSurveyPattern.isActive || !config) { clearAll(); return; }
+    // While click-drawing a new polygon, the draw layer owns the map — hide the
+    // previous/default polygon preview so the pilot sees only their clicks.
+    if (surveyDraw.active) { clearAll(); return; }
 
     const shape = config.shape;
     const p: any = config.params;
@@ -601,7 +639,7 @@
         if (!isPolygonSelfIntersecting(p_pts)) {
           const segs = shape === 'polygon-lawnmower'
             ? generatePolygonLawnmower(config.params as PolygonPatternParams)
-            : generatePolygonZigzag(config.params as PolygonPatternParams);
+            : polygonSegments(config.params as PolygonPatternParams);
           buildPreviewPath(segs);
         }
       }
@@ -676,7 +714,7 @@
       if (!isPolygonSelfIntersecting(pts)) {
         const segs = config.shape === 'polygon-lawnmower'
           ? generatePolygonLawnmower({ ...(config.params as PolygonPatternParams), points: pts })
-          : generatePolygonZigzag({ ...(config.params as PolygonPatternParams), points: pts });
+          : polygonSegments({ ...(config.params as PolygonPatternParams), points: pts });
         buildPreviewPath(segs);
       }
     }
@@ -704,7 +742,7 @@
     // Use ?? 0 for shape-specific props absent on other shapes (e.g. circle has no length/width).
     const _trigger = (p.length ?? 0) + (p.width ?? 0) + (p.radius ?? 0) + (p.ringPoints ?? 0)
       + p.shapeOrientation + p.targetLineSpacing
-      + p.turnDistance + (p.reverse ? 1 : 0) + (p.clockwise ? 1 : 0) + p.startCorner
+      + p.turnDistance + (p.reverse ? 1 : 0) + (p.clockwise ? 1 : 0) + (p.crosshatch ? 1 : 0) + p.startCorner
       + (p.trackOrientationEnabled ? 1 : 0) + p.trackOrientation
       + p.userActionStartFlags + p.userActionTrackFlags + p.userActionEndFlags
       + p.userActionLineStartFlags + p.userActionLineEndFlags + (p.points?.length ?? 0);
@@ -726,5 +764,8 @@
     updatePreview();
   });
 
-    onDestroy(() => { clearAll(); });
+    onDestroy(() => {
+      clearAll();
+      if (drawGroup) { try { map.removeLayer(drawGroup); } catch {} drawGroup = undefined; }
+    });
 </script>
