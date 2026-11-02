@@ -28,7 +28,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use super::mjpeg_server::{accept_loop, broadcast_loop, Client, EndedHook};
-use super::rtsp::{run_rtp_udp, run_rtsp, LiveRtspStats, RtpUdpConfig, RtspConfig, RtspTransport, VideoCodec};
+use super::rtsp::{run_rtp_udp, run_rtsp, LiveRtspStats, RtpUdpConfig, RtspConfig, RtspTransport, VideoCodec, VideoFrame};
 use super::surface::{SinkSurface, SurfaceRect};
 #[cfg(target_os = "android")]
 use super::android_sink::AndroidVideoSink;
@@ -331,7 +331,7 @@ impl NativeRtsp {
                 #[cfg(target_os = "linux")]
                 let mut aus_without_sps = 0u32;
                 let stop_flag = stop.clone();
-                let mut on_frame = |frame| match frame.codec {
+                let mut on_frame = |frame: VideoFrame| match frame.codec {
                     VideoCodec::Mjpeg => {
                         let part = mpjpeg_part(&frame.data, first);
                         first = false;

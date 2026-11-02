@@ -666,7 +666,7 @@ fn dispatch_message(header: &MavHeader, message: &MavMessage, fc_variant: &str, 
                             vehicles: vec![v],
                         });
                     }
-                }
+                };
             }
         }
 

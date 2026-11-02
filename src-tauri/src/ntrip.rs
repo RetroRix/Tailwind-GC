@@ -405,10 +405,11 @@ fn run_session(
 /// True while the active protocol is a MAVLink link (the only one that can take RTCM injection).
 fn link_present(app: &AppHandle) -> bool {
     let state = app.state::<AppState>();
-    match state.protocol.lock() {
+    let present = match state.protocol.lock() {
         Ok(p) => matches!(p.as_ref(), Some(ActiveProtocol::Mavlink(_))),
         Err(_) => false,
-    }
+    };
+    present
 }
 
 enum ForwardOutcome {
