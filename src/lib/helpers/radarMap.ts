@@ -112,6 +112,24 @@ export function ffContactColor(state: string | undefined): ContactColor {
   }
 }
 
+/** Outline colour for contacts that come ONLY from an internet ADS-B feed (no FC / local receiver
+ *  source) — the map's visual distinction for net traffic vs. traffic the aircraft/receiver heard
+ *  directly. Bright cyan reads against every altitude-scale fill. */
+export const NET_OUTLINE = '#22d3ee';
+
+/** True when this ADS-B contact is reported only by online (internet) providers — no local receiver
+ *  (`adsb_receiver`, incl. ADSB_VEHICLE from the connected FC) and no MSP list (`adsb_msp`) has it.
+ *  The aggregator merges sources by ICAO, so an FC-heard contact that an online feed also sees is
+ *  NOT net-only: the FC source wins the distinction. */
+export function isOnlineOnly(v: TrackedVehicle): boolean {
+  return (
+    v.system === 'adsb' &&
+    v.sources.includes('adsb_online') &&
+    !v.sources.includes('adsb_receiver') &&
+    !v.sources.includes('adsb_msp')
+  );
+}
+
 /** Colour for a contact: relative when a reference altitude exists, else absolute fallback. */
 export function contactColor(altM: number | null, refAltM: number | null): ContactColor {
   if (altM == null) return { fill: NO_ALT, fillOpacity: 1, outline: OUTLINE };

@@ -578,6 +578,7 @@
     "expand": "Zum Ausklappen klicken",
     "radius": "Radius",
     "pollInterval": "Online-Abfrage-Intervall",
+    "netSource": "Internet-Verkehr (nicht vom FC / lokalen Empfänger empfangen)",
     "uavSource": "UAV-Quelle",
     "onlineSources": "Online-Quellen",
     "providerName": "Name",

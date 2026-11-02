@@ -80,7 +80,7 @@
   import { type RadarMapSettings, type GcsMode } from "$lib/stores/settings";
   import { openContextMenu } from "$lib/stores/contextMenu";
   import { t } from "svelte-i18n";
-  import { contactColor, ffContactColor, contactVisibleOnMap, relevanceFactor } from "$lib/helpers/radarMap";
+  import { contactColor, ffContactColor, contactVisibleOnMap, relevanceFactor, isOnlineOnly, NET_OUTLINE } from "$lib/helpers/radarMap";
   import { pickShape, buildContactIconHtml } from "$lib/helpers/radarIcons";
   import { installUprightOverlays } from "$lib/helpers/leafletUpright";
   import { convertAltitude, convertSpeed, convertDistance, convertVerticalSpeed, formatConverted, speedDigits } from "$lib/utils/units";
@@ -334,7 +334,20 @@
       const a = formatConverted(convertVerticalSpeed(Math.abs(v.verticalSpeedMs), ui.verticalSpeedUnit), 1);
       vs = ` ${v.verticalSpeedMs > 0 ? '▲' : '▼'}${a}`;
     }
-    return `${name} · ${alt}${vs} · ${spd} · ${dist} · ${brg}`;
+    // Internet-only contacts are tagged NET so they're never mistaken for FC/receiver traffic.
+    const net = isOnlineOnly(v) ? 'NET · ' : '';
+    return `${net}${name} · ${alt}${vs} · ${spd} · ${dist} · ${brg}`;
+  }
+
+  /** Map label for a contact: callsign (or ICAO id) + altitude, plus a NET tag for internet-only
+   *  contacts. FormationFlight keeps its compact callsign-only label (rendered as the id badge). */
+  function radarLabel(v: EnrichedVehicle): string | undefined {
+    if (v.system === 'formationFlight') return v.callsign?.trim() || undefined;
+    const ui = get(settings).interface;
+    const name = v.callsign?.trim() || v.id;
+    const alt = v.altM == null ? '' : ` · ${formatConverted(convertAltitude(v.altM, ui.altitudeUnit), 0)}`;
+    const net = isOnlineOnly(v) ? ' · NET' : '';
+    return `${name}${alt}${net}`;
   }
 
   /** Rebuild/diff the radar contact markers from the latest snapshot + map controls. */
@@ -364,17 +377,20 @@
       const size = Math.max(RADAR_MIN_PX, Math.round(RADAR_BASE_PX * (uiScale || 1) * (0.6 + 0.4 * rel) * sizeMul));
       // Whole degrees and 1/20 opacity steps: the icon is rebuilt only when its HTML changes (below),
       // and a heading or relevance that drifts in the fourth decimal is not a visible change.
+      // Internet-only ADS-B contacts keep their altitude fill but get a cyan outline, so the source
+      // distinction is visible at a glance (the label/tooltip carry the NET tag as well).
+      const baseColor = v.system === 'formationFlight'
+        ? ffContactColor(v.extra?.ffState)
+        : contactColor(v.altM, radarRefAltM);
       const html = buildContactIconHtml({
         shape: pickShape(v.system, v.category, v.headingDeg != null),
         heading: v.headingDeg != null ? Math.round(v.headingDeg) : v.headingDeg,
         // FormationFlight uses a state colour (armed/disarmed/lost); ADS-B uses the altitude scale.
-        color: v.system === 'formationFlight'
-          ? ffContactColor(v.extra?.ffState)
-          : contactColor(v.altM, radarRefAltM),
+        color: isOnlineOnly(v) ? { ...baseColor, outline: NET_OUTLINE } : baseColor,
         sizePx: size,
         opacity: Math.round(rel * 20) / 20,
         selected: v.id === radarSelectedId,
-        label: v.callsign?.trim() || undefined,
+        label: radarLabel(v),
         badgeLabel: v.system === 'formationFlight', // big single-letter id badge
         // Alert ring is drawn as a separate persistent marker (below) so its pulse doesn't reset on
         // every icon update — keep it OUT of the contact icon.

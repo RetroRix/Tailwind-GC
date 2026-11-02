@@ -580,6 +580,7 @@
     "expand": "Click to expand",
     "radius": "Radius",
     "pollInterval": "Online poll interval",
+    "netSource": "Internet traffic (not received by the FC / a local receiver)",
     "uavSource": "UAV Source",
     "onlineSources": "Online sources",
     "providerName": "Name",

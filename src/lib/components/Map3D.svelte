@@ -98,7 +98,7 @@
   import { radarVehicles, radarSelection, type RadarSnapshot } from "$lib/stores/radarTracking";
   import { aeroData, type Airspace, type AltLimit } from "$lib/stores/airspace";
   import { airspaceStyle, airspaceContainsPoint, airspaceIsRelevant, isAirspaceHidden, airportBillboard } from "$lib/helpers/airspaceStyle";
-  import { contactColor, ffContactColor, contactVisibleOnMap, REL_OVERRIDE_M } from "$lib/helpers/radarMap";
+  import { contactColor, ffContactColor, contactVisibleOnMap, REL_OVERRIDE_M, isOnlineOnly } from "$lib/helpers/radarMap";
   import { ARROW_POLY, contactModelClass, radarModelUri, type RadarModelClass } from "$lib/helpers/radar3d";
   import { radarAlertLevels, ALERT_CONFIG, type AlertLevel } from "$lib/controllers/radarAlerts";
   import { safehomeWorking, isSafehomeEmpty } from "$lib/stores/safehome";
@@ -449,6 +449,7 @@
     headingDeg: number | null;
     modelClass: RadarModelClass; // which radar glb to render (mapped from system + ADS-B category)
     callsign: string;          // label text (callsign or id)
+    net: boolean;              // internet-only ADS-B contact (label gets a NET tag)
     altM: number;              // altitude (m) for the label
     groundSpeedMs: number | null;
     verticalSpeedMs: number | null;
@@ -1806,10 +1807,12 @@
     }
   }
 
-  /** Label text: callsign + altitude normally; the full ADS-B readout (like the 2D hover) when selected. */
+  /** Label text: callsign + altitude normally; the full ADS-B readout (like the 2D hover) when selected.
+   *  Internet-only contacts are prefixed NET, same distinction as the 2D map. */
   function radarLabelText(rec: Radar3dRec): string {
+    const name = rec.net ? `NET · ${rec.callsign}` : rec.callsign;
     if (!rec.selected) {
-      return `${rec.callsign}\n${formatConverted(convertAltitude(rec.altM, hudAltUnit), 0)}`;
+      return `${name}\n${formatConverted(convertAltitude(rec.altM, hudAltUnit), 0)}`;
     }
     const ui = get(settings).interface;
     const alt = formatConverted(convertAltitude(rec.altM, ui.altitudeUnit), 0);
@@ -1826,7 +1829,7 @@
       dist = formatConverted(convertDistance(d, ui.distanceUnit), d < 10000 ? 1 : 0);
       brg = `${Math.round(bearing(radarReference.lat, radarReference.lon, rec.lat, rec.lon))}°`;
     }
-    return `${rec.callsign}\n${alt}${vs}\n${spd} · ${dist} · ${brg}`;
+    return `${name}\n${alt}${vs}\n${spd} · ${dist} · ${brg}`;
   }
 
   /** Update the ground projection (drop-line + filled circle + heading arrow). Solid materials reassigned
@@ -2255,7 +2258,7 @@
       let rec = radar3dRecs.get(v.id);
       if (!rec) {
         rec = {
-          id: v.id, lat: v.lat, lon: v.lon, headingDeg: v.headingDeg, modelClass, callsign, altM: v.altM,
+          id: v.id, lat: v.lat, lon: v.lon, headingDeg: v.headingDeg, modelClass, callsign, net: isOnlineOnly(v), altM: v.altM,
           groundSpeedMs: v.groundSpeedMs, verticalSpeedMs: v.verticalSpeedMs,
           contactEll, color: cesColor, showGround, selected: v.id === radar3dSelectedId,
           alertLevel: radar3dAlertLevels.get(v.id) ?? null,
@@ -2266,7 +2269,7 @@
         if (!acquireBundleFor(rec)) radar3dCreateQueue.push(rec);
       } else {
         rec.lat = v.lat; rec.lon = v.lon; rec.headingDeg = v.headingDeg; rec.modelClass = modelClass;
-        rec.callsign = callsign; rec.altM = v.altM;
+        rec.callsign = callsign; rec.net = isOnlineOnly(v); rec.altM = v.altM;
         rec.groundSpeedMs = v.groundSpeedMs; rec.verticalSpeedMs = v.verticalSpeedMs;
         rec.contactEll = contactEll; rec.color = cesColor;
         rec.showGround = showGround; rec.selected = v.id === radar3dSelectedId; rec.hideRadiusM = hideR;

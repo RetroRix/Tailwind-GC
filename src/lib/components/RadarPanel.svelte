@@ -22,7 +22,7 @@
   import type { AppSettings, RadarSettings, InterfaceSettings } from '$lib/stores/settings';
   import type { PortInfo } from '$lib/stores/connection';
   import { convertSpeed, convertAltitude, convertDistance, formatConverted, speedDigits } from '$lib/utils/units';
-  import { RELATIVE_LEGEND_STOPS, LEGEND_LEVEL_PCT } from '$lib/helpers/radarMap';
+  import { RELATIVE_LEGEND_STOPS, LEGEND_LEVEL_PCT, isOnlineOnly } from '$lib/helpers/radarMap';
 
   let { radar, interfaceSettings, referencePoint = null, mspSupported = false, onPatch = (_p: Partial<AppSettings>) => {} }: {
     radar: RadarSettings;
@@ -486,7 +486,7 @@
                 onclick={() => radarSelection.update((cur) => (cur === v.id ? null : v.id))}
                 onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); radarSelection.update((cur) => (cur === v.id ? null : v.id)); } }}
               >
-                <span class="r-call">{label(v)}</span>
+                <span class="r-call">{label(v)}{#if isOnlineOnly(v)}<span class="r-net" title={$t('radar.netSource')}>NET</span>{/if}</span>
                 {#if !compact}
                   <span class="r-type" title={v.system === 'formationFlight' ? $t('radar.linkQuality') : (v.category ?? '')}>
                     {v.system === 'formationFlight' ? ffLq(v.signal) : categoryAbbrev(v.category)}
@@ -642,6 +642,11 @@
   /* Info view: call · dist · brg · alt — dist + alt wide enough for 4-digit km / >10 000 m (no wrap). */
   .radar-row.compact { grid-template-columns: 1.15fr 1.1fr 0.55fr 1.1fr; }
   .r-call { color: #e8e8e8; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Internet-only contact tag (matches the 2D/3D map NET distinction). */
+  .r-net {
+    margin-left: 5px; padding: 0 4px; border: 1px solid #22d3ee; border-radius: 3px;
+    color: #22d3ee; font-size: 9px; font-weight: 700; vertical-align: 1px;
+  }
   .r-type { color: #8fb4c5; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .r-dist, .r-brg, .r-alt, .r-spd, .r-age { color: #b8b8b8; text-align: right; white-space: nowrap; }
 
