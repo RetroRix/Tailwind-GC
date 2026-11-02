@@ -30,6 +30,8 @@
   import { nativeSurface, activeNativeSurfaces } from '$lib/controllers/nativeVideo';
   import { doubleTap, mouseDoubleClick } from '$lib/helpers/doubleTap';
   import VideoReconnectOverlay from '$lib/components/video/VideoReconnectOverlay.svelte';
+  import FpvOsdOverlay from '$lib/components/video/FpvOsdOverlay.svelte';
+  import LinkHealthStrip from '$lib/components/video/LinkHealthStrip.svelte';
 
   let {
     width = 300,
@@ -162,6 +164,13 @@
     </div>
   {/if}
   <VideoReconnectOverlay />
+  {#if !ghost && !mapHere && $videoState.kind === 'fpv' && $videoState.enabled}
+    <!-- FPV link panel (Tailwind): ground-rendered OSD (compact — no horizon at tile size)
+         + link-health strip. Sibling of the picture branches on purpose: it stays mounted
+         across live/starting/placeholder, so the OSD survives video breakup. -->
+    <FpvOsdOverlay compact />
+    <LinkHealthStrip />
+  {/if}
 </div>
 
 <style>

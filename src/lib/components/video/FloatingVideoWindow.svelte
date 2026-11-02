@@ -52,6 +52,8 @@
   import { doubleTap, mouseDoubleClick } from '$lib/helpers/doubleTap';
   import { startFloatMove, startFloatResize } from '$lib/helpers/floatWindowGestures';
   import VideoReconnectOverlay from '$lib/components/video/VideoReconnectOverlay.svelte';
+  import FpvOsdOverlay from '$lib/components/video/FpvOsdOverlay.svelte';
+  import LinkHealthStrip from '$lib/components/video/LinkHealthStrip.svelte';
 
   let {
     left,
@@ -264,6 +266,13 @@
           </button>
         {/if}
         <VideoReconnectOverlay />
+        {#if $videoState.kind === 'fpv' && $videoState.enabled}
+          <!-- FPV link panel (Tailwind): ground-rendered OSD (full, incl. the FpvHud
+               horizon) + link-health strip — DOM over the picture, so both stay up when
+               the video itself breaks up or stalls into a reconnect. -->
+          <FpvOsdOverlay />
+          <LinkHealthStrip />
+        {/if}
       </div>
     {/if}
 
