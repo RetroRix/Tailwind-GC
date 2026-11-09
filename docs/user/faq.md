@@ -89,3 +89,34 @@ Since v1.1.0-tailwind.6 the **System messages** feed (Settings → **General**) 
 developer chatter — ArduPilot's `MAV_SEVERITY_DEBUG` lines such as "Sending unknown message (44)"
 — is now its own **Debug** level: pick it when you're troubleshooting on the bench and want the
 full firehose. Your existing setting is kept; only fresh installs get the new Warning default.
+
+## Flight controller setup
+
+### Can Tailwind edit flight controller parameters?
+
+Only the ones that belong to a mission or to its safety net. Tailwind is a **mission planner, mission
+manager and flight monitor** — not a configurator. Setting up the aircraft itself (ports, receiver,
+modes, tuning, sensors, outputs) stays with the tool made for your firmware: **INAV Configurator** for
+INAV, **Mission Planner** or **QGroundControl** for ArduPilot and PX4.
+
+What Tailwind does write to the flight controller is everything you plan on the map:
+
+- **Missions** — waypoints and their actions, on INAV, ArduPilot and PX4 ([Missions](guides/missions.md)).
+- **INAV geozones** — each zone with its altitude band and breach action
+  ([Safety → Geozones](guides/safety.md#inav-geozones)).
+- **INAV safe homes and autoland** — the safe-home slots, their approach settings and the global
+  autoland configuration ([Safety → Safe Home & Autoland](guides/safety.md#automatic-landing-safe-home-autoland-inav)).
+- **ArduPilot / PX4 geofence** — the fence geometry plus the core fence parameters such as enable,
+  breach action and altitude / distance limits ([Safety → Geofence](guides/safety.md#ardupilot-px4-geofence)).
+- **ArduPilot / PX4 rally points** — the points and their parameters
+  ([Safety → Rally points](guides/safety.md#rally-points-ardupilot-px4)).
+- A few single settings where they belong to a workflow: the **loiter radius** from
+  [Vehicle control](guides/vehicle-control.md) on ArduPilot / PX4, and the INAV **craft name** from the
+  [Vehicle library](guides/vehicles.md), so that future flights link to the right vehicle.
+
+Nothing is written in the background: a change reaches the flight controller only when you save it or
+press the matching button, and only the settings that editor shows.
+
+A general **parameter editor** — the full list of every firmware setting — is not ruled out for the
+future, but it sits far down the priority list. Each firmware already has a dedicated configurator that
+does this well, and a second, half-complete one inside a ground station adds risk without adding much.
