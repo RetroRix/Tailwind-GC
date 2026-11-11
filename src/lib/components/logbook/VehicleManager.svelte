@@ -301,7 +301,6 @@
         : $t('vehicleMgr.deleteMsg'),
       buttons: [
         { label: $t('vehicleMgr.deleteYes'), value: 'delete', danger: true },
-        { label: $t('vehicleMgr.cancel'), value: 'cancel' },
       ],
     });
     if (ans !== 'delete') return;
