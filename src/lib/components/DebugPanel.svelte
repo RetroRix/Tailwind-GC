@@ -22,12 +22,45 @@
   import { nativeHoleDebug } from "$lib/controllers/nativeVideo";
   import { isLinux } from "$lib/platform";
   import NumberStepper from "$lib/components/NumberStepper.svelte";
+  import { fcModes } from "$lib/stores/fcModes";
+  import { autopilotSystem } from "$lib/stores/autopilotContext";
+  import { arduVehicleClass } from "$lib/stores/missionArdupilot";
+  import { connection } from "$lib/stores/connection";
+  import { offeredModes, tableFor, type MavMode, type FcMode } from "$lib/helpers/mavModes";
   import { mjpegStats, uiJankMs, startJankProbe, stopJankProbe } from "$lib/controllers/mjpegSink";
 
   let { onclose }: { onclose: () => void } = $props();
 
-  type Tab = 'msp' | 'mavlink' | 'alerts' | 'telemetry' | 'rc' | 'performance' | 'video';
+  type Tab = 'msp' | 'mavlink' | 'modes' | 'alerts' | 'telemetry' | 'rc' | 'performance' | 'video';
   let tab = $state<Tab>('msp');
+
+  // ── FC modes tab: the connected FC's own list (AVAILABLE_MODES) next to what the panel offers. ──
+  const FC_NOT_USER_SELECTABLE = 2;
+  const yesNo = (v: boolean): string => (v ? '✓' : '—');
+  const fcModesOffered = $derived(offeredModes($autopilotSystem, $arduVehicleClass, $fcModes));
+  /** Every row of Tailwind's table plus the FC's unknown modes, with why it is (not) offered. */
+  const fcModeRows = $derived.by(() => {
+    const fc: readonly FcMode[] | null = $fcModes;
+    const offered = new Set(fcModesOffered.map((m) => m.main));
+    const byNumber = new Map((fc ?? []).map((m) => [m.customMode >>> 0, m]));
+    const status = (m: MavMode): string => {
+      if (m.neverOffer) return 'neverOffered';
+      if (offered.has(m.main)) return 'offered';
+      if (!fc) return 'staticHidden';
+      const f = byNumber.get(m.main);
+      if (!f) return 'notListed';
+      return (f.properties & FC_NOT_USER_SELECTABLE) ? 'notSelectable' : 'staticHidden';
+    };
+    const table = tableFor($autopilotSystem, $arduVehicleClass);
+    const rows = table.map((m) => ({ main: m.main, sub: m.sub, name: m.name, stick: m.stick, confirm: !!m.confirm, status: status(m) }));
+    const known = new Set(table.map((m) => m.main));
+    for (const m of fcModesOffered) {
+      if (!known.has(m.main)) rows.push({ main: m.main, sub: m.sub, name: m.name, stick: m.stick, confirm: false, status: 'unknown' });
+    }
+    return rows;
+  });
+  const tailwindNameFor = (n: number): string =>
+    tableFor($autopilotSystem, $arduVehicleClass).find((m) => m.main === n)?.name ?? '—';
 
   // Linux hole-punch spike (dev, MOBILE_RTSP.md P2.3 stage A) — coloured stand-in below the DOM hole.
   let spikeOn = $state(false);
@@ -434,6 +467,7 @@
   <div class="debug-tabs">
     <button class="tab" class:active={tab === 'msp'} onclick={() => tab = 'msp'}>{$t('debug.tabMsp')}</button>
     <button class="tab" class:active={tab === 'mavlink'} onclick={() => tab = 'mavlink'}>{$t('debug.tabMavlink')}</button>
+    <button class="tab" class:active={tab === 'modes'} onclick={() => tab = 'modes'}>{$t('debug.tabModes')}</button>
     <button class="tab" class:active={tab === 'telemetry'} onclick={() => tab = 'telemetry'}>{$t('debug.tabTelemetry')}</button>
     <button class="tab" class:active={tab === 'alerts'} onclick={() => tab = 'alerts'}>{$t('debug.tabAlerts')}</button>
     <button class="tab" class:active={tab === 'rc'} onclick={() => tab = 'rc'}>{$t('debug.tabRc')}</button>
@@ -567,6 +601,71 @@
               <td class="col-num">{msg.count}</td>
               <td class="col-rate">{msg.rate_hz > 0 ? `${msg.rate_hz} Hz` : '—'}</td>
               <td class="col-rate">{msg.last_seen_s.toFixed(1)}s</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {:else if tab === 'modes'}
+    <!-- The reader's own state (phase, unanswered count) is not exported — its log lines
+         ("AVAILABLE_MODES: …") carry it. -->
+    <div class="perf-tab">
+      <div class="stat-group">
+        <span class="stat-label">{$t('debug.modes.vehicle')}</span>
+        <span class="stat-value">{$connection.fcInfo?.fc_variant ?? '—'} · {$autopilotSystem} / {$arduVehicleClass}</span>
+      </div>
+      <div class="stat-group">
+        <span class="stat-label">{$t('debug.modes.source')}</span>
+        <span class="stat-value">
+          {$fcModes ? $t('debug.modes.sourceFc', { values: { n: $fcModes.length } }) : $t('debug.modes.sourceStatic')}
+        </span>
+      </div>
+
+      <div class="perf-section">{$t('debug.modes.fcList')}</div>
+      <table class="debug-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-code">{$t('debug.modes.colNumber')}</th>
+            <th class="col-name">{$t('debug.modes.colFcName')}</th>
+            <th class="col-num">{$t('debug.modes.colNotSelectable')}</th>
+            <th class="col-name">{$t('debug.modes.colTailwindName')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each $fcModes ?? [] as m, i (i)}
+            <tr>
+              <td class="col-num">{i + 1}</td>
+              <td class="col-code">{m.customMode}</td>
+              <td class="col-name">{m.name}</td>
+              <td class="col-num">{yesNo((m.properties & FC_NOT_USER_SELECTABLE) !== 0)}</td>
+              <td class="col-name">{tailwindNameFor(m.customMode)}</td>
+            </tr>
+          {:else}
+            <tr><td class="empty-cell" colspan="5">{$t('debug.modes.noFcList')}</td></tr>
+          {/each}
+        </tbody>
+      </table>
+
+      <div class="perf-section">{$t('debug.modes.panel')}</div>
+      <table class="debug-table">
+        <thead>
+          <tr>
+            <th class="col-code">{$t('debug.modes.colNumber')}</th>
+            <th class="col-name">{$t('debug.modes.colTailwindName')}</th>
+            <th class="col-num">{$t('debug.modes.colStick')}</th>
+            <th class="col-num">{$t('debug.modes.colConfirm')}</th>
+            <th class="col-name">{$t('debug.modes.colStatus')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each fcModeRows as r (`${r.main}/${r.sub}/${r.status}`)}
+            <tr class:inactive={r.status !== 'offered' && r.status !== 'unknown'}>
+              <td class="col-code">{r.sub ? `${r.main}/${r.sub}` : r.main}</td>
+              <td class="col-name">{r.name}</td>
+              <td class="col-num">{yesNo(r.stick)}</td>
+              <td class="col-num">{yesNo(r.confirm)}</td>
+              <td class="col-name">{$t(`debug.modes.status.${r.status}`)}</td>
             </tr>
           {/each}
         </tbody>

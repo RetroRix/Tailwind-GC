@@ -9,6 +9,7 @@ import type { InavStats } from '$lib/stores/flightlogTypes';
 import { connection, connectionProtocol, fcLinkAlive, availablePorts, lastHotpluggedPort, bleDevices, detectedPlatformType } from '$lib/stores/connection';
 import { startTelemetryListeners, stopTelemetryListeners, resetTelemetry, setFcVariant } from '$lib/stores/telemetry';
 import { applyRelaysOnConnect, clearRelaysOnDisconnect } from '$lib/controllers/relayController';
+import { startFcModeListeners, clearFcModes } from '$lib/stores/fcModes';
 import { loadSafehomeConfig, clearSafehome } from '$lib/stores/safehome';
 import { loadGeozoneConfig, clearGeozones } from '$lib/stores/geozone';
 import { loadFenceConfig, clearFence } from '$lib/stores/fence';
@@ -156,6 +157,8 @@ export interface ConnectParams {
  * Connect to the flight controller via Tauri, update stores, start listeners.
  */
 export async function connectFC(params: ConnectParams): Promise<FcInfo> {
+  // Mode-list listener first, so an `available-modes` emit during the connect burst is not missed.
+  await startFcModeListeners();
   const info = await invoke<FcInfo>("connect", {
     protocol: params.protocolType,
     transportType: params.transportType,
@@ -234,6 +237,7 @@ export async function disconnectFC(baudRate: number): Promise<void> {
   clearRally();
   stopTelemetryListeners();
   resetTelemetry();
+  clearFcModes();
   connectionProtocol.set({ primary: '', secondary: null });
   fcLinkAlive.set(true);
   await invoke("disconnect");

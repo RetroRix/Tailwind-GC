@@ -14,6 +14,7 @@ import { autopilotSystem } from '$lib/stores/autopilotContext';
 import { arduVehicleClass, downloadArduMissionFromFc } from '$lib/stores/missionArdupilot';
 import { rcEngaged } from '$lib/stores/rcEngage';
 import { type MavMode, modesFor, guidedModeFor, matchActiveMode } from '$lib/helpers/mavModes';
+import { fcModes } from '$lib/stores/fcModes';
 
 // ── Feedback (COMMAND_ACK surfacing) ────────────────────────────────────────
 
@@ -153,10 +154,11 @@ export const stickModesUnlocked: Readable<boolean> = derived(
 /** Armed state from the unified arming flags (bit 2 = armed, matches the recorder convention). */
 export const isArmed: Readable<boolean> = derived(telemetry, (t) => (t.armingFlags & 0x04) !== 0);
 
-/** The FC's currently active mode (matched against the firmware/vehicle table), or undefined. */
+/** The FC's currently active mode (matched against the firmware/vehicle table, then the FC's own
+ *  reported list so an unknown mode shows the FC's name), or undefined. */
 export const activeMode: Readable<MavMode | undefined> = derived(
-  [telemetry, autopilotSystem, arduVehicleClass],
-  ([t, sys, cls]) => matchActiveMode(sys, cls, t.flightModeFlags),
+  [telemetry, autopilotSystem, arduVehicleClass, fcModes],
+  ([t, sys, cls, fc]) => matchActiveMode(sys, cls, t.flightModeFlags, fc),
 );
 
 // ── Commands ────────────────────────────────────────────────────────────────
@@ -181,15 +183,17 @@ export function disarm(force = false): Promise<boolean> {
 }
 
 /**
- * Take off to `altitude` (m). Guided takeoff requires the reposition-ready mode (GUIDED on ArduPilot)
- * and an already-armed vehicle. We switch to GUIDED first (ArduPilot) so the FC accepts NAV_TAKEOFF;
- * if the vehicle isn't armed the FC still rejects it and the error surfaces. PX4 takes off via the
- * NAV_TAKEOFF command directly.
+ * Take off to `altitude` (m) via NAV_TAKEOFF (multirotor / QuadPlane / PX4; a plain ArduPlane uses
+ * `planeTakeoff`). Guided takeoff requires the reposition-ready mode (GUIDED on ArduPilot) and an
+ * already-armed vehicle. On ArduPilot we switch to GUIDED first, when the vehicle offers it (with
+ * the FC's mode list: only a GUIDED the FC lists as selectable), so the FC accepts NAV_TAKEOFF; if
+ * the vehicle isn't armed — or has no GUIDED — the FC rejects the takeoff and the error surfaces.
+ * PX4 takes off via the NAV_TAKEOFF command directly.
  */
 export async function takeoff(altitude: number): Promise<boolean> {
   guidedTarget.set(null); // fresh flight phase — no carried-over Guided target
   if (get(autopilotSystem) === 'ardupilot') {
-    const g = guidedModeFor('ardupilot', get(arduVehicleClass));
+    const g = guidedModeFor('ardupilot', get(arduVehicleClass), get(fcModes));
     if (g && get(activeMode)?.key !== g.key) {
       try {
         await invoke('mav_set_mode', { main: g.main, sub: g.sub });
@@ -200,6 +204,23 @@ export async function takeoff(altitude: number): Promise<boolean> {
     }
   }
   return runCommand('takeoff', 'mav_takeoff', { altitude });
+}
+
+/**
+ * Plain ArduPlane take-off: switch to TAKEOFF mode. NAV_TAKEOFF is the QuadPlane VTOL take-off and
+ * fails on a plain plane, and the firmware never enters TAKEOFF by itself. Disarmed, the mode waits;
+ * once armed the motor runs up to take-off throttle (default parameters: about 0.2 s after arming,
+ * no throw detection) and the plane climbs to TKOFF_ALT, then loiters. `mode` is the table's
+ * TAKEOFF entry.
+ */
+export async function planeTakeoff(mode: MavMode): Promise<boolean> {
+  const ok = await runCommand('takeoff', 'mav_set_mode', { main: mode.main, sub: mode.sub });
+  if (ok) {
+    guidedActive.set(false);
+    guidedTarget.set(null);
+    headingOverrideActive = false;
+  }
+  return ok;
 }
 
 export function land(): Promise<boolean> {
@@ -349,7 +370,8 @@ export async function setGuided(on: boolean): Promise<boolean> {
     guidedActive.set(false);
     return true;
   }
-  const mode = guidedModeFor(get(autopilotSystem), get(arduVehicleClass));
+  // With the FC's own mode list, only a GUIDED the FC offers — none means no Guided for this vehicle.
+  const mode = guidedModeFor(get(autopilotSystem), get(arduVehicleClass), get(fcModes));
   if (!mode) {
     lastFeedback.set({ action: 'guided', ok: false, message: 'No guided mode for this vehicle', ts: Date.now() });
     return false;

@@ -183,6 +183,20 @@ fn handler_loop(
     const MAX_PARAM_PROBES: u8 = 6;
     const PARAM_PROBE_INTERVAL: Duration = Duration::from_millis(1200);
 
+    // FC-reported mode list (AVAILABLE_MODES, ArduPilot 4.7+ — see modes.rs): the enumerator asks
+    // index by index once the connect burst is through; a complete list is emitted to the frontend
+    // as `available-modes`. Firmware that never answers is not asked again. ArduPilot only — the
+    // handler's single vehicle is the connected FC (upstream keys this per vehicle; Tailwind is
+    // single-vehicle, so one enumerator for the link's autopilot).
+    let mut mode_enum: Option<super::modes::ModeEnumerator> = if is_ardupilot {
+        Some(super::modes::ModeEnumerator::new(fc_sysid, Instant::now()))
+    } else {
+        None
+    };
+    // A vehicle heard again after this much silence gets its mode list re-read (it may have rebooted
+    // into a different mode set).
+    const MODE_REREAD_AFTER_SILENCE: Duration = Duration::from_secs(5);
+
     let gcs_header = codec::gcs_header();
 
     // RC override streaming (ArduPilot, docs/active/MAVLINK_RC_CONTROL.md §3). We stream
@@ -331,6 +345,16 @@ fn handler_loop(
             last_param_probe = Instant::now();
         }
 
+        // 2c. Mode-list enumeration: ask for the next AVAILABLE_MODES index when due. Paused while a
+        // mission operation owns the link, so the requests can't interleave with a mission transfer.
+        if mission_fwd.is_none() {
+            if let Some(index) = mode_enum.as_mut().and_then(|e| e.poll(Instant::now())) {
+                let msg = super::modes::request_msg(fc_sysid, fc_compid, index);
+                send_mav_frame(&mut *transport, &gcs_header, &mut seq, &msg,
+                    &mut debug_tracker, &mut link_stats, &recorder);
+            }
+        }
+
         // 3. Read incoming bytes and parse MAVLink frames
         match transport.read_bytes(&mut buf) {
             Ok(0) => {}
@@ -343,11 +367,17 @@ fn handler_loop(
                     // sysid (a SIYI air unit, a gimbal, CAN nodes) keep heartbeating while the FC
                     // itself may be gone — see the HEARTBEAT component gate below.
                     if frame.header.component_id == fc_compid {
+                        let silent_for = last_fc_rx.elapsed();
                         last_fc_rx = Instant::now();
                         if stall_warned {
                             stall_warned = false;
                             log::warn!("Link recovered — MAVLink frames from the FC resumed");
                             let _ = app_handle.emit("telemetry-fc-link", FcLinkAlive { alive: true });
+                            if silent_for >= MODE_REREAD_AFTER_SILENCE
+                                && mode_enum.as_mut().is_some_and(|e| e.restart(Instant::now()))
+                            {
+                                log::info!("AVAILABLE_MODES: FC heard again after a stall — reading the mode list again");
+                            }
                         }
                     }
                     debug_tracker.on_rx(frame.message.message_id(), frame.raw_bytes.len());
@@ -395,6 +425,26 @@ fn handler_loop(
                             }
                             continue;
                         }
+                    }
+
+                    // AVAILABLE_MODES / _MONITOR feed the mode-list enumerator; they are consumed
+                    // here (validated to the autopilot component) and never dispatched as telemetry.
+                    match frame.message {
+                        MavMessage::AVAILABLE_MODES(ref m) => {
+                            if super::modes::from_autopilot(&frame.header, fc_sysid, fc_compid) {
+                                if let Some(list) = mode_enum.as_mut().and_then(|e| e.on_mode(m)) {
+                                    let _ = app_handle.emit("available-modes", super::modes::AvailableModesEvent { modes: &list });
+                                }
+                            }
+                            continue;
+                        }
+                        MavMessage::AVAILABLE_MODES_MONITOR(ref m) => {
+                            if super::modes::from_autopilot(&frame.header, fc_sysid, fc_compid) {
+                                if let Some(e) = mode_enum.as_mut() { e.on_monitor(m.seq); }
+                            }
+                            continue;
+                        }
+                        _ => {}
                     }
 
                     // Only the autopilot component drives mode + armed. Peripherals sharing the FC's

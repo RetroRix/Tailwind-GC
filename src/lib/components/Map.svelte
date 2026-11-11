@@ -42,7 +42,7 @@
   import { autopilotSystem } from "$lib/stores/autopilotContext";
   import { arduMission, arduVehicleClass, arduEditMode } from "$lib/stores/missionArdupilot";
   import { activeSurveyPattern, surveyDraw, addSurveyDrawPoint } from "$lib/stores/surveyPattern.svelte";
-  import { guidedActive, guidedTarget, repositionTo, activeMode, guidedParams, fcLoiterRadius, type GuidedParams } from "$lib/controllers/vehicleControl";
+  import { guidedActive, guidedTarget, repositionTo, activeMode, guidedParams, fcLoiterRadius, lastFeedback, type GuidedParams } from "$lib/controllers/vehicleControl";
   import GuidedTargetForm from "$lib/components/control/GuidedTargetForm.svelte";
   import { cmdHasLocation } from "$lib/helpers/arduCommandCatalog";
   import { connection } from "$lib/stores/connection";
@@ -1227,7 +1227,10 @@
       props: {
         lat, lon: lng, multirotor,
         onfly: (flat: number, flon: number, p: GuidedParams) => {
-          void repositionTo(flat, flon, p);
+          // Re-checked at send time: the popup can outlive what armed it — the FC left its guided
+          // mode, or the vehicle is now a Sub (reconnect). Say so instead of dropping the click silently.
+          if (guidedClickArmed()) void repositionTo(flat, flon, p);
+          else lastFeedback.set({ action: 'reposition', ok: false, message: $t('control.guidedGone'), ts: Date.now() });
           // Defer the close so the originating click finishes bubbling first (the popup is still in
           // the DOM, so the in-popup guard above suppresses a stray second popup).
           setTimeout(closeGuidedPopup, 0);
