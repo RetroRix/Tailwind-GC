@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#whats-new-in-tailwind-v110-tailwind7" class="md-skip">
+        <a href="#whats-new-in-tailwind-v110-tailwind8" class="md-skip">
           Skip to content
         </a>
       
@@ -332,6 +332,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.8
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind7" class="md-nav__link">
@@ -1766,6 +1777,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.8
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind7" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1908,6 +1930,31 @@ right next to the map.</p>
 <p>Tailwind Ground Control flying in 3D mode.</p>
 </figcaption>
 </figure>
+<h2 id="whats-new-in-tailwind-v110-tailwind8">What's new in Tailwind v1.1.0-tailwind.8<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind8" title="Permanent link">&para;</a></h2>
+<p>The upstream 1.0.2 maintenance wave, ported — no flight is lost to a failed save, and rover,
+boat and submarine modes are finally named (and sent) correctly:</p>
+<ul>
+<li><strong>A flight whose save fails is kept, not dropped</strong> — saving a recorded flight used to
+    consume the session: if the write to the logbook failed (database busy with a long import,
+    disk full), the flight silently vanished. Now a failed save keeps the recording and
+    protects its temp file; the post-flight summary shows the error with a <strong>Retry</strong> button.
+    The same protection covers the "connection lost" save, the startup recovery prompts, and
+    the automatic save on re-arm. (Porting this also surfaced and fixed a bug in Tailwind's
+    own crash recovery: summarizing a recovered session could fail against its temp database.)</li>
+<li><strong>ArduSub gets its own mode table; Rover / Boat / Sub modes named correctly</strong> — surface
+    and underwater vehicles were classified with the Copter mode table (a Rover <em>Hold</em> showed
+    as "Guided", a Sub <em>Manual</em> as "Avoid ADSB"), and the Sub's mode buttons sent Rover
+    numbers. Mode names, the mode grid and the S.Port passthrough decoder now follow the
+    actual vehicle. Copter also gains mode 28 <em>Turtle</em>; Plane gains 16 <em>Initialising</em> and
+    26 <em>Autoland</em>.</li>
+<li><strong><code>.tlog</code> import and Log Viewer follow the first autopilot only</strong> — on a telemetry link
+    shared by several vehicles, only the first autopilot's frames make up the flight; another
+    vehicle's positions and attitudes no longer interleave into one garbled track.</li>
+<li><strong>Dialog fix</strong> — confirm dialogs (vehicle delete, survey truncation) no longer show two
+    <strong>Cancel</strong> buttons.</li>
+</ul>
+<p>Get it: <strong><a href="https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.8">Windows</a></strong> ·
+<strong><a href="https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.8-android.1">Android</a></strong></p>
 <h2 id="whats-new-in-tailwind-v110-tailwind7">What's new in Tailwind v1.1.0-tailwind.7<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind7" title="Permanent link">&para;</a></h2>
 <p>The rivals release — the best ideas from the other ground stations, built into Tailwind:</p>
 <ul>
