@@ -17,6 +17,31 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.9
+
+Rick's three picks from upstream development, backported — the mode panel now shows what your
+flight controller really offers, and Blackbox import loses its training wheels:
+
+-   **The Control panel offers the modes your ArduPilot reports** — on ArduPilot 4.7+ the
+    flight controller reports its own mode list, and the panel builds its grid from it: modes
+    your firmware doesn't have disappear, custom and newer modes show up. Fixed-wing planes
+    get a dedicated **Takeoff** button, QuadPlane gets its full landing set (QRTL, QLand,
+    Loiter-to-Q-Land, AutoLand), and confirmation modes arm by hold-to-confirm. **Pinned modes
+    keep working** — a pin for a mode the FC doesn't report drops out; with no reported list
+    the built-in table is used exactly as before. The Debug Monitor gains an **FC modes** tab
+    showing the reported list next to the panel's table. Older firmware and INAV unaffected.
+-   **INAV Blackbox logs decode natively** — no more downloading the external
+    `blackbox_decode` helper: the decoder is built in, imports are faster, and Blackbox logs
+    now import on mobile too. The external tool remains as a fallback via the
+    `TAILWIND_BLACKBOX_LEGACY=1` environment variable (the Settings decoder row only appears
+    in that mode). The Log Viewer's record store is unchanged.
+-   **Small stuff** — the second battery widget reads **BAT 2**; an empty network host field
+    shows a faded **localhost** hint, and connecting with it empty (or typing "localhost")
+    connects to this machine — handy for SITL.
+
+Get it: **[Windows](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.9)** ·
+**[Android](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.9-android.1)**
+
 ## What's new in Tailwind v1.1.0-tailwind.8
 
 The upstream 1.0.2 maintenance wave, ported — no flight is lost to a failed save, and rover,
