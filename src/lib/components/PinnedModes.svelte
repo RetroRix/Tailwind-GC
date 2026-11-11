@@ -5,22 +5,25 @@
 
 <!-- Tailwind pinned flight modes — the pilot's chosen modes as one-tap buttons in the status
      bar (TitanPlanner-style). The pin list lives in settings (`pinnedModes`, edited from the
-     Control panel's Modes section); what's rendered is pins ∩ the connected vehicle's
-     non-stick modes, so the same list works across airframes. Mode switches go through the
+     Control panel's Modes section); what's rendered is pins ∩ the modes the connected vehicle
+     actually offers — the same `offeredModes` list the Control panel's grid uses, so with an
+     FC-reported mode list (ArduPilot 4.7+) a pinned mode the FC doesn't have quietly drops out,
+     and without one the static table applies exactly as before. Mode switches go through the
      same vehicleControl.setMode path as the Control panel. Renders nothing when no MAVLink
      vehicle is connected or no pins apply. -->
 <script lang="ts">
   import { settings } from '$lib/stores/settings';
   import { autopilotSystem } from '$lib/stores/autopilotContext';
   import { arduVehicleClass } from '$lib/stores/missionArdupilot';
-  import { modesFor } from '$lib/helpers/mavModes';
+  import { offeredModes } from '$lib/helpers/mavModes';
+  import { fcModes } from '$lib/stores/fcModes';
   import { controlAvailable, activeMode, setMode } from '$lib/controllers/vehicleControl';
 
   const sys = $derived($autopilotSystem);
   const cls = $derived($arduVehicleClass);
   const pins = $derived($settings.pinnedModes ?? []);
   const pinned = $derived(
-    modesFor(sys, cls).filter((m) => !m.stick && pins.includes(m.key))
+    offeredModes(sys, cls, $fcModes).filter((m) => !m.stick && pins.includes(m.key))
   );
   const activeKey = $derived($activeMode?.key ?? '');
 </script>

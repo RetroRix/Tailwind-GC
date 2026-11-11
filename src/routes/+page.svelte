@@ -8,7 +8,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { open, save } from "@tauri-apps/plugin-dialog";
-  import { connection, availablePorts, bleDevices, defaultNetPort, lastHotpluggedPort } from "$lib/stores/connection";
+  import { connection, availablePorts, bleDevices, defaultNetPort, netHostOrLocal, lastHotpluggedPort } from "$lib/stores/connection";
   import type { FcInfo, PortInfo, BleDeviceInfo, TransportType, ProtocolType } from "$lib/stores/connection";
   import { settings } from "$lib/stores/settings";
   import { isAndroid, isMobile, isTablet, isPhone as isPhoneDevice, hasSerialPorts, logPlayerWidth } from "$lib/platform";
@@ -82,7 +82,7 @@
   import { batteryManagerOpen, batteryManagerCreateSerial, normalizeSerial } from '$lib/stores/batteryManager';
   import { vehicleManagerOpen, vehicleManagerCreateCraft, vehicleManagerSelectedId } from '$lib/stores/vehicleManager';
   import type { BlackboxImportStatus } from '$lib/stores/flightlog';
-  import { missionDbForFlight, flightLoggedWpCount, missionDbSave, flightLinkMission, missionDbGeocode, flightSetBatterySerial, updateFlightNotes, getFlight, flightlogCommitPending, flightlogDiscardPending, flightlogContinuePending, scanOrphanSessions, recoverDiscard, recoverSaveIncomplete, recoverContinue, batteryDbFindBySerial, batteryDbAddUsage, vehicleDbFindByCraftName, blackboxDecoderAvailable, downloadBlackboxDecode, hiresInfo, hiresParse, hiresSample, hiresDrop, hiresCleanup, scratchDir, scratchClear } from '$lib/stores/flightlog';
+  import { missionDbForFlight, flightLoggedWpCount, missionDbSave, flightLinkMission, missionDbGeocode, flightSetBatterySerial, updateFlightNotes, getFlight, flightlogCommitPending, flightlogDiscardPending, flightlogContinuePending, scanOrphanSessions, recoverDiscard, recoverSaveIncomplete, recoverContinue, batteryDbFindBySerial, batteryDbAddUsage, vehicleDbFindByCraftName, blackboxLegacyMode, blackboxDecoderAvailable, downloadBlackboxDecode, hiresInfo, hiresParse, hiresSample, hiresDrop, hiresCleanup, scratchDir, scratchClear } from '$lib/stores/flightlog';
   import EndFlightDialog from "$lib/components/logbook/EndFlightDialog.svelte";
   import type { EndFlightStats } from "$lib/components/logbook/EndFlightDialog.svelte";
   import RecoveryPrompt from "$lib/components/logbook/RecoveryPrompt.svelte";
@@ -454,7 +454,7 @@
   let selectedProtocol = $state<ProtocolType>(isMobile ? 'mavlink' : 'msp');
   let selectedPort = $state("");
   let selectedBaud = $state(115200);
-  let tcpHost = $state("192.168.1.1");
+  let tcpHost = $state("");
   /** Port a fresh profile starts on: the MAVLink GCS convention on mobile (Wi-Fi links only),
    *  INAV SITL's MSP port on the desktop. */
   const INITIAL_NET_PORT = isMobile ? 14550 : 5761;
@@ -1826,10 +1826,16 @@
     return p.split(/[\\/]/).pop() ?? p;
   }
 
-  /** INAV blackbox text logs need the external `blackbox_decode`. If it's missing, offer to fetch it
-   *  from GitHub (Windows auto-download) and report progress on the shared import progress bar.
-   *  Returns true when the decoder is available afterwards. */
+  /** INAV blackbox text logs are decoded by the built-in decoder; only the legacy switch
+   *  (`KITE_BLACKBOX_LEGACY=1`) needs the external `blackbox_decode`. If it's missing then, offer to
+   *  fetch it from GitHub and report progress on the shared import progress bar.
+   *  Returns true when the import can go ahead. */
   async function ensureBlackboxDecoder(): Promise<boolean> {
+    try {
+      if (!(await blackboxLegacyMode())) return true;
+    } catch {
+      return true; // the probe cannot tell → the default, built-in decoder
+    }
     try {
       if (await blackboxDecoderAvailable()) return true;
     } catch {
@@ -1854,16 +1860,16 @@
     }
   }
 
-  /** The INAV blackbox formats — the only ones that need the external `blackbox_decode`. Everything
-   *  else the importer accepts (.kflight archives, .rawmsp, .tlog, ArduPilot .bin, PX4 .ulg) is parsed
-   *  in-process by the Rust backend and works on every platform. */
+  /** The INAV blackbox formats. Like everything else the importer accepts (.kflight archives, .rawmsp,
+   *  .tlog, ArduPilot .bin, PX4 .ulg) they are parsed in-process by the Rust backend; only the legacy
+   *  switch (`KITE_BLACKBOX_LEGACY=1`) sends them through the external `blackbox_decode`. */
   const BLACKBOX_EXTS = /\.(txt|bbl|bfl)$/i;
   /** Extensions offered in the file picker / accepted from a drop. Mobile keeps what the device can
    *  produce itself or receive from a desktop — .kflight archives and the raw links (.rawmsp / .tlog)
-   *  — and drops the rest: the three INAV blackbox formats need `blackbox_decode`, a separate native
-   *  executable neither mobile OS allows to run (the backend refuses too — decoder_impossible), and
-   *  ArduPilot dataflash (.bin) and PX4 ULog (.ulg) grow to tens or hundreds of megabytes for a tablet database that never
-   *  archives originals (ANDROID_SUPPORT.md §4). Recording, replay and export are unaffected. */
+   *  — and drops the onboard logs: INAV blackbox, ArduPilot dataflash (.bin) and PX4 ULog (.ulg) grow
+   *  to tens or hundreds of megabytes for a tablet database that never archives originals
+   *  (ANDROID_SUPPORT.md §4). This gate is the frontend's alone — the backend would decode a blackbox
+   *  log on mobile too. Recording, replay and export are unaffected. */
   const IMPORT_EXTS = isMobile
     ? ['kflight', 'rawmsp', 'tlog']
     : ['txt', 'bbl', 'bfl', 'bin', 'ulg', 'kflight', 'rawmsp', 'tlog'];
@@ -1872,8 +1878,8 @@
    *  failures (with the per-importer reason) are collected and surfaced together. */
   async function importFiles(files: string[]) {
     // Second line of defence for mobile: the picker no longer offers blackbox formats, but a file can
-    // still arrive by another route (a drop, a picker that ignores the filter). Say why rather than
-    // letting it fail somewhere in the decoder lookup.
+    // still arrive by another route (a drop, a picker that ignores the filter). Turn it away here with
+    // a message — nothing behind this point stops it.
     if (isMobile) {
       const rejected = files.filter((f) => BLACKBOX_EXTS.test(f));
       files = files.filter((f) => !BLACKBOX_EXTS.test(f));
@@ -1884,7 +1890,8 @@
       }
       if (files.length === 0) return;
     }
-    // INAV blackbox text logs (.txt/.bbl/.bfl) need blackbox_decode — ensure it once before the batch.
+    // INAV blackbox text logs (.txt/.bbl/.bfl): in legacy mode they need blackbox_decode — ensure it
+    // once before the batch (a no-op with the built-in decoder).
     if (files.some((f) => BLACKBOX_EXTS.test(f)) && !(await ensureBlackboxDecoder())) {
       return;
     }
@@ -2675,10 +2682,6 @@
       errorMsg = $t('connection.noPortSelected');
       return;
     }
-    if ((selectedTransport === 'tcp' || selectedTransport === 'udp') && !tcpHost) {
-      errorMsg = $t('connection.noHostSpecified');
-      return;
-    }
     if (selectedTransport === 'ble' && !selectedBleDevice) {
       errorMsg = $t('connection.noBleDeviceSelected');
       return;
@@ -2698,7 +2701,8 @@
         transportType: selectedTransport,
         port: selectedTransport === 'serial' ? selectedPort : undefined,
         baudRate: selectedTransport === 'serial' ? selectedBaud : undefined,
-        host: (selectedTransport === 'tcp' || selectedTransport === 'udp') ? tcpHost : undefined,
+        // A blank host is this machine; `lastHost` above keeps what was typed, so it stays blank.
+        host: (selectedTransport === 'tcp' || selectedTransport === 'udp') ? netHostOrLocal(tcpHost) : undefined,
         tcpPort: (selectedTransport === 'tcp' || selectedTransport === 'udp') ? tcpPort : undefined,
         bleDeviceId: selectedTransport === 'ble' ? selectedBleDevice : undefined,
         attitudeRateHz,

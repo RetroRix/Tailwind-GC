@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Marc Hoffmann (b14ckyy)
 
-//! On-demand download of INAV's `blackbox_decode` — Kite's one external runtime dependency.
+//! On-demand download of INAV's `blackbox_decode`. Since the built-in decoder (`flightlog/inav/`) it
+//! is only used with the legacy switch `TAILWIND_BLACKBOX_LEGACY=1` (kept as a fallback while the built-in
+//! decoder proves itself in the field).
 //!
 //! The decoder is intentionally NOT bundled, so it can be updated independently when a new INAV
 //! version changes the log format. When it's missing, this module fetches it from the
@@ -18,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 const REPO: &str = "iNavFlight/blackbox-tools";
 const RELEASES_PAGE: &str = "https://github.com/iNavFlight/blackbox-tools/releases";
-const HTTP_USER_AGENT: &str = "Kite-GC blackbox-decode-fetch";
+const HTTP_USER_AGENT: &str = "Tailwind-GC blackbox-decode-fetch";
 
 /// Filename of the decoder for the current platform.
 pub fn binary_name() -> &'static str {
