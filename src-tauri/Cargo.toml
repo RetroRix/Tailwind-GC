@@ -23,6 +23,8 @@ tauri-build = { version = "2", features = [] }
 [dev-dependencies]
 # Full tokio runtime for async integration tests (#[tokio::test]); not in the release build
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+# Blackbox comparison-test oracle hashing (upstream parity; test builds only).
+sha1 = "0.10"
 
 [dependencies]
 base64 = "0.22"

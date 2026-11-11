@@ -12,6 +12,7 @@ pub mod decoder;
 pub mod exchange;
 pub mod geocode;
 pub mod hires;
+mod inav;
 pub mod msp_raw_logger;
 pub mod raw_import;
 pub mod recorder;
