@@ -1020,10 +1020,14 @@ fn build_tlog_dataset(
     })
 }
 
-/// Filter HEARTBEATs down to the locked autopilot sender (same rule as the raw importer):
-/// the first non-GCS heartbeat that identifies an autopilot locks (system, component);
-/// heartbeats from other senders are dropped before dataset building so a camera/gimbal
-/// heartbeat cannot flap the mode timeline. Non-heartbeat frames pass through untouched.
+/// Filter the frame stream down to the locked autopilot's vehicle (same rule as the raw
+/// importer): the first non-GCS heartbeat that identifies an autopilot locks (system,
+/// component); heartbeats from other senders are dropped before dataset building so a
+/// camera/gimbal heartbeat cannot flap the mode timeline, and — upstream #230 — once the
+/// autopilot is locked, non-heartbeat frames from another *system id* are dropped too, so a
+/// tlog recorded on a link shared by several vehicles does not merge the other vehicle's
+/// telemetry into this flight's track and series. Frames from the locked system id pass
+/// regardless of component (peripherals and a second GPS belong to the same flight).
 fn lock_autopilot_heartbeats(frames: Vec<(f64, (u8, u8), MavMessage)>) -> Vec<(f64, MavMessage)> {
     let mut fc_id: Option<(u8, u8)> = None;
     let mut out = Vec::with_capacity(frames.len());
@@ -1035,6 +1039,10 @@ fn lock_autopilot_heartbeats(frames: Vec<(f64, (u8, u8), MavMessage)>) -> Vec<(f
                 fc_id = Some(sender);
             }
             if fc_id != Some(sender) {
+                continue;
+            }
+        } else if let Some((sysid, _)) = fc_id {
+            if sender.0 != sysid {
                 continue;
             }
         }
@@ -1430,5 +1438,35 @@ mod tests {
     fn tlog_garbage_is_an_error_not_a_panic() {
         let junk = vec![0x99u8; 2048];
         assert!(parse_tlog_viewer(&junk, "junk.tlog", junk.len() as u64).is_err());
+    }
+
+    /// Upstream #230 applied to the viewer: once the first autopilot locks, a second
+    /// vehicle's frames are dropped; the locked vehicle's frames — including a peripheral
+    /// component on the same system id — pass through.
+    #[test]
+    fn tlog_lock_drops_a_second_vehicle() {
+        use ::mavlink::ardupilotmega::{MavModeFlag, MavState, ATTITUDE_DATA, HEARTBEAT_DATA};
+        let hb = |mavtype: MavType, autopilot: MavAutopilot| {
+            MavMessage::HEARTBEAT(HEARTBEAT_DATA {
+                custom_mode: 0,
+                mavtype,
+                autopilot,
+                base_mode: MavModeFlag::MAV_MODE_FLAG_SAFETY_ARMED,
+                system_status: MavState::MAV_STATE_ACTIVE,
+                mavlink_version: 3,
+            })
+        };
+        let att = || MavMessage::ATTITUDE(ATTITUDE_DATA::default());
+        let frames = vec![
+            (0.0, (1, 1), hb(MavType::MAV_TYPE_FIXED_WING, MavAutopilot::MAV_AUTOPILOT_ARDUPILOTMEGA)),
+            (1.0, (2, 1), hb(MavType::MAV_TYPE_QUADROTOR, MavAutopilot::MAV_AUTOPILOT_PX4)),
+            (2.0, (1, 1), att()),
+            (3.0, (2, 1), att()),
+            (4.0, (1, 154), att()), // a gimbal on the locked vehicle: same system id
+            (5.0, (2, 1), att()),
+        ];
+        let out = lock_autopilot_heartbeats(frames);
+        let times: Vec<f64> = out.iter().map(|(t, _)| *t).collect();
+        assert_eq!(times, vec![0.0, 2.0, 4.0]);
     }
 }
