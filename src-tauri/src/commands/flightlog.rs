@@ -1708,7 +1708,7 @@ mod tests {
         {
             let conn = db::open_temp_session(&temp_path).unwrap();
             db::write_session_meta(
-                &conn, &chrono::Utc::now(), "TestCraft", "INAV", "8.0.0", "TEST", 1, "MSP", None, None,
+                &conn, &chrono::Utc::now(), "TestCraft", "INAV", "8.0.0", "TEST", 1, None, "MSP", None, None,
             )
             .unwrap();
             conn.execute_batch(

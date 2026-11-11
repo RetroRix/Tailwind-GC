@@ -1324,36 +1324,39 @@ mod tests {
         }
     }
 
-    /// Crash recovery reads an orphan `.ktmp`, which has no `flights` table: summarizing it must
-    /// take the flight variant from `session_meta` instead of querying `flights`.
+    /// Crash recovery reads an orphan `.ktmp`, which has no `flights` row: summarizing it must
+    /// take the flight variant from `session_meta` instead of querying `flights`. Once the
+    /// recovered session is committed, the track read derives the INAV mode from the stored
+    /// flags. (Tailwind's db has no `read_flight_track(.., variant)`: `get_flight_track` picks
+    /// the mode table from the committed flight row, so the derivation is asserted post-commit.)
     #[test]
     fn summarize_temp_session_reads_a_ktmp_without_flights_table() {
-        let temp_path = std::env::temp_dir()
-            .join(format!("kite-recorder-test-recover-{}.ktmp", std::process::id()));
-        db::remove_temp_session(&temp_path);
+        let dir = test_dir("recover-ktmp");
+        let temp_path = dir.join("active_recover.ktmp");
         {
             let conn = db::open_temp_session(&temp_path).unwrap();
             db::write_session_meta(
-                &conn, &Utc::now(), "TestCraft", "INAV", "8.0.0", "TEST", 1, "MSP", None, None,
+                &conn, &Utc::now(), "TestCraft", "INAV", "8.0.0", "TEST", 1, None, "MSP", None, None,
             )
             .unwrap();
             db::insert_telemetry_batch(&conn, &[record(0), record(100)]).unwrap();
         }
 
-        let result = summarize_temp_session(temp_path.clone(), PathBuf::from("unused.db"));
-        let derived = db::open_temp_session(&temp_path)
-            .and_then(|conn| db::read_flight_track(&conn, 0, Some("INAV")));
-        db::remove_temp_session(&temp_path);
-
-        let (session, count) = result.expect("recovery must read the .ktmp");
+        let main_db = dir.join("main").join("flights.db");
+        let (session, count) = summarize_temp_session(temp_path.clone(), main_db.clone())
+            .expect("recovery must read the .ktmp");
         assert_eq!(count, 2);
         assert_eq!(session.flight.fc_variant, "INAV");
+
+        let flight_id = commit_pending_session(&session).expect("the recovered session commits");
+        let conn = db::open_database(&main_db).unwrap();
+        let derived = db::get_flight_track(&conn, flight_id).unwrap();
         let expected = crate::flightmode::classify_inav(1).primary;
-        let derived = derived.unwrap();
         assert_eq!(derived.len(), 2);
         for r in derived {
             assert_eq!(r.mode_primary.as_deref(), Some(expected.as_str()));
         }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn test_dir(name: &str) -> PathBuf {
@@ -1368,7 +1371,7 @@ mod tests {
         {
             let conn = db::open_temp_session(temp_path).unwrap();
             db::write_session_meta(
-                &conn, &Utc::now(), "TestCraft", "INAV", "8.0.0", "TEST", 1, "MSP", None, None,
+                &conn, &Utc::now(), "TestCraft", "INAV", "8.0.0", "TEST", 1, None, "MSP", None, None,
             )
             .unwrap();
             db::insert_telemetry_batch(&conn, &[record(0), record(100)]).unwrap();
