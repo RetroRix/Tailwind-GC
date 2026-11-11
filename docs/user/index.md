@@ -17,6 +17,33 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.8
+
+The upstream 1.0.2 maintenance wave, ported — no flight is lost to a failed save, and rover,
+boat and submarine modes are finally named (and sent) correctly:
+
+-   **A flight whose save fails is kept, not dropped** — saving a recorded flight used to
+    consume the session: if the write to the logbook failed (database busy with a long import,
+    disk full), the flight silently vanished. Now a failed save keeps the recording and
+    protects its temp file; the post-flight summary shows the error with a **Retry** button.
+    The same protection covers the "connection lost" save, the startup recovery prompts, and
+    the automatic save on re-arm. (Porting this also surfaced and fixed a bug in Tailwind's
+    own crash recovery: summarizing a recovered session could fail against its temp database.)
+-   **ArduSub gets its own mode table; Rover / Boat / Sub modes named correctly** — surface
+    and underwater vehicles were classified with the Copter mode table (a Rover *Hold* showed
+    as "Guided", a Sub *Manual* as "Avoid ADSB"), and the Sub's mode buttons sent Rover
+    numbers. Mode names, the mode grid and the S.Port passthrough decoder now follow the
+    actual vehicle. Copter also gains mode 28 *Turtle*; Plane gains 16 *Initialising* and
+    26 *Autoland*.
+-   **`.tlog` import and Log Viewer follow the first autopilot only** — on a telemetry link
+    shared by several vehicles, only the first autopilot's frames make up the flight; another
+    vehicle's positions and attitudes no longer interleave into one garbled track.
+-   **Dialog fix** — confirm dialogs (vehicle delete, survey truncation) no longer show two
+    **Cancel** buttons.
+
+Get it: **[Windows](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.8)** ·
+**[Android](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.8-android.1)**
+
 ## What's new in Tailwind v1.1.0-tailwind.7
 
 The rivals release — the best ideas from the other ground stations, built into Tailwind:
