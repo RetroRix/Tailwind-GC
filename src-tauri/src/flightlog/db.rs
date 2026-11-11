@@ -2146,13 +2146,19 @@ pub fn get_flight_track(
     // recording cannot, so the mode is derived here from the flags that are already in the row.
     // `active_flight_mode_flags` holds INAV's bitmask or MAVLink's custom_mode depending on the
     // source, which is what the variant selects between.
+    // A temp-session (.ktmp) database has no `flights` table at all — crash recovery reads an
+    // orphan's track through this function (summarize_temp_session), so a failed lookup means
+    // "no variant known" (the records come back as stored, without a derived mode), never an
+    // error. The telemetry read below still surfaces genuine database problems.
     let fc_variant: Option<String> = conn
         .query_row(
             "SELECT fc_variant FROM flights WHERE id = ?1",
             params![flight_id],
             |row| row.get(0),
         )
-        .optional()?;
+        .optional()
+        .ok()
+        .flatten();
 
     let mut stmt = conn.prepare(&format!(
         "SELECT id, {TELEMETRY_COLS} FROM telemetry_records \
