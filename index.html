@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#whats-new-in-tailwind-v110-tailwind10" class="md-skip">
+        <a href="#whats-new-in-tailwind-v110-tailwind11" class="md-skip">
           Skip to content
         </a>
       
@@ -332,6 +332,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.11
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind10" class="md-nav__link">
@@ -1827,6 +1838,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.11
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind10" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2002,6 +2024,25 @@ right next to the map.</p>
 <p>Tailwind Ground Control flying in 3D mode.</p>
 </figcaption>
 </figure>
+<h2 id="whats-new-in-tailwind-v110-tailwind11">What's new in Tailwind v1.1.0-tailwind.11<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind11" title="Permanent link">&para;</a></h2>
+<p>New: <strong>custom maps — offline tiles from a local folder</strong> (desktop). Point Tailwind at a folder
+in Settings → Map → Custom map location, and every subfolder becomes a map in the Tile Provider
+list, right after the built-in providers:</p>
+<ul>
+<li>Tiles use the usual <code>Z/X/Y</code> folder layout (.png / .jpg / .jpeg / .webp, any tile size —
+    256, 512, …) and work across the 2D map, the 3D globe, the mission preview and the video
+    backdrop — with no internet, and without going through the online tile cache.</li>
+<li>Gaps are filled gracefully: a missing tile is drawn from the nearest lower zoom, and one
+    level below a map's lowest level still draws from its children.</li>
+<li>Each map's covered area is framed on the map ("Show map area" in Settings), backed by a
+    background scan whose result is cached next to the tiles as <code>.kite-coverage.json</code>; the
+    Debug Monitor's Custom maps tab shows the scan details.</li>
+<li>Desktop only — the entries are hidden on Android. 3D terrain still needs internet; only
+    the imagery is local. MBTiles files are not supported yet.</li>
+</ul>
+<p>Full walkthrough: <a href="guides/custom-maps/">Custom maps</a>.</p>
+<p>Get it: <a href="https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.11">Windows + all platforms</a> ·
+<a href="https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.11-android.1">Android APK</a></p>
 <h2 id="whats-new-in-tailwind-v110-tailwind10">What's new in Tailwind v1.1.0-tailwind.10<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind10" title="Permanent link">&para;</a></h2>
 <p>Hotfix: <strong>the dark map works again.</strong> CARTO's basemap servers now answer every <em>CartoDB Dark
 Matter</em> tile with an "API KEY REQUIRED" image, so the dark map showed that text instead of a
