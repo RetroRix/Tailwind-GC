@@ -1433,11 +1433,9 @@
     });
     // Custom map "Show map area" (Settings): fly to the requested covered region — like
     // frameMission3d only in free look (follow / orbit / FPV own the camera), dropping a pending
-    // go-to-UAV jump. The fleet camera is left for free look the way it is left elsewhere (it only
-    // re-fits; it holds no lookAt transform).
+    // go-to-UAV jump.
     unsubCustomFocus3d = onCustomMapFocus((b) => {
       if (!viewer) return;
-      if (cameraMode === 'fleet') cameraMode = 'free';
       if (!isFreeLook()) return;
       pendingUavJump3d = false;
       viewer.camera.flyTo({ destination: Cesium.Rectangle.fromDegrees(b[0], b[1], b[2], b[3]), duration: 1.2 });
