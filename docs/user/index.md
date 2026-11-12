@@ -17,6 +17,25 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.10
+
+Hotfix: **the dark map works again.** CARTO's basemap servers now answer every *CartoDB Dark
+Matter* tile with an "API KEY REQUIRED" image, so the dark map showed that text instead of a
+map in every earlier version. The dark map is now **ESRI Dark Gray** — the same ESRI service
+as the other maps, with its label layer on top:
+
+-   If you had CartoDB Dark Matter selected, Tailwind switches you to ESRI Dark Gray by
+    itself — nothing to do.
+-   ESRI's dark tiles end at zoom level 16. Zoom in further and the map enlarges the zoom-16
+    tiles instead of pulling the provider's "Map data not yet available" placeholders (the
+    3D globe likewise stops at 16).
+
+Verified in the running app before release: the dark map renders El Paso with labels, and at
+maximum zoom it shows enlarged real tiles — no placeholder or "API KEY" tiles anywhere.
+
+Get it: **[Windows](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.10)** ·
+**[Android](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.10-android.1)**
+
 ## What's new in Tailwind v1.1.0-tailwind.9
 
 Rick's three picks from upstream development, backported — the mode panel now shows what your
