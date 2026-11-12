@@ -42,6 +42,7 @@ export const isTablet = isMobile && !isPhone;
  *  platform where the serial transport is genuinely absent — not hidden, absent. */
 export const hasSerialPorts = !isIOS;
 
+export const hasCustomMaps = !isMobile;
 /** True when running inside the macOS WebView (WKWebView) — used to mirror native window-control
  *  placement and drive the native-capture backend (AVFoundation). Excludes iPadOS, which shares the
  *  "Macintosh" user-agent. */
