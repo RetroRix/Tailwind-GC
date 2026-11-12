@@ -23,13 +23,14 @@ mission overlay.
 for one the first time you open 3D; paste it once (or add it later in **Settings → Data**) and the globe
 shows true elevation. Without a token the 3D view still works — you just don't get real-world terrain
 relief. The surface **imagery** is whatever map/tile provider you've chosen for the 2D map, draped over
-the terrain — on the desktop that can also be a **[custom map](custom-maps.md)** read from disk.
+the terrain — that can also be one of your **[custom online providers](custom-maps.md#custom-online-providers)** or, on
+the desktop, a **[custom map](custom-maps.md#custom-maps-from-a-folder)** read from disk.
 
 !!! warning "3D needs an internet connection"
     The terrain mesh is streamed live from Cesium and is **not** cached for offline use — this is a
     design limitation. In the field without a connection, the 2D map (whose tiles *are* cached) is the
     offline-capable view. See the [offline notes](../troubleshooting/connection.md). A
-    [custom map](custom-maps.md) supplies the 3D imagery from disk, but the terrain still needs the
+    [custom map](custom-maps.md#custom-maps-from-a-folder) supplies the 3D imagery from disk, but the terrain still needs the
     connection.
 
 ## The flight track in 3D

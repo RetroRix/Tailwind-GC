@@ -108,7 +108,7 @@ nav:
       - Airspace Manager: guides/airspace.md
       - 3D map: guides/map-3d.md
       - Offline Maps: guides/offline-maps.md
-      - Custom maps: guides/custom-maps.md
+      - Your own maps: guides/custom-maps.md
       - Relay & forwarding: guides/relay-and-forwarding.md
   - Reference:
       - Settings: reference/settings.md
