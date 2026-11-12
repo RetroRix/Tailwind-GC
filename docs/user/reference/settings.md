@@ -131,7 +131,7 @@ how smooth the instruments feel; the rest is automatic.
 | **Telemetry API** | Serve the live telemetry to other programs as JSON, read-only: a **TCP stream** (port 27300), an **HTTP snapshot** (port 27301) and/or **UDP subscribers** (port 27300, a client subscribes by sending the word `subscribe`); **Reachable on the network** switches the listeners from loopback to all interfaces; **Update rate** 1–10 Hz. The status line shows the endpoints and connected clients. Full contract: **[Telemetry API](telemetry-api.md)**. | Off |
 | **Radar tracking** | Master switch for foreign-vehicle radar, with per-system enables (**ADS-B**, **FormationFlight**). See **[Radar & ADS-B](../guides/radar-and-adsb.md)**. | On (ADS-B on) |
 | **Internet traffic (adsb.fi)** | Also fetch internet ADS-B traffic (adsb.fi open data) around your position and show it on the map and radar, tagged **NET** and merged with receiver traffic (a contact heard by a receiver wins). Polled at most every 10 s while on. Same switch as the adsb.fi row in the Radar panel. | Off |
-| **RC Control** | Enable GCS RC control (reveals the RC tool). See **[RC control](../guides/rc-control.md)**. | Off |
+| **RC Control** *(not on a phone)* | Enable GCS RC control (reveals the RC tool). See **[RC control](../guides/rc-control.md)**. | Off |
 
 **Airspeed** and **Wind** each request **extra messages** over the link, so they're separate toggles —
 switch them off to save bandwidth on a slow over-the-air radio, and on when the link can spare it.

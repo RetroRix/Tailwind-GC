@@ -12,7 +12,7 @@ GCS can never keep stale sticks flying.
     FC's failsafe). Tailwind adds guards, but **you** are flying.
 
 Open it from the **RC** tool on the navigation rail. It's available once you enable RC control in
-**Settings**, and is hidden on passive-telemetry links (there's no uplink to send on).
+**Settings**, is not offered on a phone, and is hidden on passive-telemetry links (there's no uplink to send on).
 
 ## The big picture: three very different systems
 

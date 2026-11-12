@@ -11,7 +11,7 @@
   import { connection, availablePorts, bleDevices, defaultNetPort, netHostOrLocal, lastHotpluggedPort } from "$lib/stores/connection";
   import type { FcInfo, PortInfo, BleDeviceInfo, TransportType, ProtocolType } from "$lib/stores/connection";
   import { settings } from "$lib/stores/settings";
-  import { isAndroid, isMobile, isTablet, isPhone as isPhoneDevice, hasSerialPorts, logPlayerWidth } from "$lib/platform";
+  import { isAndroid, isMobile, isTablet, isPhone as isPhoneDevice, hasSerialPorts, hasRcControl, logPlayerWidth } from "$lib/platform";
   import { isDebugMode } from "$lib/stores/debug";
   import { telemetry } from "$lib/stores/telemetry";
   import { startRadarListeners, configureRadar, setRadarCenter, setRadarNode } from "$lib/stores/radarTracking";
@@ -865,7 +865,8 @@
   const isTelemetryConnected = $derived(
     $connection.status === 'connected' && $connection.protocolType === 'telemetry'
   );
-  const rcTabAvailable = $derived($settings.rcControl.enabled && !isTelemetryConnected);
+  // Never on a phone, whatever the stored switch says — see `hasRcControl`.
+  const rcTabAvailable = $derived(hasRcControl && $settings.rcControl.enabled && !isTelemetryConnected);
   // On mobile there is no joystick, but the on-screen touch sticks (VirtualSticks) can drive RC over
   // Wi-Fi. RC is safety-relevant and barely field-tested, so touch control is opt-in behind the SAME
   // master switch as the joystick path (`rcTabAvailable`) rather than appearing whenever an FC is
