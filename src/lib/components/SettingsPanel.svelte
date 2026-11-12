@@ -25,7 +25,7 @@
   import { resetGcsManual, gcsManuallySet } from '$lib/stores/gcsLocation';
   import type { AppSettings, InterfaceSettings, RadarSettings, GcsMode, AirspaceSettings, AirspaceProvider, SystemMessagesLevel, LogLevel, RcControlSettings, TelemetryApiSettings, UpdateCheckSettings, UpdateCheckMode, DefaultProtocol, NtripSettings } from '$lib/stores/settings';
   import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
-  import { isAndroid, isMobile, hasCustomMaps } from '$lib/platform';
+  import { isAndroid, isMobile, hasCustomMaps, hasDbCompact } from '$lib/platform';
   import { blackboxDecoderVersion, blackboxLegacyMode, downloadBlackboxDecode } from '$lib/stores/flightlog';
   import type { TileCacheStats } from '$lib/cache/tileCache';
   import NumberStepper from '$lib/components/NumberStepper.svelte';
@@ -982,10 +982,13 @@
           <Button variant="standard" size="sm" onclick={onResetFlightLogPath}>{$t('settings.useDefault')}</Button>
         </div>
       </div>
-      <div class="s-row">
-        <span class="s-label" title={$t('settings.compactDbHint')}>{$t('settings.compactDb')}</span>
-        <Button variant="standard" size="sm" onclick={onCompactDb} title={$t('settings.compactDbHint')}>{$t('settings.compactDbBtn')}</Button>
-      </div>
+      <!-- Desktop only — see `hasDbCompact`. -->
+      {#if hasDbCompact}
+        <div class="s-row">
+          <span class="s-label" title={$t('settings.compactDbHint')}>{$t('settings.compactDb')}</span>
+          <Button variant="standard" size="sm" onclick={onCompactDb} title={$t('settings.compactDbHint')}>{$t('settings.compactDbBtn')}</Button>
+        </div>
+      {/if}
       {#if dbBackup}
         <div class="s-row" title={dbBackup.path}>
           <span class="s-label" title={$t('settings.dbBackupHint')}>
