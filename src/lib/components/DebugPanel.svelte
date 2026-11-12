@@ -29,7 +29,8 @@
   import { offeredModes, tableFor, type MavMode, type FcMode } from "$lib/helpers/mavModes";
   import { mjpegStats, uiJankMs, startJankProbe, stopJankProbe } from "$lib/controllers/mjpegSink";
   import { customMaps, customMapCoverage, customMapName, customTileDebug, type CustomTileDebugEntry } from "$lib/stores/customMaps";
-  import { customLayerZoom, normalizeTileSize } from "$lib/config/mapProviders";
+  import { normalizeTileSize } from "$lib/config/mapProviders";
+  import { customLayerZoom } from "$lib/helpers/tileTemplate";
 
   let { onclose }: { onclose: () => void } = $props();
 

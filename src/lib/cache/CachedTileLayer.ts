@@ -27,7 +27,8 @@ import {
   setRegionVerified,
   MIN_DETECT_ZOOM,
 } from "$lib/cache/tileAvailability";
-import { customLayerZoom, type CustomMapSpec, type MapProvider } from "$lib/config/mapProviders";
+import { isUserProviderId, type CustomMapSpec, type MapProvider } from "$lib/config/mapProviders";
+import { customLayerZoom, fillTileTemplate, userLayerZoom } from "$lib/helpers/tileTemplate";
 import { recordCustomTile } from "$lib/stores/customMaps";
 
 /** Backend answer for a custom-map tile that is not on disk (see `custom_maps::resolve_tile`). */
@@ -430,14 +431,10 @@ export const CachedTileLayer = L.TileLayer.extend({
    *  differs on a layer with a zoomOffset — the custom-map path converts first (_createCustomTile);
    *  the ESRI placeholder path (map zoom) never runs on such a layer. */
   _buildUrlAt(x: number, y: number, z: number): string {
+    // Treats z (Leaflet's coords.z, a MAP zoom) as the URL zoom: wrong for a layer with a zoomOffset
+    // (custom online providers with 512 / 128 px tiles) — never reach it from such a layer.
     const subs: string | string[] = this.options.subdomains ?? "abc";
-    const sub = subs[(x + y + z) % subs.length];
-    return this._url
-      .replace("{s}", sub)
-      .replace("{z}", String(z))
-      .replace("{x}", String(x))
-      .replace("{y}", String(y))
-      .replace("{r}", "");
+    return fillTileTemplate(this._url, z, x, y, subs);
   },
 });
 
@@ -454,9 +451,12 @@ export function cachedTileLayer(
 /** Extra layer options for a provider's base layer: a custom map gets its local-tile path, no
  *  attribution, and its tile pixel size with the matching level shift — `maxNativeZoom` = the map
  *  zoom showing its highest level (Leaflet scales the top level above it — over-zoom) and the
- *  seam-CSS class (`customLayerZoom`). Built-in providers get nothing. Spread AFTER the caller's
- *  own options. */
+ *  seam-CSS class (`customLayerZoom`). A user online map gets its tile pixel size with the matching
+ *  level shift and over-zooms the same way above its highest level, so a source with a low max
+ *  zoom does not cap the whole map (`userLayerZoom`). Built-in providers get nothing. Spread AFTER
+ *  the caller's own options. */
 export function providerLayerOptions(p: MapProvider): Partial<L.TileLayerOptions> & { customMap?: CustomMapSpec } {
+  if (isUserProviderId(p.id)) return userLayerZoom(p.maxZoom, p.tileSize ?? 256);
   if (!p.custom) return {};
   return { customMap: p.custom, ...customLayerZoom(p.custom.maxZoom, p.custom.tileSize), attribution: "" };
 }

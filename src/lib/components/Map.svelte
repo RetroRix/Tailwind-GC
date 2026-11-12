@@ -2544,9 +2544,10 @@
     width: 256.5px !important;
     height: 256.5px !important;
   }
-  /* An offline map with 512 / 128 px tiles (layer class from customLayerZoom; offline-map tiles are
-     canvases): the same half-pixel stretch at its own size — the 256.5 above would crop / gap its
-     tiles. Higher specificity (one class more) wins over the 256 rule, both being !important. */
+  /* A custom offline map or custom online provider with 512 / 128 px tiles (layer class from
+     customLayerZoom / userLayerZoom): the same half-pixel stretch at its own size — the 256.5
+     above would crop / gap its tiles. Higher specificity (one class more) wins over the 256 rule,
+     both being !important. */
   :global(.map.tile-overlap .kite-tiles-512 img.leaflet-tile),
   :global(.map.tile-overlap .kite-tiles-512 canvas.leaflet-tile) {
     width: 512.5px !important;
@@ -2580,8 +2581,8 @@
     width: 257px !important;
     height: 257px !important;
   }
-  /* The same full-pixel stretch for an offline map with 512 / 128 px tiles (see the tile-overlap
-     counterparts above). */
+  /* The same full-pixel stretch for a custom offline map or custom online provider with
+     512 / 128 px tiles (see the tile-overlap counterparts above). */
   :global(.map.tile-snap .kite-tiles-512 .leaflet-tile) {
     width: 513px !important;
     height: 513px !important;

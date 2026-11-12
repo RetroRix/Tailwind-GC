@@ -12,8 +12,9 @@
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { t, locale } from 'svelte-i18n';
   import { SUPPORTED_LOCALES } from '$lib/i18n';
-  import { MAP_PROVIDERS, getProviderById, isCustomProviderId } from '$lib/config/mapProviders';
+  import { MAP_PROVIDERS, getProviderById, isCustomProviderId, userProviderId } from '$lib/config/mapProviders';
   import { settings } from '$lib/stores/settings';
+  import UserMapsDialog from '$lib/components/UserMapsDialog.svelte';
   import {
     customMaps, ensureCustomMapsLoaded, chooseCustomMapsFolder, resetCustomMapsFolder, rescanCustomMaps,
     focusCustomMap, customMapName,
@@ -389,9 +390,14 @@
    *  falls back like any unknown id. A custom id waits for the first listing instead of flashing it. */
   const providerSelectValue = $derived.by(() => {
     const listed = $customMaps;
+    // A deleted user online map falls back too: re-resolve after every list change. The registry is
+    // current by then — the user-map store's settings subscriber (registered at import) runs inside the
+    // store write itself, before this derived is re-read.
+    void $settings.userMapProviders;
     if (!listed.loaded && isCustomProviderId(mapProvider)) return mapProvider;
     return getProviderById(mapProvider).id;
   });
+  let userMapsOpen = $state(false);
   const activeCustomMap = $derived.by(() => {
     void $customMaps; // re-resolve after every listing
     return customMapName(mapProvider);
@@ -498,6 +504,11 @@
         <label class="s-label" for="map-provider">{$t('settings.tileProvider')}</label>
         <select id="map-provider" class="s-select" value={providerSelectValue} onchange={handleMapProviderChange}>
           {#each MAP_PROVIDERS as p}<option value={p.id}>{p.label}</option>{/each}
+          {#if $settings.userMapProviders.length > 0}
+            <optgroup label={$t('settings.userMaps.group')}>
+              {#each $settings.userMapProviders as m (m.id)}<option value={userProviderId(m)}>{m.name}</option>{/each}
+            </optgroup>
+          {/if}
           {#if hasCustomMaps && $customMaps.providers.length > 0}
             <!-- ▦ marks a custom (local tile folder) map; a <select> option can hold text only. -->
             <optgroup label={$t('settings.customMaps')}>
@@ -505,6 +516,13 @@
             </optgroup>
           {/if}
         </select>
+      </div>
+      <div class="s-row">
+        <span class="s-label" title={$t('settings.userMaps.rowHint')}>{$t('settings.userMaps.row')}</span>
+        <div class="s-loc">
+          <span class="s-loc-coords">{$t('settings.userMaps.count', { values: { count: $settings.userMapProviders.length } })}</span>
+          <Button variant="standard" size="sm" icon="edit" onclick={() => (userMapsOpen = true)}>{$t('settings.userMaps.manage')}</Button>
+        </div>
       </div>
       {#if hasCustomMaps}
         <div class="s-row s-row-stack">
@@ -1103,6 +1121,9 @@
      here the overlay covers the whole panels layer. -->
 {#if showLogPicker}
   <LogFilePicker files={logFiles} onPick={sharePickedLog} onClose={() => (showLogPicker = false)} />
+{/if}
+{#if userMapsOpen}
+  <UserMapsDialog onClose={() => (userMapsOpen = false)} />
 {/if}
 
 <style>
