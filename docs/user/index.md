@@ -17,6 +17,28 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.11
+
+New: **custom maps — offline tiles from a local folder** (desktop). Point Tailwind at a folder
+in Settings → Map → Custom map location, and every subfolder becomes a map in the Tile Provider
+list, right after the built-in providers:
+
+-   Tiles use the usual `Z/X/Y` folder layout (.png / .jpg / .jpeg / .webp, any tile size —
+    256, 512, …) and work across the 2D map, the 3D globe, the mission preview and the video
+    backdrop — with no internet, and without going through the online tile cache.
+-   Gaps are filled gracefully: a missing tile is drawn from the nearest lower zoom, and one
+    level below a map's lowest level still draws from its children.
+-   Each map's covered area is framed on the map ("Show map area" in Settings), backed by a
+    background scan whose result is cached next to the tiles as `.kite-coverage.json`; the
+    Debug Monitor's Custom maps tab shows the scan details.
+-   Desktop only — the entries are hidden on Android. 3D terrain still needs internet; only
+    the imagery is local. MBTiles files are not supported yet.
+
+Full walkthrough: [Custom maps](guides/custom-maps.md).
+
+Get it: [Windows + all platforms](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.11) ·
+[Android APK](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.11-android.1)
+
 ## What's new in Tailwind v1.1.0-tailwind.10
 
 Hotfix: **the dark map works again.** CARTO's basemap servers now answer every *CartoDB Dark
