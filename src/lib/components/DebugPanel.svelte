@@ -28,10 +28,11 @@
   import { connection } from "$lib/stores/connection";
   import { offeredModes, tableFor, type MavMode, type FcMode } from "$lib/helpers/mavModes";
   import { mjpegStats, uiJankMs, startJankProbe, stopJankProbe } from "$lib/controllers/mjpegSink";
+  import { customMaps, customMapCoverage, customMapName, customTileDebug, type CustomTileDebugEntry } from "$lib/stores/customMaps";
 
   let { onclose }: { onclose: () => void } = $props();
 
-  type Tab = 'msp' | 'mavlink' | 'modes' | 'alerts' | 'telemetry' | 'rc' | 'performance' | 'video';
+  type Tab = 'msp' | 'mavlink' | 'modes' | 'alerts' | 'telemetry' | 'rc' | 'performance' | 'video' | 'customMaps';
   let tab = $state<Tab>('msp');
 
   // ── FC modes tab: the connected FC's own list (AVAILABLE_MODES) next to what the panel offers. ──
@@ -61,6 +62,27 @@
   });
   const tailwindNameFor = (n: number): string =>
     tableFor($autopilotSystem, $arduVehicleClass).find((m) => m.main === n)?.name ?? '—';
+
+  // ── Custom maps: the active map's coverage index + the last resolved tiles ──
+  const cmName = $derived.by(() => {
+    void $customMaps; // re-resolve after every listing
+    return customMapName($settings.mapProvider);
+  });
+  const cmInfo = $derived($customMaps.maps.find((mp) => mp.name === cmName) ?? null);
+  const cmCov = $derived(cmName ? ($customMapCoverage[cmName] ?? null) : null);
+  function cmPlan(e: CustomTileDebugEntry): string {
+    switch (e.kind) {
+      case 'exact': return $t('debug.customMaps.planExact');
+      case 'ancestor': return $t('debug.customMaps.planAncestor', { values: { z: e.srcZ ?? '?' } });
+      case 'children': return $t('debug.customMaps.planChildren', { values: { z: e.srcZ ?? '?' } });
+      case 'none': return $t('debug.customMaps.planNone');
+      case 'below': return $t('debug.customMaps.planBelow');
+    }
+  }
+  function cmBox(b: [number, number, number, number]): string {
+    return `${b[1].toFixed(4)}, ${b[0].toFixed(4)} … ${b[3].toFixed(4)}, ${b[2].toFixed(4)}`;
+  }
+
 
   // Linux hole-punch spike (dev, MOBILE_RTSP.md P2.3 stage A) — coloured stand-in below the DOM hole.
   let spikeOn = $state(false);
@@ -473,6 +495,7 @@
     <button class="tab" class:active={tab === 'rc'} onclick={() => tab = 'rc'}>{$t('debug.tabRc')}</button>
     <button class="tab" class:active={tab === 'performance'} onclick={() => tab = 'performance'}>{$t('debug.tabPerformance')}</button>
     <button class="tab" class:active={tab === 'video'} onclick={() => tab = 'video'}>{$t('debug.tabVideo')}</button>
+    <button class="tab" class:active={tab === 'customMaps'} onclick={() => tab = 'customMaps'}>{$t('debug.tabCustomMaps')}</button>
   </div>
 
   <div class="inject-row" class:on={inj.active}>
@@ -988,6 +1011,213 @@
         <div class="perf-hint">{$t('debug.perf.hint')}</div>
       {/if}
     </div>
+  {:else if tab === 'customMaps'}
+    <!-- Custom (local tile folder) maps: the active map's listing + coverage index (what the outline
+         frames and "Show map area" are built from) and how the last tiles were resolved. -->
+    <div class="perf-tab">
+      <div class="stat-group">
+        <span class="stat-label">{$t('debug.customMaps.folder')}</span>
+        <span class="stat-value">{$customMaps.root || '—'}</span>
+      </div>
+      {#if !cmName}
+        <div class="perf-hint">{$t('debug.customMaps.noActive')}</div>
+      {:else}
+        <div class="stat-group">
+          <span class="stat-label">{$t('debug.customMaps.map')}</span>
+          <span class="stat-value">{cmName}</span>
+          <span class="stat-sep">|</span>
+          <span class="stat-label">{$t('debug.customMaps.ext')}</span>
+          <span class="stat-value">{cmInfo?.ext ?? '—'}</span>
+          <span class="stat-sep">|</span>
+          <span class="stat-label">{$t('debug.customMaps.levels')}</span>
+          <span class="stat-value">{cmInfo ? `${cmInfo.minZoom}–${cmInfo.maxZoom}` : '—'}</span>
+        </div>
+        {#if cmCov}
+          {@const cov = cmCov}
+          <div class="stat-group">
+            <span class="stat-label">{$t('debug.customMaps.tiles')}</span>
+            <span class="stat-value">{cov.tileCount}</span>
+            <span class="stat-sep">|</span>
+            <span class="stat-label">{$t('debug.customMaps.scan')}</span>
+            <span class="stat-value">{cov.scanMs} ms</span>
+            <span class="stat-sep">|</span>
+            <span class="stat-label">{$t('debug.customMaps.index')}</span>
+            <span class="stat-value">
+              {cov.indexPath == null
+                ? $t('debug.customMaps.indexNone')
+                : cov.indexHit ? $t('debug.customMaps.indexHit') : $t('debug.customMaps.indexMiss')}
+            </span>
+          </div>
+          {#if cov.indexPath}<div class="perf-hint">{cov.indexPath}</div>{/if}
+          <table class="debug-table">
+            <thead>
+              <tr>
+                <th class="col-num">{$t('debug.customMaps.colLevel')}</th>
+                <th class="col-num">{$t('debug.customMaps.colTiles')}</th>
+                <th class="col-num">{$t('debug.customMaps.colGrid')}</th>
+                <th class="col-num">{$t('debug.customMaps.colRects')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each cov.levels as lv (lv.z)}
+                <tr>
+                  <td class="col-num">{lv.z}</td>
+                  <td class="col-num">{lv.tiles}</td>
+                  <td class="col-num">{lv.grid}</td>
+                  <td class="col-num">{lv.rects}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+          <div class="perf-section">{$t('debug.customMaps.areas')} ({cov.areas.length}{cov.areasTruncated ? '+' : ''})</div>
+          <table class="debug-table">
+            <thead>
+              <tr>
+                <th class="col-num">{$t('debug.customMaps.colTop')}</th>
+                <th class="col-num">{$t('debug.customMaps.colSegments')}</th>
+                <th class="col-name">{$t('debug.customMaps.colBox')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each cov.areas as a}
+                <tr>
+                  <td class="col-num">{a.top}</td>
+                  <td class="col-num">{a.segments.length}</td>
+                  <td class="col-name">{cmBox(a.bounds)}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+          <div class="perf-hint">{$t('debug.customMaps.frameRule')}</div>
+        {:else}
+          <div class="perf-hint">{$t('debug.customMaps.noCoverage')}</div>
+        {/if}
+      {/if}
+      <div class="perf-section">{$t('debug.customMaps.recent')}</div>
+      <table class="debug-table">
+        <thead>
+          <tr>
+            <th class="col-name">{$t('debug.customMaps.colTile')}</th>
+            <th class="col-name">{$t('debug.customMaps.colPlan')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each $customTileDebug as e}
+            <tr>
+              <td class="col-name">{e.z}/{e.x}/{e.y}</td>
+              <td class="col-name">{cmPlan(e)}</td>
+            </tr>
+          {:else}
+            <tr><td class="empty-cell" colspan="2">{$t('debug.customMaps.noTiles')}</td></tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {:else if tab === 'fleet'}
+    <!-- The multi-vehicle feature gate (stores/fleetMode): on by default in a debug build, else the
+         `--fleet` launch flag. Switchable here for the running session in a debug build only — a release
+         build (also with --debug) refuses it. Group recording is shown read-only (an env opt-in). -->
+    <div class="perf-tab">
+      <label class="perf-check">
+        <input
+          type="checkbox"
+          disabled={!import.meta.env.DEV}
+          checked={$fleetEnabled}
+          onchange={(e) => {
+            const box = e.currentTarget as HTMLInputElement;
+            void setFleetMode(box.checked).catch((err) => {
+              console.warn('[fleet] set_fleet_enabled failed:', err);
+              box.checked = get(fleetEnabled);
+            });
+          }}
+        />
+        {$t('debug.fleet.enabled')}
+      </label>
+      <div class="stat-group">
+        <span class="stat-label">{$t('debug.fleet.groupRecording')}</span>
+        <span class="stat-value">{$fleetGroupRecording ? $t('debug.fleet.on') : $t('debug.fleet.off')}</span>
+      </div>
+      <div class="perf-hint">{$t('debug.fleet.hint')}</div>
+
+      {#if groupState}
+        {@const gs = groupState}
+        <div class="perf-section">{$t('debug.fleet.coordinator')}</div>
+        <div class="stat-group">
+          <span class="stat-label">{$t('debug.fleet.backendFlag')}</span>
+          <span class="stat-value">{gs.enabled ? $t('debug.fleet.on') : $t('debug.fleet.off')}</span>
+          <span class="stat-sep">|</span>
+          <span class="stat-label">{$t('debug.fleet.pending')}</span>
+          <span class="stat-value">{gs.pending.length ? gs.pending.join(', ') : '—'}</span>
+        </div>
+
+        <div class="perf-section">{$t('debug.fleet.recorders')}</div>
+        <table class="debug-table">
+          <thead>
+            <tr>
+              <th class="col-name">{$t('debug.fleet.colKey')}</th>
+              <th class="col-num">{$t('debug.fleet.colFirstStatus')}</th>
+              <th class="col-num">{$t('debug.fleet.colArmed')}</th>
+              <th class="col-rate">{$t('debug.fleet.colLastSeen')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each gs.recorders as r (r.key)}
+              <tr>
+                <td class="col-name">{r.key}</td>
+                <td class="col-num">{yesNo(r.firstStatusSeen)}</td>
+                <td class="col-num">{yesNo(r.armed)}</td>
+                <td class="col-rate">{r.lastSeenMs} ms</td>
+              </tr>
+            {:else}
+              <tr><td class="empty-cell" colspan="4">{$t('debug.fleet.noRecorders')}</td></tr>
+            {/each}
+          </tbody>
+        </table>
+
+        <div class="perf-section">{$t('debug.fleet.group')}</div>
+        {#if gs.group}
+          {@const g = gs.group}
+          <div class="stat-group">
+            <span class="stat-value">{g.id}</span>
+            <span class="stat-sep">|</span>
+            <span class="stat-value">{g.phase === 'running' ? $t('debug.fleet.phaseRunning') : $t('debug.fleet.phaseEnding')}</span>
+            <span class="stat-sep">|</span>
+            <span class="stat-label">{$t('debug.fleet.start')}</span>
+            <span class="stat-value">{g.startTime}</span>
+            <span class="stat-sep">|</span>
+            <span class="stat-label">{$t('debug.fleet.endsIn')}</span>
+            <span class="stat-value">{g.endInMs != null ? `${g.endInMs} ms` : '—'}</span>
+          </div>
+          <table class="debug-table">
+            <thead>
+              <tr>
+                <th class="col-code">{$t('debug.fleet.colKey')}</th>
+                <th class="col-num">{$t('debug.fleet.colArmed')}</th>
+                <th class="col-num">{$t('debug.fleet.colGone')}</th>
+                <th class="col-num">{$t('debug.fleet.colLostArmed')}</th>
+                <th class="col-num">{$t('debug.fleet.colStalled')}</th>
+                <th class="col-name">{$t('debug.fleet.colFile')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each g.members as m}
+                <tr class:inactive={m.gone}>
+                  <td class="col-code">{m.key}</td>
+                  <td class="col-num">{yesNo(m.armed)}</td>
+                  <td class="col-num">{yesNo(m.gone)}</td>
+                  <td class="col-num" class:has-timeouts={m.lostArmed}>{yesNo(m.lostArmed)}</td>
+                  <td class="col-num" class:has-timeouts={m.stalled}>{yesNo(m.stalled)}</td>
+                  <td class="col-name" title={m.file ?? ''}>{m.file ?? '—'}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {:else}
+          <div class="perf-hint">{$t('debug.fleet.noGroup')}</div>
+        {/if}
+      {/if}
+    </div>
+
   {:else if tab === 'video'}
     <!-- WebRTC inbound pipeline, one row per stage: what arrives from the engine (recv), what the decoder
          manages (decoded/dropped) and what the playout reports (freezes/delay). Splitting the stages is

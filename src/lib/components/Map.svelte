@@ -33,10 +33,12 @@
   } from "$lib/stores/rally";
   import { MIN_FIX_SATELLITES } from "$lib/helpers/telemetry";
   import { get } from "svelte/store";
-  import { MAP_PROVIDERS, getProviderById, type MapProvider } from "$lib/config/mapProviders";
-  import { cachedTileLayer } from "$lib/cache/CachedTileLayer";
+  import { MAP_PROVIDERS, type MapProvider } from "$lib/config/mapProviders";
+  import { cachedTileLayer, providerLayerOptions } from "$lib/cache/CachedTileLayer";
   import { initTileCache } from "$lib/cache/tileCache";
-  import { isWebKitGtk, isAndroid } from "$lib/platform";
+  import { isWebKitGtk, isAndroid, hasCustomMaps } from "$lib/platform";
+  import { watchMapProvider, onCustomMapFocus } from "$lib/stores/customMaps";
+  import CustomMapCoverageLayer from "./CustomMapCoverageLayer.svelte";
   import { homePosition, homeMarkerShown } from "$lib/stores/home";
   import { editMode, geoWaypoints, launchPoint, replayActive, toDeg } from "$lib/stores/mission";
   import { autopilotSystem } from "$lib/stores/autopilotContext";
@@ -553,6 +555,7 @@
   let airspaceLayer: L.LayerGroup | undefined;
   let unsubAero: (() => void) | undefined;
   let unsubAeroFocus: (() => void) | undefined;
+  let unsubCustomFocus: (() => void) | undefined;
   // Safehome + autoland overlay (INAV).
   let safehomeLayer: L.LayerGroup | undefined;
   let unsubSafehome: (() => void) | undefined;
@@ -1890,6 +1893,8 @@
       updateWhenIdle: false,
       // Enable over-zoom placeholder detection on flagged base layers (ESRI sat).
       providerId: provider.detectPlaceholders ? provider.id : undefined,
+      // Custom (local tile folder) map: local tile path + over-zoom above its highest level.
+      ...providerLayerOptions(provider),
     }).addTo(map);
 
     // Add overlay layers (e.g. labels for hybrid)
@@ -1975,9 +1980,6 @@
     // Initialize tile cache with persisted size limit
     initTileCache(s.mapCacheMaxMB);
 
-    // Apply the persisted (or default) map provider
-    applyProvider(getProviderById(s.mapProvider));
-
     // Every zoom ANIMATION in a follow mode heads for the aircraft: the fingers lifting off a pinch,
     // the mini map's slide, a wheel step — Leaflet animates them around the container centre, which
     // on the phone is not where the aircraft is (centerInsetRight/Bottom), so the aircraft slid
@@ -1991,6 +1993,11 @@
       e.center = c;
       (map as unknown as MapInternals)._animateToCenter = c;
     });
+
+    // Apply the persisted (or default) map provider, and again whenever the selection (or a custom
+    // map's listing) changes. A persisted custom map is applied once the custom-map folder is listed.
+    // After the zoomanim hook above: the tile layers' own zoomanim listeners must run after it.
+    unsubSettings = watchMapProvider(applyProvider);
 
     map.on("moveend", saveMapState);
     map.on("zoomend", saveMapState);
@@ -2139,13 +2146,19 @@
       prevConnStatus = c.status;
     });
 
-    // React to provider changes from settings
-    let currentProviderId = s.mapProvider;
-    unsubSettings = settings.subscribe((next) => {
-      if (next.mapProvider !== currentProviderId) {
-        currentProviderId = next.mapProvider;
-        applyProvider(getProviderById(currentProviderId));
+    // Custom map "Show map area" (Settings): fit the requested covered region. An explicit request,
+    // so a follow / fleet camera hands over to free pan first (else its next frame undoes the fit),
+    // and a pending go-to-UAV jump is dropped, like frameMission does. Not in the swapped-in mini map:
+    // its view mode belongs to the parent.
+    unsubCustomFocus = onCustomMapFocus((b) => {
+      if (!map || miniControls) return;
+      pendingUavJump = false;
+      if (viewMode !== 'free') {
+        viewMode = 'free';
+        appliedViewMode = 'free'; // the $effect would apply it a tick later — after the fit
+        applyViewModeEffects('free');
       }
+      map.fitBounds(L.latLngBounds([b[1], b[0]], [b[3], b[2]]), { padding: [40, 40] });
     });
 
     // Foreign-vehicle contacts: rebuild the radar layer on every snapshot / selection change.
@@ -2387,6 +2400,7 @@
     unsubAeroFocus?.();
     if (unsubTelemetry) unsubTelemetry();
     if (unsubSettings) unsubSettings();
+    unsubCustomFocus?.();
     unsubFrameMission?.();
     unsubConnForJump?.();
     unsubSafehome?.();
@@ -2462,6 +2476,7 @@
     <SurveyPatternLayer {map} />
     <TerrainCursorLayer {map} />
     <RfRayLayer {map} />
+    {#if hasCustomMaps}<CustomMapCoverageLayer {map} />{/if}
   {/if}
 </div>
 
@@ -2524,9 +2539,16 @@
   /* WebKitGTK only: stretch every 256px tile by half a px so neighbors overlap — OS-level
      fractional display scaling still puts tile edges on subpixel boundaries after the #52
      rounding, and WebKitGTK antialiases the gap. !important beats Leaflet's inline size. */
-  :global(.map.tile-overlap img.leaflet-tile) {
+  :global(.map.tile-overlap img.leaflet-tile),
+  :global(.map.tile-overlap canvas.leaflet-tile) {
     width: 256.5px !important;
     height: 256.5px !important;
+  }
+
+  /* Custom-map tiles are <canvas> elements (CachedTileLayer._createCustomTile): give them the same
+     Chromium seam remedy Leaflet's own CSS applies to `img.leaflet-tile` (plus-lighter). */
+  :global(.leaflet-container canvas.leaflet-tile) {
+    mix-blend-mode: plus-lighter;
   }
 
   /* Android (Chromium WebView): every tile is its own composited layer and cc snaps each layer's
