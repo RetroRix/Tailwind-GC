@@ -17,6 +17,25 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.13
+
+Four improvements ported from upstream Kite GC's development line:
+
+-   **Your own map by URL template.** Under **Custom Online Provider** (Settings) you can
+    add a map as a tile URL template (`{z}`/`{x}`/`{y}`), test it in place, and then pick
+    it like any built-in provider — on the 2D map, the 3D globe, the mission preview and
+    the video backdrop. It sits alongside the folder-based custom maps from v1.1.0-tailwind.11
+    and the Offline Maps panel.
+-   **Settings in three tabs.** The Settings panel is reorganized into **Interface**,
+    **Map** and **Data** tabs. Every setting from before is in its new home — nothing was
+    removed.
+-   **A healthier flight database.** **Compact Database** now runs in the background
+    instead of freezing the app, and reports how much space it freed; unused space is
+    also reclaimed quietly in the background between flights. Importing several log
+    files at once now continues past one that can't be read.
+-   **Lighter 3D.** With **High-Resolution 3D** off, the globe loads one imagery level
+    coarser — less bandwidth and memory on modest hardware.
+
 ## What's new in Tailwind v1.1.0-tailwind.12
 
 A maintenance release — four fixes ported from upstream Kite GC's 1.0.2 line:
