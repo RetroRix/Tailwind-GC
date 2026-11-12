@@ -4,7 +4,7 @@
 // Flight Recorder — detects arm/disarm transitions and records telemetry.
 // Designed to be called from the scheduler thread with each decoded telemetry payload.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
