@@ -17,6 +17,31 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.12
+
+A maintenance release — four fixes ported from upstream Kite GC's 1.0.2 line:
+
+-   **Custom maps are drawn at their real tile size.** A folder map's tile size (128, 256 or
+    512 px) is detected automatically from a tile header, and the map is drawn at that size: a
+    512 px map appears one map zoom higher with its labels at their intended size, a 128 px map
+    one lower. The Debug Monitor's Custom maps tab shows the detected size. 256 px maps are
+    unchanged.
+-   **A page reload can no longer strand a connection.** In release builds the reload keys
+    (F5, Ctrl/Cmd+R) are blocked — a reload used to restart only the frontend while the backend
+    stayed connected, leaving no way to disconnect short of quitting. If Connect ever does meet
+    such a leftover link, it now offers to close it and connect again; a flight being recorded
+    on it is kept.
+-   **Requests identify the app correctly.** Map tiles, terrain, weather, geocoding, ADS-B,
+    OpenAIP and the helper-program downloads now send Tailwind's real app version in the
+    User-Agent instead of hard-coded, stale ones.
+-   **More complete translations** — several hundred French, Bulgarian and Chinese strings
+    that previously showed in English are translated.
+-   Documentation corrected: **Airspeed** and **Radar** are on by default (the settings
+    reference and the radar guide said the opposite).
+
+Get it: [Windows + all platforms](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.12) ·
+[Android APK](https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.12-android.1)
+
 ## What's new in Tailwind v1.1.0-tailwind.11
 
 New: **custom maps — offline tiles from a local folder** (desktop). Point Tailwind at a folder
