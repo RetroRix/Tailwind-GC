@@ -86,9 +86,10 @@ Auto** pinned.
 - **Takeoff** (with a target altitude) is offered for **multirotor, VTOL and PX4** vehicles. A
   fixed-wing plane launches via an AUTO mission takeoff or by hand, so the command is hidden there. On
   ArduPilot, Tailwind switches to Guided first so the FC accepts the takeoff.
-- **RTL** returns to the launch/home point.
+- **RTL** returns to the launch/home point. Not on ArduSub, which has no such mode.
 - **Land** lands in place — hidden for plain ArduPlane fixed-wing (which lands via an AUTO sequence or
-  RTL); QuadPlane uses its vertical QLAND path.
+  RTL) and for a rover or boat, which has nothing to land; QuadPlane uses its vertical QLAND path.
+- **ArduSub** — instead of RTL and Land there is **Surface**: the vehicle rises to the surface.
 - **Abort Landing** (go-around) is offered for **fixed-wing** to wave off an approach and climb out.
 - **VTOL transition** (QuadPlane / VTOL only) switches between **hover** and **forward** flight.
 
