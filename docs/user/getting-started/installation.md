@@ -168,8 +168,11 @@ program, which Tailwind offers to **download automatically the first time you us
 | Helper | Used for | How it's provided |
 |---|---|---|
 | `blackbox_decode` | Importing **INAV blackbox** logs | auto-download on **Windows & Linux** (macOS: install manually) |
-| `ffmpeg` | **Video** (native capture + fallback decoding for some RTSP sources) | auto-download on **Windows & Linux**; **bundled inside the app on macOS** |
-| `mediamtx` | **Video** (the RTSP → low-latency engine) | auto-download on **Windows, Linux & macOS** |
+| `ffmpeg` | **Video** (native capture + fallback decoding for some RTSP sources on the classic path) | auto-download on **Windows & Linux**; **bundled inside the app on macOS** |
+| `mediamtx` | **Video** (the classic RTSP → low-latency engine, used with the *Native RTSP client* switched off) | auto-download on **Windows, Linux & macOS** |
+
+RTSP through Tailwind's own **Native RTSP client** needs neither helper — Android always uses it,
+the desktop by default unless it is switched off in the Video panel (see **[Video](../guides/video.md)**).
 
 - Downloaded helpers are stored in Tailwind's tools folder (`…\kite-gc\bin`, or `data\bin` in portable
   mode) — they don't touch your system.

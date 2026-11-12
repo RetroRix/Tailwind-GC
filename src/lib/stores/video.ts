@@ -103,8 +103,8 @@ export interface VideoState {
   rtspTransport: RtspTransport;
   /** Saved, named RTSP connections the user can recall (explicit save — never auto-added). */
   rtspConnections: RtspConnection[];
-  /** Experimental: use Kite's own in-process RTSP client — no MediaMTX, no ffmpeg (MJPEG
-   *  sources only until the P2.1 native decode sinks land). Persisted. */
+  /** Use Kite's own in-process RTSP client — no MediaMTX, no ffmpeg. On by default; off falls back
+   *  to the classic engine path. Persisted. */
   rtspNativeClient: boolean;
   // ── FPV link (wfb-ng) ────────────────────────────────────────────
   /** Local bind interface for the raw RTP/UDP listen ('0.0.0.0' = all interfaces). */
@@ -203,6 +203,8 @@ interface VideoPrefs {
   rtspConnections: RtspConnection[];
   rtspBufferFrames: number;
   rtspNativeClient: boolean;
+  /** Set once the native-by-default migration has been applied to this installation. */
+  rtspNativeDefaultApplied: boolean;
   fpvHost: string;
   fpvPort: number;
   fpvOsd: boolean;
@@ -236,7 +238,8 @@ const PREF_DEFAULTS: VideoPrefs = {
   rtspTransport: 'auto',
   rtspConnections: [],
   rtspBufferFrames: 0,
-  rtspNativeClient: false,
+  rtspNativeClient: true,
+  rtspNativeDefaultApplied: true,
   fpvHost: '0.0.0.0',
   fpvPort: 5600,
   fpvOsd: true,
@@ -281,7 +284,11 @@ function loadPrefs(): VideoPrefs {
         rtspConnections: Array.isArray(p.rtspConnections) ? p.rtspConnections : [],
         // Clamped to the stepper's range — a hand-edited pref must not park the buffer at 4000 ms.
         rtspBufferFrames: Math.min(3, Math.max(0, Math.round(p.rtspBufferFrames ?? 0))),
-        rtspNativeClient: p.rtspNativeClient ?? false,
+        // The native client became the default with Tailwind .16 (upstream PR #259). An installation
+        // from before that has either no value or a stored `false` — the old default, not a choice —
+        // so it is switched on once; from then on the stored value is the user's.
+        rtspNativeClient: p.rtspNativeDefaultApplied ? (p.rtspNativeClient ?? true) : true,
+        rtspNativeDefaultApplied: true,
         fpvHost: p.fpvHost ?? '0.0.0.0',
         fpvPort: Math.min(65535, Math.max(1, Math.round(p.fpvPort ?? 5600))),
         fpvOsd: p.fpvOsd ?? true,
@@ -319,6 +326,7 @@ function savePrefs(): void {
         rtspConnections: s.rtspConnections,
         rtspBufferFrames: get(rtspBufferFrames),
         rtspNativeClient: s.rtspNativeClient,
+        rtspNativeDefaultApplied: true,
         fpvHost: s.fpvHost,
         fpvPort: s.fpvPort,
         fpvOsd: s.fpvOsd,
@@ -1744,7 +1752,7 @@ export async function startRtsp(opts?: { reconnect?: boolean }): Promise<void> {
     // connectivity failure: WebRTC can never carry this stream (HEVC being the field case
     // — see the H.265 decision history) and the MJPEG copy above was already refused, so
     // reconnecting forever would just repeat both answers. Hard stop, pointing at the
-    // native client, which decodes H.264/HEVC in hardware on Windows.
+    // native client, which decodes H.264/HEVC in hardware.
     if (message.includes('codecs not supported')) {
       patch({ status: 'error', error: get(t)('video.webrtcCodecUnsupported'), reconnecting: false, reconnectAttempt: 0 });
       return;
@@ -1910,8 +1918,8 @@ export async function setRtspTransport(transport: RtspTransport): Promise<void> 
   if (st.enabled && st.kind === 'rtsp') await startRtsp();
 }
 
-/** Toggle the experimental in-process RTSP client (no MediaMTX/ffmpeg; MJPEG sources only for
- *  now); restarts a live RTSP feed so the choice applies immediately. */
+/** Toggle the in-process RTSP client (no MediaMTX/ffmpeg); restarts a live RTSP feed so the choice
+ *  applies immediately. */
 export async function setRtspNativeClient(on: boolean): Promise<void> {
   // Detaching is a feature of the native client alone (D2) — switching it off brings an open
   // detached window home instead of leaving a dead frame on the desktop.
