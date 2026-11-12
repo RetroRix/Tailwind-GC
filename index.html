@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#whats-new-in-tailwind-v110-tailwind11" class="md-skip">
+        <a href="#whats-new-in-tailwind-v110-tailwind12" class="md-skip">
           Skip to content
         </a>
       
@@ -332,6 +332,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.12
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind11" class="md-nav__link">
@@ -1838,6 +1849,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.12
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind11" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2024,6 +2046,29 @@ right next to the map.</p>
 <p>Tailwind Ground Control flying in 3D mode.</p>
 </figcaption>
 </figure>
+<h2 id="whats-new-in-tailwind-v110-tailwind12">What's new in Tailwind v1.1.0-tailwind.12<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind12" title="Permanent link">&para;</a></h2>
+<p>A maintenance release — four fixes ported from upstream Kite GC's 1.0.2 line:</p>
+<ul>
+<li><strong>Custom maps are drawn at their real tile size.</strong> A folder map's tile size (128, 256 or
+    512 px) is detected automatically from a tile header, and the map is drawn at that size: a
+    512 px map appears one map zoom higher with its labels at their intended size, a 128 px map
+    one lower. The Debug Monitor's Custom maps tab shows the detected size. 256 px maps are
+    unchanged.</li>
+<li><strong>A page reload can no longer strand a connection.</strong> In release builds the reload keys
+    (F5, Ctrl/Cmd+R) are blocked — a reload used to restart only the frontend while the backend
+    stayed connected, leaving no way to disconnect short of quitting. If Connect ever does meet
+    such a leftover link, it now offers to close it and connect again; a flight being recorded
+    on it is kept.</li>
+<li><strong>Requests identify the app correctly.</strong> Map tiles, terrain, weather, geocoding, ADS-B,
+    OpenAIP and the helper-program downloads now send Tailwind's real app version in the
+    User-Agent instead of hard-coded, stale ones.</li>
+<li><strong>More complete translations</strong> — several hundred French, Bulgarian and Chinese strings
+    that previously showed in English are translated.</li>
+<li>Documentation corrected: <strong>Airspeed</strong> and <strong>Radar</strong> are on by default (the settings
+    reference and the radar guide said the opposite).</li>
+</ul>
+<p>Get it: <a href="https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.12">Windows + all platforms</a> ·
+<a href="https://github.com/RetroRix/Tailwind-GC/releases/tag/v1.1.0-tailwind.12-android.1">Android APK</a></p>
 <h2 id="whats-new-in-tailwind-v110-tailwind11">What's new in Tailwind v1.1.0-tailwind.11<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind11" title="Permanent link">&para;</a></h2>
 <p>New: <strong>custom maps — offline tiles from a local folder</strong> (desktop). Point Tailwind at a folder
 in Settings → Map → Custom map location, and every subfolder becomes a map in the Tile Provider
