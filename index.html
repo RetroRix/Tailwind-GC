@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#whats-new-in-tailwind-v110-tailwind12" class="md-skip">
+        <a href="#whats-new-in-tailwind-v110-tailwind13" class="md-skip">
           Skip to content
         </a>
       
@@ -332,6 +332,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.13
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind12" class="md-nav__link">
@@ -1849,6 +1860,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.13
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind12" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2046,6 +2068,24 @@ right next to the map.</p>
 <p>Tailwind Ground Control flying in 3D mode.</p>
 </figcaption>
 </figure>
+<h2 id="whats-new-in-tailwind-v110-tailwind13">What's new in Tailwind v1.1.0-tailwind.13<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind13" title="Permanent link">&para;</a></h2>
+<p>Four improvements ported from upstream Kite GC's development line:</p>
+<ul>
+<li><strong>Your own map by URL template.</strong> Under <strong>Custom Online Provider</strong> (Settings) you can
+    add a map as a tile URL template (<code>{z}</code>/<code>{x}</code>/<code>{y}</code>), test it in place, and then pick
+    it like any built-in provider — on the 2D map, the 3D globe, the mission preview and
+    the video backdrop. It sits alongside the folder-based custom maps from v1.1.0-tailwind.11
+    and the Offline Maps panel.</li>
+<li><strong>Settings in three tabs.</strong> The Settings panel is reorganized into <strong>Interface</strong>,
+    <strong>Map</strong> and <strong>Data</strong> tabs. Every setting from before is in its new home — nothing was
+    removed.</li>
+<li><strong>A healthier flight database.</strong> <strong>Compact Database</strong> now runs in the background
+    instead of freezing the app, and reports how much space it freed; unused space is
+    also reclaimed quietly in the background between flights. Importing several log
+    files at once now continues past one that can't be read.</li>
+<li><strong>Lighter 3D.</strong> With <strong>High-Resolution 3D</strong> off, the globe loads one imagery level
+    coarser — less bandwidth and memory on modest hardware.</li>
+</ul>
 <h2 id="whats-new-in-tailwind-v110-tailwind12">What's new in Tailwind v1.1.0-tailwind.12<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind12" title="Permanent link">&para;</a></h2>
 <p>A maintenance release — four fixes ported from upstream Kite GC's 1.0.2 line:</p>
 <ul>
