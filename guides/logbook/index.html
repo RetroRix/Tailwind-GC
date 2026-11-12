@@ -1163,7 +1163,7 @@
   <span class="md-ellipsis">
     
   
-    Custom maps
+    Your own maps
   
 
     
@@ -2149,7 +2149,8 @@ and the panel says so when that happens. Nothing is imported into the logbook.</
 <p>A progress bar tracks the import. INAV Blackbox needs the <strong><code>blackbox_decode</code></strong> helper, which Tailwind
 fetches automatically the first time you import one. A <code>.bbl</code> pulled from the flight controller's
 flash usually holds <strong>several flights</strong> — one per arm / disarm cycle. Tailwind detects that and offers to
-import them all, each as its own logbook entry. Imported telemetry logs (<code>.tlog</code> / <code>.rawmsp</code>) are
+import them all, each as its own logbook entry. A log in the file that cannot be read does not stop the others: Tailwind imports the
+rest and then lists which logs failed and why. Imported telemetry logs (<code>.tlog</code> / <code>.rawmsp</code>) are
 treated as telemetry recordings and <strong>split into separate flights on the arm / disarm markers</strong> in the
 log, the same way a live recording is.</p>
 <p>PX4 ULog note: PX4 doesn't log a throttle <em>output</em>, so a replayed <code>.ulg</code> flight shows the FC's
