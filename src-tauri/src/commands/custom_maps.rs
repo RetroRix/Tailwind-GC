@@ -17,7 +17,8 @@ const MAX_CONCURRENT_TILE_IO: usize = 8;
 
 fn tile_io_gate() -> Arc<Semaphore> {
     static GATE: OnceLock<Arc<Semaphore>> = OnceLock::new();
-    GATE.get_or_init(|| Arc::new(Semaphore::new(MAX_CONCURRENT_TILE_IO))).clone()
+    GATE.get_or_init(|| Arc::new(Semaphore::new(MAX_CONCURRENT_TILE_IO)))
+        .clone()
 }
 
 fn refuse_mobile() -> Result<(), String> {
@@ -64,7 +65,11 @@ pub async fn custom_maps_list(root: String) -> Result<CustomMapsListing, String>
             custom_maps::clear_registry();
             log::warn!("custom maps: {e}");
         })?;
-        Ok(CustomMapsListing { root: dir.to_string_lossy().into_owned(), default_root, maps })
+        Ok(CustomMapsListing {
+            root: dir.to_string_lossy().into_owned(),
+            default_root,
+            maps,
+        })
     })
     .await
 }
@@ -72,7 +77,12 @@ pub async fn custom_maps_list(root: String) -> Result<CustomMapsListing, String>
 /// One tile's raw bytes (exact level, no fallback) — the custom-map leg of the shared tile loader.
 /// Missing → `Err("tile not found")`; the caller decides what to draw instead.
 #[tauri::command]
-pub async fn custom_map_tile(map: String, z: u8, x: u32, y: u32) -> Result<tauri::ipc::Response, String> {
+pub async fn custom_map_tile(
+    map: String,
+    z: u8,
+    x: u32,
+    y: u32,
+) -> Result<tauri::ipc::Response, String> {
     refuse_mobile()?;
     if !custom_maps::valid_tile(z, x, y) {
         return Err(format!("invalid tile {z}/{x}/{y}"));
@@ -108,7 +118,14 @@ pub async fn custom_map_resolve(map: String, z: u8, x: u32, y: u32) -> Result<Ti
         .await
         .map_err(|e| format!("tile gate closed: {e}"))?;
     blocking(move || {
-        Ok(custom_maps::resolve_tile(entry.source.as_ref(), z, x, y, entry.min_zoom, entry.max_zoom))
+        Ok(custom_maps::resolve_tile(
+            entry.source.as_ref(),
+            z,
+            x,
+            y,
+            entry.min_zoom,
+            entry.max_zoom,
+        ))
     })
     .await
 }
@@ -116,7 +133,10 @@ pub async fn custom_map_resolve(map: String, z: u8, x: u32, y: u32) -> Result<Ti
 /// Coverage of a map (its covered areas: frames + "Show map area") from its index, or a fresh background scan
 /// when the index is missing / stale or `force` is set (the Settings "Rescan").
 #[tauri::command]
-pub async fn custom_map_coverage(map: String, force: bool) -> Result<coverage::CoverageReport, String> {
+pub async fn custom_map_coverage(
+    map: String,
+    force: bool,
+) -> Result<coverage::CoverageReport, String> {
     refuse_mobile()?;
     let entry = custom_maps::lookup(&map)?;
     blocking(move || {

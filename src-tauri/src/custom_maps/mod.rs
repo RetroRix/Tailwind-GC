@@ -49,7 +49,9 @@ pub fn sanitize_map_name(name: &str) -> Result<&str, String> {
         || name.len() > 255
         || name == "."
         || name == ".."
-        || name.chars().any(|c| matches!(c, '/' | '\\' | ':' | '\0') || c.is_control());
+        || name
+            .chars()
+            .any(|c| matches!(c, '/' | '\\' | ':' | '\0') || c.is_control());
     if bad {
         return Err(format!("invalid custom map name: {name:?}"));
     }
@@ -62,7 +64,10 @@ pub fn sanitize_map_name(name: &str) -> Result<&str, String> {
 
 /// Normalise a file extension to one of [`SUPPORTED_EXTS`] (case-insensitive), or `None`.
 pub fn supported_ext(ext: &str) -> Option<&'static str> {
-    SUPPORTED_EXTS.iter().copied().find(|e| e.eq_ignore_ascii_case(ext))
+    SUPPORTED_EXTS
+        .iter()
+        .copied()
+        .find(|e| e.eq_ignore_ascii_case(ext))
 }
 
 /// Parse a canonical decimal folder/file stem (`"12"`, not `"012"` or `"+12"`) — the XYZ layout writes
@@ -79,7 +84,9 @@ pub fn parse_index(s: &str) -> Option<u32> {
 
 /// Parse a zoom-level folder name (`0..=MAX_LEVEL`).
 pub fn parse_level(s: &str) -> Option<u8> {
-    parse_index(s).filter(|z| *z <= MAX_LEVEL as u32).map(|z| z as u8)
+    parse_index(s)
+        .filter(|z| *z <= MAX_LEVEL as u32)
+        .map(|z| z as u8)
 }
 
 /// Split a tile file name `<y>.<ext>` into the row and the extension AS WRITTEN (its case is kept, so
@@ -139,7 +146,10 @@ pub struct FolderSource {
 
 impl FolderSource {
     pub fn new(dir: PathBuf, detected_ext: Option<&str>) -> Self {
-        Self { dir, exts: ext_candidates(detected_ext) }
+        Self {
+            dir,
+            exts: ext_candidates(detected_ext),
+        }
     }
 
     fn base(&self, z: u8, x: u32) -> PathBuf {
@@ -163,7 +173,9 @@ impl TileSource for FolderSource {
 
     fn exists(&self, z: u8, x: u32, y: u32) -> bool {
         let base = self.base(z, x);
-        self.exts.iter().any(|ext| base.join(format!("{y}.{ext}")).is_file())
+        self.exts
+            .iter()
+            .any(|ext| base.join(format!("{y}.{ext}")).is_file())
     }
 }
 
@@ -184,13 +196,24 @@ pub struct TilePlan {
 /// Resolve what to draw for (z, x, y): the tile itself or its nearest existing ancestor down to
 /// `min_zoom`; failing that, the children one level up (the "one more level below the lowest" rule —
 /// never deeper, so at most four tiles feed one displayed tile); else nothing.
-pub fn resolve_tile(src: &dyn TileSource, z: u8, x: u32, y: u32, min_zoom: u8, max_zoom: u8) -> TilePlan {
+pub fn resolve_tile(
+    src: &dyn TileSource,
+    z: u8,
+    x: u32,
+    y: u32,
+    min_zoom: u8,
+    max_zoom: u8,
+) -> TilePlan {
     let top = z.min(max_zoom);
     if top >= min_zoom {
         for l in (min_zoom..=top).rev() {
             let d = z - l;
             if src.exists(l, x >> d, y >> d) {
-                return TilePlan { kind: "tile", z: l, children: [false; 4] };
+                return TilePlan {
+                    kind: "tile",
+                    z: l,
+                    children: [false; 4],
+                };
             }
         }
     }
@@ -203,10 +226,18 @@ pub fn resolve_tile(src: &dyn TileSource, z: u8, x: u32, y: u32, min_zoom: u8, m
             src.exists(z + 1, cx + 1, cy + 1),
         ];
         if children.iter().any(|c| *c) {
-            return TilePlan { kind: "children", z: z + 1, children };
+            return TilePlan {
+                kind: "children",
+                z: z + 1,
+                children,
+            };
         }
     }
-    TilePlan { kind: "none", z, children: [false; 4] }
+    TilePlan {
+        kind: "none",
+        z,
+        children: [false; 4],
+    }
 }
 
 /// One map as listed for the selector.
@@ -257,7 +288,9 @@ fn probe_level(level_dir: &Path, z: u8) -> Option<String> {
     let mut probed = 0usize;
     for entry in rd.flatten() {
         let name = entry.file_name();
-        let Some(x) = name.to_str().and_then(parse_index) else { continue };
+        let Some(x) = name.to_str().and_then(parse_index) else {
+            continue;
+        };
         if x as u64 >= n || !entry.path().is_dir() {
             continue;
         }
@@ -286,11 +319,15 @@ pub fn probe_map(dir: &Path) -> Option<(u8, u8, Option<String>)> {
     let mut ext: Option<String> = None;
     for entry in std::fs::read_dir(dir).ok()?.flatten() {
         let name = entry.file_name();
-        let Some(z) = name.to_str().and_then(parse_level) else { continue };
+        let Some(z) = name.to_str().and_then(parse_level) else {
+            continue;
+        };
         if !entry.path().is_dir() {
             continue;
         }
-        let Some(found) = probe_level(&entry.path(), z) else { continue };
+        let Some(found) = probe_level(&entry.path(), z) else {
+            continue;
+        };
         // The extension of the lowest level wins (deterministic regardless of listing order).
         if min.is_none_or(|m| z < m) {
             ext = Some(found);
@@ -333,11 +370,18 @@ pub fn list_maps(root: &Path) -> Result<Vec<MapInfo>, String> {
         if !dir.is_dir() {
             continue;
         }
-        let Some((min_zoom, max_zoom, ext)) = probe_map(&dir) else { continue };
+        let Some((min_zoom, max_zoom, ext)) = probe_map(&dir) else {
+            continue;
+        };
         let source: Arc<dyn TileSource> = Arc::new(FolderSource::new(dir.clone(), ext.as_deref()));
         maps.insert(
             name.to_string(),
-            Arc::new(MapEntry { dir, source, min_zoom, max_zoom }),
+            Arc::new(MapEntry {
+                dir,
+                source,
+                min_zoom,
+                max_zoom,
+            }),
         );
         infos.push(MapInfo {
             name: name.to_string(),
@@ -346,12 +390,24 @@ pub fn list_maps(root: &Path) -> Result<Vec<MapInfo>, String> {
             ext: ext.map(|e| e.to_ascii_lowercase()),
         });
     }
-    infos.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then(a.name.cmp(&b.name)));
-    log::info!("custom maps: {} map(s) under {}", infos.len(), root.display());
+    infos.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then(a.name.cmp(&b.name))
+    });
+    log::info!(
+        "custom maps: {} map(s) under {}",
+        infos.len(),
+        root.display()
+    );
     for m in &infos {
         log::debug!(
             "custom maps: '{}' z{}-{} ext {:?}",
-            m.name, m.min_zoom, m.max_zoom, m.ext
+            m.name,
+            m.min_zoom,
+            m.max_zoom,
+            m.ext
         );
     }
     registry().write().unwrap_or_else(|e| e.into_inner()).maps = maps;
@@ -360,7 +416,11 @@ pub fn list_maps(root: &Path) -> Result<Vec<MapInfo>, String> {
 
 /// Forget all registered maps (the configured root could not be read).
 pub fn clear_registry() {
-    registry().write().unwrap_or_else(|e| e.into_inner()).maps.clear();
+    registry()
+        .write()
+        .unwrap_or_else(|e| e.into_inner())
+        .maps
+        .clear();
 }
 
 #[cfg(test)]
@@ -369,7 +429,8 @@ pub(crate) mod test_util {
 
     /// A fresh, empty temp folder for one test.
     pub fn temp_root(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("kite-custom-maps-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("kite-custom-maps-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -379,7 +440,11 @@ pub(crate) mod test_util {
     pub fn touch_tile(map_dir: &Path, z: u8, x: u32, y: u32, ext: &str) {
         let d = map_dir.join(z.to_string()).join(x.to_string());
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join(format!("{y}.{ext}")), [z, (x & 0xff) as u8, (y & 0xff) as u8]).unwrap();
+        std::fs::write(
+            d.join(format!("{y}.{ext}")),
+            [z, (x & 0xff) as u8, (y & 0xff) as u8],
+        )
+        .unwrap();
     }
 }
 
@@ -392,7 +457,18 @@ mod tests {
     fn map_names_are_sanitized() {
         assert!(sanitize_map_name("Airfield 2026").is_ok());
         assert!(sanitize_map_name("Karte_ä").is_ok());
-        for bad in ["", ".", "..", "a/b", "a\\b", "C:", "..\\x", "../x", "a\0b", "tab\there"] {
+        for bad in [
+            "",
+            ".",
+            "..",
+            "a/b",
+            "a\\b",
+            "C:",
+            "..\\x",
+            "../x",
+            "a\0b",
+            "tab\there",
+        ] {
             assert!(sanitize_map_name(bad).is_err(), "{bad:?} must be rejected");
         }
     }
@@ -493,7 +569,10 @@ mod tests {
         assert_eq!((p.kind, p.z), ("tile", 10));
         // Below the lowest level of an area → its children one level up, never deeper.
         let p = resolve_tile(&src, 13, 1000, 1000, 10, 14);
-        assert_eq!((p.kind, p.z, p.children), ("children", 14, [true, false, false, false]));
+        assert_eq!(
+            (p.kind, p.z, p.children),
+            ("children", 14, [true, false, false, false])
+        );
         let p = resolve_tile(&src, 12, 500, 500, 10, 14);
         assert_eq!(p.kind, "none", "two levels above the data shows nothing");
         // Over-zoom above the top level resolves to the top tile.

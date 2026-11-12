@@ -118,7 +118,9 @@ fn numeric_dirs(dir: &Path) -> io::Result<Vec<(u32, std::fs::DirEntry)>> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(dir)?.flatten() {
         let name = entry.file_name();
-        let Some(n) = name.to_str().and_then(parse_index) else { continue };
+        let Some(n) = name.to_str().and_then(parse_index) else {
+            continue;
+        };
         if is_dir_entry(&entry) {
             out.push((n, entry));
         }
@@ -136,12 +138,17 @@ pub fn scan_levels(map_dir: &Path) -> io::Result<Vec<LevelTiles>> {
         }
         let z = zn as u8;
         let n = 1u64 << z;
-        let mut lt = LevelTiles { z, ..Default::default() };
+        let mut lt = LevelTiles {
+            z,
+            ..Default::default()
+        };
         for (x, xentry) in numeric_dirs(&zentry.path())? {
             if x as u64 >= n {
                 continue;
             }
-            let Ok(rd) = std::fs::read_dir(xentry.path()) else { continue };
+            let Ok(rd) = std::fs::read_dir(xentry.path()) else {
+                continue;
+            };
             let mut ys: Vec<u32> = rd
                 .flatten()
                 .filter_map(|f| {
@@ -296,7 +303,11 @@ pub fn boundary_segments(cells: &CellSet) -> Vec<[u32; 4]> {
                 b += 1;
                 i += 1;
             }
-            out.push(if horizontal { [a, line, b, line] } else { [line, a, line, b] });
+            out.push(if horizontal {
+                [a, line, b, line]
+            } else {
+                [line, a, line, b]
+            });
         }
     };
     for (y, xs) in hor {
@@ -312,7 +323,10 @@ pub fn boundary_segments(cells: &CellSet) -> Vec<[u32; 4]> {
 pub fn corner_to_latlon(x: u32, y: u32, level: u8) -> (f64, f64) {
     let n = (1u64 << level) as f64;
     let lon = x as f64 / n * 360.0 - 180.0;
-    let lat = (std::f64::consts::PI * (1.0 - 2.0 * y as f64 / n)).sinh().atan().to_degrees();
+    let lat = (std::f64::consts::PI * (1.0 - 2.0 * y as f64 / n))
+        .sinh()
+        .atan()
+        .to_degrees();
     (lat, lon)
 }
 
@@ -428,20 +442,25 @@ fn areas(fps: &[Footprint]) -> (Vec<Area>, bool) {
             .copied()
             .filter(|&(x, y)| {
                 !finer.contains(&(x, y))
-                    && !coarser.iter().any(|(cg, cs)| cs.contains(&(x >> (g - cg), y >> (g - cg))))
+                    && !coarser
+                        .iter()
+                        .any(|(cg, cs)| cs.contains(&(x >> (g - cg), y >> (g - cg))))
             })
             .collect();
         for (cells, b) in components(&rest) {
             let nb = norm_box(b, g);
             // `boxes[i]` and `claimed[i]` belong to the same area (pushed together below).
-            let in_hole = boxes.iter().zip(claimed.iter()).any(|((top, ab), (ag, acells))| {
-                *top > f.z
-                    && nb[0] >= ab[0]
-                    && nb[1] >= ab[1]
-                    && nb[2] <= ab[2]
-                    && nb[3] <= ab[3]
-                    && touches(&cells, g, *ag, acells)
-            });
+            let in_hole = boxes
+                .iter()
+                .zip(claimed.iter())
+                .any(|((top, ab), (ag, acells))| {
+                    *top > f.z
+                        && nb[0] >= ab[0]
+                        && nb[1] >= ab[1]
+                        && nb[2] <= ab[2]
+                        && nb[3] <= ab[3]
+                        && touches(&cells, g, *ag, acells)
+                });
             if in_hole {
                 continue;
             }
@@ -488,7 +507,12 @@ fn touches(comp: &CellSet, g: u8, area_grid: u8, area_cells: &CellSet) -> bool {
 /// boxes of different grids compare directly (exact in f64 up to level 30).
 fn norm_box(b: [u32; 4], level: u8) -> [f64; 4] {
     let n = (1u64 << level) as f64;
-    [b[0] as f64 / n, b[1] as f64 / n, (b[2] as f64 + 1.0) / n, (b[3] as f64 + 1.0) / n]
+    [
+        b[0] as f64 / n,
+        b[1] as f64 / n,
+        (b[2] as f64 + 1.0) / n,
+        (b[3] as f64 + 1.0) / n,
+    ]
 }
 
 /// Build the coverage (index content + what the frontend gets) from a scan.
@@ -497,8 +521,17 @@ pub fn build(levels: &[LevelTiles]) -> Coverage {
     let mut summaries = Vec::new();
     for lt in levels {
         let (level, cells) = footprint(lt);
-        summaries.push(LevelSummary { z: lt.z, tiles: lt.count, grid: level, rects: rects_from_cells(&cells).len() });
-        fps.push(Footprint { z: lt.z, level, cells });
+        summaries.push(LevelSummary {
+            z: lt.z,
+            tiles: lt.count,
+            grid: level,
+            rects: rects_from_cells(&cells).len(),
+        });
+        fps.push(Footprint {
+            z: lt.z,
+            level,
+            cells,
+        });
     }
     let (areas, areas_truncated) = areas(&fps);
     Coverage {
@@ -566,7 +599,9 @@ fn fallback_index_path(map_dir: &Path) -> PathBuf {
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_default();
-    app_dir.join("custom_maps_index").join(format!("{:016x}.json", h.0))
+    app_dir
+        .join("custom_maps_index")
+        .join(format!("{:016x}.json", h.0))
 }
 
 fn read_index(path: &Path) -> Option<IndexFile> {
@@ -585,7 +620,10 @@ fn write_index(map_dir: &Path, fallback: &Path, index: &IndexFile) -> Option<Pat
             Some(primary)
         }
         Err(e) => {
-            log::debug!("custom maps: index not writable in {} ({e}), using app data", map_dir.display());
+            log::debug!(
+                "custom maps: index not writable in {} ({e}), using app data",
+                map_dir.display()
+            );
             let res = fallback
                 .parent()
                 .map_or(Ok(()), std::fs::create_dir_all)
@@ -625,7 +663,10 @@ pub fn load_or_scan(map_dir: &Path, force: bool) -> io::Result<CoverageReport> {
     let sig = signature(map_dir)?;
     if !force {
         if let Some((coverage, path)) = load_valid(map_dir, &fallback, &sig) {
-            log::debug!("custom maps: coverage index of {} is current", map_dir.display());
+            log::debug!(
+                "custom maps: coverage index of {} is current",
+                map_dir.display()
+            );
             return Ok(CoverageReport {
                 coverage,
                 index_path: Some(path.to_string_lossy().into_owned()),
@@ -652,7 +693,11 @@ pub fn load_or_scan(map_dir: &Path, force: bool) -> io::Result<CoverageReport> {
             map_dir.display()
         );
     }
-    let index = IndexFile { version: INDEX_VERSION, signature: sig, coverage };
+    let index = IndexFile {
+        version: INDEX_VERSION,
+        signature: sig,
+        coverage,
+    };
     let written = write_index(map_dir, &fallback, &index);
     Ok(CoverageReport {
         coverage: index.coverage,
@@ -700,7 +745,10 @@ mod tests {
         }
         let mut s = boundary_segments(&block);
         s.sort_unstable();
-        assert_eq!(s, vec![[2, 3, 2, 5], [2, 3, 5, 3], [2, 5, 5, 5], [5, 3, 5, 5]]);
+        assert_eq!(
+            s,
+            vec![[2, 3, 2, 5], [2, 3, 5, 3], [2, 5, 5, 5], [5, 3, 5, 5]]
+        );
         // Two separate squares: eight segments.
         assert_eq!(boundary_segments(&cells(&[(0, 0), (2, 2)])).len(), 8);
         // Diagonal neighbours share two edge lines, which merge into straight runs (same drawing).
@@ -709,7 +757,10 @@ mod tests {
 
     #[test]
     fn footprint_coarsens_to_the_cell_limit() {
-        let mut lt = LevelTiles { z: 12, ..Default::default() };
+        let mut lt = LevelTiles {
+            z: 12,
+            ..Default::default()
+        };
         for x in 0..300u32 {
             lt.columns.insert(x, (0..300u32).collect());
         }
@@ -777,15 +828,20 @@ mod tests {
         // Tight box around B (4 x 2 tiles at z13).
         let (lat_b, lon_b) = corner_to_latlon(3500, 1000, 12);
         let b = cov.areas[0].bounds;
-        assert!(b[0] <= lon_b && lon_b < b[2] && b[1] < lat_b && lat_b <= b[3], "{b:?}");
+        assert!(
+            b[0] <= lon_b && lon_b < b[2] && b[1] < lat_b && lat_b <= b[3],
+            "{b:?}"
+        );
         assert!(b[2] - b[0] < 0.2, "B box too wide: {b:?}");
         // Both footprints are rectangles: the real outline is 4 merged segments each.
         assert_eq!(cov.areas[0].segments.len(), 4);
         assert_eq!(cov.areas[1].segments.len(), 4);
         // The outline runs along the box.
         let s = &cov.areas[0].segments;
-        assert!(s.iter().all(|g| (g[1] - b[0]).abs() < 1e-9 || (g[1] - b[2]).abs() < 1e-9
-            || (g[3] - b[0]).abs() < 1e-9 || (g[3] - b[2]).abs() < 1e-9));
+        assert!(s.iter().all(|g| (g[1] - b[0]).abs() < 1e-9
+            || (g[1] - b[2]).abs() < 1e-9
+            || (g[3] - b[0]).abs() < 1e-9
+            || (g[3] - b[2]).abs() < 1e-9));
         assert_eq!(cov.levels.len(), 6);
         assert_eq!(cov.levels[0].tiles, 4);
         let _ = std::fs::remove_dir_all(&root);
@@ -798,9 +854,13 @@ mod tests {
         let mut levels = Vec::new();
         for z in 0u8..=16 {
             let k = 16 - z;
-            let mut lt = LevelTiles { z, ..Default::default() };
+            let mut lt = LevelTiles {
+                z,
+                ..Default::default()
+            };
             for x in (34_000u32 >> k)..=(34_001u32 >> k) {
-                lt.columns.insert(x, ((22_000u32 >> k)..=(22_001u32 >> k)).collect());
+                lt.columns
+                    .insert(x, ((22_000u32 >> k)..=(22_001u32 >> k)).collect());
             }
             lt.count = lt.columns.values().map(|c| c.len() as u64).sum();
             levels.push(lt);
@@ -809,7 +869,10 @@ mod tests {
         assert_eq!(cov.areas.len(), 1, "{:?}", cov.areas);
         assert_eq!(cov.areas[0].top, 16);
         let air = cov.areas[0].bounds;
-        assert!(air[2] - air[0] < 0.02 && air[3] - air[1] < 0.02, "airfield box {air:?}");
+        assert!(
+            air[2] - air[0] < 0.02 && air[3] - air[1] < 0.02,
+            "airfield box {air:?}"
+        );
 
         // A second, overview-only patch far away at z3..=5 adds its own area with top 5.
         for z in 3u8..=5 {
@@ -831,7 +894,10 @@ mod tests {
         // 4 x 4 parent block. The z13 tile under the hole is outside the z14 footprint but inside its
         // box — it must not become a second area (a frame inside a frame).
         let (x0, y0) = (8000u32, 5000u32);
-        let mut top = LevelTiles { z: 14, ..Default::default() };
+        let mut top = LevelTiles {
+            z: 14,
+            ..Default::default()
+        };
         for x in x0..x0 + 8 {
             let ys: Vec<u32> = (y0..y0 + 8)
                 .filter(|&y| !((x0 + 2..x0 + 4).contains(&x) && (y0 + 2..y0 + 4).contains(&y)))
@@ -839,7 +905,10 @@ mod tests {
             top.count += ys.len() as u64;
             top.columns.insert(x, ys);
         }
-        let mut low = LevelTiles { z: 13, ..Default::default() };
+        let mut low = LevelTiles {
+            z: 13,
+            ..Default::default()
+        };
         for x in x0 / 2..x0 / 2 + 4 {
             low.columns.insert(x, (y0 / 2..y0 / 2 + 4).collect());
         }
@@ -855,7 +924,10 @@ mod tests {
         // z14: an 8 x 8 block missing a 2 x 2 notch at its top edge; z13: the full parent block. The
         // z13 tile under the notch touches the z14 area and lies in its box → dropped.
         let (x0, y0) = (8000u32, 5000u32);
-        let mut top = LevelTiles { z: 14, ..Default::default() };
+        let mut top = LevelTiles {
+            z: 14,
+            ..Default::default()
+        };
         for x in x0..x0 + 8 {
             let ys: Vec<u32> = (y0..y0 + 8)
                 .filter(|&y| !((x0 + 2..x0 + 4).contains(&x) && y < y0 + 2))
@@ -863,7 +935,10 @@ mod tests {
             top.count += ys.len() as u64;
             top.columns.insert(x, ys);
         }
-        let mut low = LevelTiles { z: 13, ..Default::default() };
+        let mut low = LevelTiles {
+            z: 13,
+            ..Default::default()
+        };
         for x in x0 / 2..x0 / 2 + 4 {
             low.columns.insert(x, (y0 / 2..y0 / 2 + 4).collect());
         }
@@ -879,12 +954,18 @@ mod tests {
         // plus a detached block far from the corridor but inside its box — that block is its own
         // field (loaded only to z13) and must keep its frame and "Show map area" target.
         let (x0, y0) = (8000u32, 5000u32);
-        let mut top = LevelTiles { z: 14, ..Default::default() };
+        let mut top = LevelTiles {
+            z: 14,
+            ..Default::default()
+        };
         for i in 0..16u32 {
             top.columns.insert(x0 + i, vec![y0 + i]);
         }
         top.count = 16;
-        let mut low = LevelTiles { z: 13, ..Default::default() };
+        let mut low = LevelTiles {
+            z: 13,
+            ..Default::default()
+        };
         for j in 0..8u32 {
             low.columns.entry(x0 / 2 + j).or_default().push(y0 / 2 + j);
         }
@@ -902,7 +983,10 @@ mod tests {
     #[test]
     fn area_count_is_bounded() {
         // 200 isolated tiles at z12 (every 3rd column/row) → capped.
-        let mut lt = LevelTiles { z: 12, ..Default::default() };
+        let mut lt = LevelTiles {
+            z: 12,
+            ..Default::default()
+        };
         for i in 0..200u32 {
             lt.columns.insert(i * 3, vec![(i % 20) * 3]);
         }
@@ -916,9 +1000,16 @@ mod tests {
     fn area_outline_stays_bounded() {
         // One connected comb at z14: a full row with 300 one-cell teeth below it — far more boundary
         // segments than allowed, so the outline is coarsened.
-        let mut lt = LevelTiles { z: 14, ..Default::default() };
+        let mut lt = LevelTiles {
+            z: 14,
+            ..Default::default()
+        };
         for x in 0..600u32 {
-            let ys = if x % 2 == 0 { vec![0, 1, 2, 3] } else { vec![0] };
+            let ys = if x % 2 == 0 {
+                vec![0, 1, 2, 3]
+            } else {
+                vec![0]
+            };
             lt.columns.insert(x, ys);
         }
         lt.count = lt.columns.values().map(|c| c.len() as u64).sum();
@@ -934,9 +1025,15 @@ mod tests {
         let m = two_area_tree(&root);
         let report = load_or_scan(&m, false).unwrap();
         assert!(!report.index_hit);
-        assert_eq!(report.index_path.as_deref(), Some(m.join(INDEX_FILE).to_string_lossy().as_ref()));
+        assert_eq!(
+            report.index_path.as_deref(),
+            Some(m.join(INDEX_FILE).to_string_lossy().as_ref())
+        );
         let first = report.coverage;
-        assert!(m.join(INDEX_FILE).is_file(), "index written into the map folder");
+        assert!(
+            m.join(INDEX_FILE).is_file(),
+            "index written into the map folder"
+        );
         let sig = signature(&m).unwrap();
         // Unchanged folder → same signature, index reused (identical result).
         assert_eq!(signature(&m).unwrap(), sig);
@@ -944,7 +1041,11 @@ mod tests {
         assert!(again.index_hit);
         assert_eq!(again.coverage, first);
         // The index file itself must not change the signature.
-        std::fs::write(m.join(INDEX_FILE), std::fs::read(m.join(INDEX_FILE)).unwrap()).unwrap();
+        std::fs::write(
+            m.join(INDEX_FILE),
+            std::fs::read(m.join(INDEX_FILE)).unwrap(),
+        )
+        .unwrap();
         assert_eq!(signature(&m).unwrap(), sig);
         // A new column (new X folder) → zoom folder changed → signature differs → rescan.
         touch_tile(&m, 8, 200, 100, "png");
@@ -960,13 +1061,19 @@ mod tests {
         };
         std::fs::write(m.join(INDEX_FILE), serde_json::to_string(&fake).unwrap()).unwrap();
         assert_eq!(load_or_scan(&m, false).unwrap().coverage.tile_count, 0);
-        assert_eq!(load_or_scan(&m, true).unwrap().coverage.tile_count, second.tile_count);
+        assert_eq!(
+            load_or_scan(&m, true).unwrap().coverage.tile_count,
+            second.tile_count
+        );
         // An index of another version is ignored.
         let mut old: IndexFile = read_index(&m.join(INDEX_FILE)).unwrap();
         old.version = INDEX_VERSION + 1;
         old.coverage.tile_count = 1;
         std::fs::write(m.join(INDEX_FILE), serde_json::to_string(&old).unwrap()).unwrap();
-        assert_eq!(load_or_scan(&m, false).unwrap().coverage.tile_count, second.tile_count);
+        assert_eq!(
+            load_or_scan(&m, false).unwrap().coverage.tile_count,
+            second.tile_count
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 }
