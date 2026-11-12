@@ -47,8 +47,9 @@
   import { connection, type ConnectionStatus } from "$lib/stores/connection";
   import { settings } from "$lib/stores/settings";
   import { gcsLocation } from "$lib/stores/gcsLocation";
-  import { getProviderById } from "$lib/config/mapProviders";
+  import { getProviderById, isCustomProviderId, isCustomTileUrl } from "$lib/config/mapProviders";
   import type { MapProvider } from "$lib/config/mapProviders";
+  import { ensureCustomMapsLoaded, watchMapProvider, onCustomMapFocus } from "$lib/stores/customMaps";
   import { getCachedTile, putCachedTile, initTileCache } from "$lib/cache/tileCache";
   import { loadTileBytes } from "$lib/cache/tileLoader";
   import { isKnownUnavailable, isPlaceholderTile } from "$lib/cache/tileAvailability";
@@ -295,6 +296,8 @@
   let unsubTelemetry: (() => void) | undefined;
   let unsubHome: (() => void) | undefined;
   let unsubSettingsWatch: (() => void) | undefined;
+  let unsubProviderWatch: (() => void) | undefined;
+  let unsubCustomFocus3d: (() => void) | undefined;
   let unsubMissionStore: (() => void) | undefined;
   let unsubShowMissionStore: (() => void) | undefined;
   let unsubReplayStore: (() => void) | undefined;
@@ -624,6 +627,9 @@
    * Load a tile image — checks IndexedDB cache first, then fetches from network.
    */
   async function loadCachedImage(url: string, meta: TileMeta | undefined, layerKey: string): Promise<HTMLImageElement> {
+    // Custom (local folder) map: read straight from disk — never through the IndexedDB cache. A
+    // missing tile rejects, so Cesium keeps the parent tile (same as a 404).
+    if (isCustomTileUrl(url)) return decodeTileImage(await loadTileBytes(url, layerKey));
     // Check IndexedDB cache
     const cached = await getCachedTile(url);
     if (cached) {
@@ -662,6 +668,11 @@
       throw new Error('placeholder tile (over-zoom)');
     }
     putCachedTile(url, buf).catch(() => {}); // fire-and-forget
+    return decodeTileImage(buf);
+  }
+
+  /** Tile bytes → Image (any pixel size: Cesium takes non-power-of-two textures, without mipmaps). */
+  function decodeTileImage(buf: ArrayBuffer): Promise<HTMLImageElement> {
     return new Promise<HTMLImageElement>((resolve, reject) => {
       const blob = new Blob([buf]);
       const blobUrl = URL.createObjectURL(blob);
@@ -696,9 +707,14 @@
     // Errors (404, CORS) propagate as rejections → Cesium marks tile as FAILED
     // → parent tile remains visible (correct upsampling behavior).
     const detectId = provider.detectPlaceholders ? provider.id : undefined;
+    const customMin = provider.custom?.minZoom;
     (imgProvider as any).requestImage = function (
       x: number, y: number, level: number, _request?: unknown
     ): Promise<HTMLImageElement> {
+      // Custom map below its lowest level: nothing on disk — fail without a backend round-trip.
+      if (customMin !== undefined && level < customMin) {
+        return Promise.reject(new Error('tile unavailable (below custom map levels)'));
+      }
       // Known over-zoom placeholder for this region → fail fast so Cesium keeps
       // the parent (z-1) tile, no network round-trip.
       if (detectId && isKnownUnavailable(detectId, level, x, y)) {
@@ -720,10 +736,9 @@
   /**
    * Apply the selected map provider (base + overlays) to the Cesium viewer.
    */
-  function applyMapProvider(providerId: string) {
+  function applyMapProvider(provider: MapProvider) {
     if (!viewer) return;
 
-    const provider = getProviderById(providerId);
     const layers = viewer.imageryLayers;
 
     // Remove all existing layers
@@ -1131,7 +1146,9 @@
     creditDiv.style.display = 'none';
     cesiumContainer.appendChild(creditDiv);
 
-    // Build the base imagery provider from the selected map provider
+    // Build the base imagery provider from the selected map provider (a custom map needs the
+    // custom-map folder listed first, or it would resolve to the fallback provider).
+    if (isCustomProviderId(mapProviderId)) await ensureCustomMapsLoaded();
     const baseProvider = getProviderById(mapProviderId);
 
     const viewerOptions: Cesium.Viewer.ConstructorOptions = {
@@ -1406,13 +1423,26 @@
       viewer.scene.requestRender();
     });
 
-    // Watch for live setting changes (map provider, altitude curtain toggle)
-    let currentProviderId = mapProviderId;
+    // Map provider changes (selection, custom-map listing). The first call reports the provider the
+    // viewer was just built with — skip that one.
+    let firstProviderCall = true;
+    unsubProviderWatch = watchMapProvider((p) => {
+      const skip = firstProviderCall && p === baseProvider;
+      firstProviderCall = false;
+      if (!skip) applyMapProvider(p);
+    });
+    // Custom map "Show map area" (Settings): fly to the requested covered region — like
+    // frameMission3d only in free look (follow / orbit / FPV own the camera), dropping a pending
+    // go-to-UAV jump.
+    unsubCustomFocus3d = onCustomMapFocus((b) => {
+      if (!viewer) return;
+      if (!isFreeLook()) return;
+      pendingUavJump3d = false;
+      viewer.camera.flyTo({ destination: Cesium.Rectangle.fromDegrees(b[0], b[1], b[2], b[3]), duration: 1.2 });
+    });
+
+    // Watch for live setting changes (altitude curtain toggle, lighting, …)
     unsubSettingsWatch = settings.subscribe((next) => {
-      if (next.mapProvider !== currentProviderId) {
-        currentProviderId = next.mapProvider;
-        applyMapProvider(currentProviderId);
-      }
       const curtain = next.altitudeCurtain3D ?? true;
       if (curtain !== curtainEnabled) {
         curtainEnabled = curtain;
@@ -1604,6 +1634,8 @@
     radar3dPickHandler?.destroy();
     unsubHome?.();
     unsubSettingsWatch?.();
+    unsubProviderWatch?.();
+    unsubCustomFocus3d?.();
     unsubMissionStore?.();
     unsubShowMissionStore?.();
     unsubReplayStore?.();
