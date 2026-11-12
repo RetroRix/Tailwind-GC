@@ -5,8 +5,8 @@
 ### Which map providers can I use?
 
 Tailwind ships with several free map sources — no account or API key required. Pick one under
-**[Settings → Interface → Map → Tile Provider](reference/settings.md)**; the choice applies to **both
-the 2D map and the 3D globe**:
+**[Settings → Interface → Display → Map Provider](reference/settings.md#display)**; the choice applies
+to **both the 2D map and the 3D globe**:
 
 - **OpenStreetMap** — the standard street map.
 - **ESRI World Street Map** — an alternative street map.
@@ -19,15 +19,15 @@ All of them work **offline** once the tiles have been cached — see below.
 
 You can also bring your own maps (see **[Your own maps](guides/custom-maps.md)**):
 
-- **Custom online providers** — any online tile service you add by its URL template, with your own API key in
-  the URL if the service needs one. On every platform; the tiles are cached like those of the
-  built-in maps.
+- **Custom online providers** — any online tile service you add by its URL template, with your own
+  API key in the URL if the service needs one. On every platform; the tiles are cached like those of
+  the built-in maps.
 - **Custom maps** — map tiles from a folder on disk, on Windows, Linux and macOS.
 
 ### Can I use the maps offline?
 
-Yes — two ways. Tailwind caches every map tile it downloads (**[Settings → Data → Map →
-Tile Cache](reference/settings.md)**), so anything you pan and zoom over **while you still have an
+Yes — two ways. Tailwind caches every map tile it downloads (**[Settings → Map → Cache →
+Tile Cache](reference/settings.md#cache)**), so anything you pan and zoom over **while you still have an
 internet connection** stays available offline afterwards. The default cache is 200 MB and can be
 raised up to 5 GB. The same holds for your
 **[custom online providers](guides/custom-maps.md#custom-online-providers)**.

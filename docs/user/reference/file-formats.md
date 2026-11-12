@@ -56,7 +56,11 @@ See **[Flight logbook](../guides/logbook.md)**.
 
 - **Flight database** — your logbook (flights, vehicles, batteries, saved missions) is one local SQLite
   database; its location is configurable in **[Settings → Data](settings.md)**.
-- **Caches** — 2D map tiles and terrain are cached on disk (also under Settings → Data); these are the
+- **Next to the database** — `flights.pre-migration-backup.db`, the full backup Tailwind writes before an
+  update upgrades the database format (only the latest is kept), and a `hires-cache/` folder that holds
+  the temporary decode of a flight in **HI-RES** replay and is emptied when you close the flight. See
+  **[Flight logbook](../guides/logbook.md#the-database-updates-and-the-automatic-backup)**.
+- **Caches** — 2D map tiles and terrain are cached on disk (under Settings → Map → Cache); these are the
   files that make the 2D map usable offline.
 - **Custom maps** (desktop) — your own map tiles in the custom map location, one `Z/X/Y` folder per
   map, plus a small `.kite-coverage.json` index Kite writes into each map folder. See

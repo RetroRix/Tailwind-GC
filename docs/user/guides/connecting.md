@@ -124,7 +124,7 @@ selectors, and stays yours across restarts: Tailwind remembers that you typed it
 number. Type the standard port for the current selection and it goes back to following the
 selectors, so there is always a way back.
 
-If **Settings → Connection → Default Protocol** is pinned, the port follows it at startup, the same
+If **Settings → Interface → UI → Default Protocol** is pinned, the port follows it at startup, the same
 way it follows the selectors.
 
 !!! note "Protocol still applies"
@@ -245,7 +245,7 @@ Tailwind remembers your last **protocol, transport, port/host, baud, and BLE dev
 usually a single click on **Connect**. To drop the link, click **Disconnect**.
 
 If you always fly the same link and would rather not have a stray session decide, set
-**Settings → Connection → Default Protocol** to that protocol: it then wins on every launch. Leave it
+**Settings → Interface → UI → Default Protocol** to that protocol: it then wins on every launch. Leave it
 on **Last used** for the behaviour described above.
 
 ## Trouble connecting?
