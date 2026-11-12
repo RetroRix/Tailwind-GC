@@ -355,7 +355,7 @@ export interface AppSettings {
   lastPort: string;
   lastBaud: number;
   lastProtocol: string;
-  /** Startup protocol preference (Settings → Connection). `last` = restore `lastProtocol`. */
+  /** Startup protocol preference (Settings → Interface → UI). `last` = restore `lastProtocol`. */
   defaultProtocol: DefaultProtocol;
   // Full last-used connection path (restored on startup so nothing has to be re-entered)
   lastTransport: string;
