@@ -15,7 +15,8 @@ the 2D map and the 3D globe**:
 - **OpenTopoMap** — topographic map with contour lines.
 - **ESRI Dark Gray** — a dark, low-contrast basemap.
 
-All of them work **offline** once the tiles have been cached — see below.
+All of them work **offline** once the tiles have been cached — see below. On Windows, Linux and macOS
+the list also offers your own map tiles from a folder on disk — see **[Custom maps](guides/custom-maps.md)**.
 
 ### Can I use the maps offline?
 
@@ -28,6 +29,10 @@ For flying sites, use the **[Offline Maps](guides/offline-maps.md)** panel inste
 around your field and a max zoom, and Tailwind downloads the whole area ahead of time, shows a
 coverage bar per area, and can export an area as a **.mappack** file to share with other Tailwind
 users — they import it and get the exact same coverage without downloading anything.
+
+On the desktop there is a second way: map tiles you already have can be put into a folder and shown as
+a **[custom map](guides/custom-maps.md)**, straight from disk and without any connection. Kite does not
+download those tiles for you.
 
 ### Why isn't Google Maps or HERE Maps available?
 
