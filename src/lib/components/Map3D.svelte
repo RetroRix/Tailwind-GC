@@ -690,6 +690,12 @@
     const hasSubdomains = cesiumUrl.includes('{s}');
     const subdomains = hasSubdomains ? ['a', 'b', 'c'] : [];
 
+    // With High-Resolution 3D off the globe renders at half the pixel density, but Cesium picks tile
+    // levels in CSS pixels (QuadtreePrimitive divides the screen-space error by pixelRatio), so it
+    // would still load tiles twice as fine as the picture can show. Telling it the tiles are twice as
+    // wide makes it take the imagery one level lower: a quarter of the tiles, matching the picture.
+    const texelPx = (provider.custom?.tileSize ?? provider.tileSize ?? 256) * (highRes3DSetting ? 1 : 2);
+
     const imgProvider = new Cesium.UrlTemplateImageryProvider({
       url: cesiumUrl,
       subdomains: hasSubdomains ? subdomains : undefined,
@@ -699,8 +705,8 @@
       // by tileWidth), so a 512 px source is drawn from one level lower — its own native density.
       // Levels stay file levels for a custom map (maximumLevel = its highest level, the
       // below-lowest check below).
-      tileWidth: provider.custom?.tileSize ?? provider.tileSize ?? 256,
-      tileHeight: provider.custom?.tileSize ?? provider.tileSize ?? 256,
+      tileWidth: texelPx,
+      tileHeight: texelPx,
       credit: new Cesium.Credit(provider.attribution, false),
     });
 
@@ -1481,6 +1487,8 @@
       if (highRes !== highRes3DSetting) {
         highRes3DSetting = highRes;
         applyRenderResolution();
+        // The imagery level follows the render resolution — rebuild the layers with the new tile width.
+        applyMapProvider(getProviderById(next.mapProvider));
       }
       const aspEnabledChg = next.airspace.enabled !== airspaceEnabled;
       if (aspEnabledChg || next.airspace.layers.obstacles.d3 !== obstacleD3 || next.airspace.obstacleDistanceKm !== obstacleDistKm) {
