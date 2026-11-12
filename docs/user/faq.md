@@ -5,8 +5,8 @@
 ### Which map providers can I use?
 
 Tailwind ships with several free map sources — no account or API key required. Pick one under
-**[Settings → Interface → Map → Tile Provider](reference/settings.md)**; the choice applies to **both
-the 2D map and the 3D globe**:
+**[Settings → Interface → Display → Map Provider](reference/settings.md#display)**; the choice applies
+to **both the 2D map and the 3D globe**:
 
 - **OpenStreetMap** — the standard street map.
 - **ESRI World Street Map** — an alternative street map.
@@ -15,15 +15,22 @@ the 2D map and the 3D globe**:
 - **OpenTopoMap** — topographic map with contour lines.
 - **ESRI Dark Gray** — a dark, low-contrast basemap.
 
-All of them work **offline** once the tiles have been cached — see below. On Windows, Linux and macOS
-the list also offers your own map tiles from a folder on disk — see **[Custom maps](guides/custom-maps.md)**.
+All of them work **offline** once the tiles have been cached — see below.
+
+You can also bring your own maps (see **[Your own maps](guides/custom-maps.md)**):
+
+- **Custom online providers** — any online tile service you add by its URL template, with your own
+  API key in the URL if the service needs one. On every platform; the tiles are cached like those of
+  the built-in maps.
+- **Custom maps** — map tiles from a folder on disk, on Windows, Linux and macOS.
 
 ### Can I use the maps offline?
 
-Yes — two ways. Tailwind caches every map tile it downloads (**[Settings → Data → Map →
-Tile Cache](reference/settings.md)**), so anything you pan and zoom over **while you still have an
+Yes — two ways. Tailwind caches every map tile it downloads (**[Settings → Map → Cache →
+Tile Cache](reference/settings.md#cache)**), so anything you pan and zoom over **while you still have an
 internet connection** stays available offline afterwards. The default cache is 200 MB and can be
-raised up to 5 GB.
+raised up to 5 GB. The same holds for your
+**[custom online providers](guides/custom-maps.md#custom-online-providers)**.
 
 For flying sites, use the **[Offline Maps](guides/offline-maps.md)** panel instead: pick a radius
 around your field and a max zoom, and Tailwind downloads the whole area ahead of time, shows a
@@ -31,8 +38,8 @@ coverage bar per area, and can export an area as a **.mappack** file to share wi
 users — they import it and get the exact same coverage without downloading anything.
 
 On the desktop there is a second way: map tiles you already have can be put into a folder and shown as
-a **[custom map](guides/custom-maps.md)**, straight from disk and without any connection. Kite does not
-download those tiles for you.
+a **[custom map](guides/custom-maps.md#custom-maps-from-a-folder)**, straight from disk and without any
+connection. Tailwind does not download those tiles for you.
 
 ### Why isn't Google Maps or HERE Maps available?
 
@@ -56,9 +63,10 @@ mid-zoom imagery as ESRI, it lacks the highest zoom levels ESRI provides, and it
 the older Bing basemap that ESRI already serves in better quality.
 
 In both cases the extra setup (account, API key, billing) and the licensing constraints simply aren't
-worth it for a map style you can already get, key-free, from the built-in providers. If a specific,
-properly licensed provider ever adds real value, we would add it as an optional *bring-your-own-key*
-source rather than route around anyone's terms of service.
+worth it for a map style you can already get, key-free, from the built-in providers. A service you
+have a key for can be added yourself as a **[custom online provider](guides/custom-maps.md#custom-online-providers)**,
+by its tile URL template — whether its terms allow that use, including Kite's tile cache, is yours to
+check.
 
 ## Flying & connecting
 

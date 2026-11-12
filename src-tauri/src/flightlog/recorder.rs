@@ -4,7 +4,7 @@
 // Flight Recorder — detects arm/disarm transitions and records telemetry.
 // Designed to be called from the scheduler thread with each decoded telemetry payload.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -132,13 +132,23 @@ pub fn keep_failed_session(
     );
 }
 
+/// Error of a commit refused because "Compact Database" is running on the main DB.
+const COMPACT_COMMIT_ERROR: &str =
+    "the flight database is being compacted — the recording is kept; save it again once the compact has finished";
+
 /// Commit a pending session into the main DB: insert the finalized flight, copy the temp
 /// `telemetry_records`, remove the temp file, and spawn weather/geocode enrichment. Returns the new
 /// flight id. Shared by the Save command and the recorder's grace-lapsed re-arm path. On failure the
 /// session is untouched (the commit runs in one transaction) and the caller still owns it.
+/// While "Compact Database" runs on that file it fails at once instead of waiting out the busy timeout
+/// on the VACUUM's lock — the recorder's commits run on telemetry threads (MSP scheduler, MAVLink
+/// handler); the callers' keep / Retry paths take over.
 pub fn commit_pending_session(session: &PendingSession) -> Result<i64, String> {
     let conn = db::open_database(&session.db_path)
         .map_err(|e| format!("Failed to open flight DB for commit: {}", e))?;
+    if conn.path().is_some_and(|p| db::compact_running(Path::new(p))) {
+        return Err(COMPACT_COMMIT_ERROR.to_string());
+    }
     let flight_id = db::commit_session_to_main(&conn, &session.temp_path, &session.flight)
         .map_err(|e| format!("Failed to commit session: {}", e))?;
     db::remove_temp_session(&session.temp_path);

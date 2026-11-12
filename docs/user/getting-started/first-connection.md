@@ -70,7 +70,9 @@ That's it — you're connected. 🎉
 ## Disconnect
 
 Click **Disconnect** in the top bar. Tailwind remembers your **port, baud, protocol and transport**, so
-next time you can usually just press **Connect** straight away.
+next time you can usually just press **Connect** straight away. (Always fly the same link? Pin it under
+**Settings → Interface → UI → Default Protocol**, and Tailwind starts on that protocol whatever the last session
+used.)
 
 ## It didn't connect?
 

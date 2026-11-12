@@ -40,7 +40,7 @@ service by the app.
 
 | Data | What it contains | Where |
 | --- | --- | --- |
-| **Settings** | Units, layout, connection settings, map providers, API keys you entered (Cesium ion, OpenAIP), interface options | App data folder of the OS |
+| **Settings** | Units, layout, connection settings, map providers, API keys you entered (Cesium ion, OpenAIP, and any key inside the URL of a custom online provider), interface options | App data folder of the OS |
 | **Flight log database** | Telemetry recorded during flights: GPS track, altitude, speed, battery, flight modes, events; take-off place name and weather; your vehicle and battery records; the flight controller's hardware ID where the firmware reports one | App data folder of the OS |
 | **Missions, geozones, safe homes** | Waypoints and areas you plan, with coordinates | Files you save |
 | **Terrain cache** | Elevation tiles for areas you planned or flew in, kept so terrain features work offline | App data folder of the OS |
@@ -89,7 +89,7 @@ Each provider handles the request under its own privacy policy, which we link be
 | --- | --- | --- | --- |
 | **At every app start** | GitHub Releases API ([GitHub privacy statement](https://docs.github.com/site-policy/privacy-policies)) | A request for the latest release version. No data about you or your installation | Settings → Updates → *Check for updates: Disabled* |
 | **When a flight is recorded** (the aircraft arms with a valid GPS fix) | Open-Meteo ([privacy](https://open-meteo.com/en/terms)) and OpenStreetMap Nominatim ([privacy](https://osmfoundation.org/wiki/Privacy_Policy)) | The take-off coordinates, to store the weather and the place name in the logbook entry | *(no setting yet — see the note below)* |
-| **While the map is shown** | The map tile provider you selected: OpenStreetMap ([privacy](https://osmfoundation.org/wiki/Privacy_Policy)), OpenTopoMap, Esri ArcGIS ([privacy](https://www.esri.com/en-us/privacy/overview)); v1.1.0-tailwind.9 and earlier also CARTO ([privacy](https://carto.com/privacy)) for the dark map | The map tiles for the area on screen, i.e. which region you are looking at | Use the map without internet — Tailwind then shows only what the system's web cache still holds |
+| **While the map is shown** | The map tile provider you selected: OpenStreetMap ([privacy](https://osmfoundation.org/wiki/Privacy_Policy)), OpenTopoMap, Esri ArcGIS ([privacy](https://www.esri.com/en-us/privacy/overview)); v1.1.0-tailwind.9 and earlier also CARTO ([privacy](https://carto.com/privacy)) for the dark map — or, with a [custom online provider](guides/custom-maps.md#custom-online-providers) selected, the service you added, under its own policy | The map tiles for the area on screen, i.e. which region you are looking at; for a custom online provider also the API key you put into its URL | Use the map without internet — Tailwind then shows only what the system's web cache still holds |
 | **When a terrain feature needs elevation** (AGL planning, terrain clearance, line-of-sight analysis, terrain radar) | Copernicus DEM on AWS Open Data ([AWS privacy notice](https://aws.amazon.com/privacy/)) | The 1°×1° elevation tile covering the area | Downloads only for areas you plan or fly in; tiles are cached |
 
 ### Only while the feature is enabled

@@ -5,26 +5,28 @@
 
 <script lang="ts">
   // Settings on the panel framework (docs/active/PANEL_FRAMEWORK.md): a `compact` PanelShell with
-  // a SegmentedToggle tab switcher (Interface / Data) in the toolbar; each tab is grouped into
+  // a SegmentedToggle tab switcher (Interface / Map / Data) in the toolbar; each tab is grouped into
   // labelled subsections. On/off switches use the shared <Toggle>, actions use <Button>, selects
-  // match the framework height. All tiny italic hints are dropped except the Cesium-token one.
+  // match the framework height. Most hints are tooltips; only the Cesium-token, airspace-key and
+  // update-check hints are shown as text (`.cesium-hint`).
   import { invoke } from '@tauri-apps/api/core';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { t, locale } from 'svelte-i18n';
   import { SUPPORTED_LOCALES } from '$lib/i18n';
-  import { MAP_PROVIDERS, getProviderById, isCustomProviderId } from '$lib/config/mapProviders';
+  import { MAP_PROVIDERS, getProviderById, isCustomProviderId, userProviderId } from '$lib/config/mapProviders';
   import { settings } from '$lib/stores/settings';
+  import UserMapsDialog from '$lib/components/UserMapsDialog.svelte';
   import {
     customMaps, ensureCustomMapsLoaded, chooseCustomMapsFolder, resetCustomMapsFolder, rescanCustomMaps,
     focusCustomMap, customMapName,
   } from '$lib/stores/customMaps';
   import { WIDGET_DEFS } from '$lib/config/widgetRegistry';
   import { DEFAULT_RADAR, DEFAULT_AIRSPACE, DEFAULT_RC_CONTROL, DEFAULT_UPDATE_CHECK, DEFAULT_TELEMETRY_API, DEFAULT_NTRIP } from '$lib/stores/settings';
-  import { panelState } from '$lib/stores/panelState';
+  import { panelState, type SettingsTab } from '$lib/stores/panelState';
   import { resetGcsManual, gcsManuallySet } from '$lib/stores/gcsLocation';
   import type { AppSettings, InterfaceSettings, RadarSettings, GcsMode, AirspaceSettings, AirspaceProvider, SystemMessagesLevel, LogLevel, RcControlSettings, TelemetryApiSettings, UpdateCheckSettings, UpdateCheckMode, DefaultProtocol, NtripSettings } from '$lib/stores/settings';
   import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
-  import { isAndroid, isMobile, hasCustomMaps } from '$lib/platform';
+  import { isAndroid, isMobile, hasCustomMaps, hasDbCompact } from '$lib/platform';
   import { blackboxDecoderVersion, blackboxLegacyMode, downloadBlackboxDecode } from '$lib/stores/flightlog';
   import type { TileCacheStats } from '$lib/cache/tileCache';
   import NumberStepper from '$lib/components/NumberStepper.svelte';
@@ -45,7 +47,7 @@
     mapCacheMaxMB = 200,
     cacheStats = { usedBytes: 0, maxBytes: 0, tileCount: 0 },
     cesiumIonToken = '',
-    altitudeCurtain3D = true,
+    altitudeCurtain3D = false,
     realLighting3D = false,
     buildings3D = false,
     logReplayTime = false,
@@ -276,13 +278,12 @@
     }
   }
 
-  // Refresh the terrain-cache size + blackbox_decode version whenever the Data tab is shown.
+  // Refresh the terrain-cache size whenever the Map tab is shown, the blackbox_decode version
+  // whenever the Data tab is shown.
   $effect(() => {
-    if (tab !== 'interface') {
-      void loadTerrainCache();
-      // No decoder row on mobile (see below) — nothing to load a version for.
-      if (!isMobile) void loadBbVersion();
-    }
+    if (tab === 'map') void loadTerrainCache();
+    // No decoder row on mobile (see below) — nothing to load a version for.
+    if (tab === 'data' && !isMobile) void loadBbVersion();
   });
 
   /** Patch the nested radar settings (onPatch merges shallowly, so pass the whole radar object). */
@@ -383,15 +384,21 @@
   }
 
   // ── Custom maps (desktop only, `hasCustomMaps`) ──
-  // The selector lists them after the built-in providers; the row below it holds the folder.
+  // The selector (Interface tab) lists them last, after the built-in and the online user maps; the
+  // folder row lives in the Map tab's Providers group.
   if (hasCustomMaps) void ensureCustomMapsLoaded();
   /** What the selector shows: the provider the maps really use — a custom map whose folder is gone
    *  falls back like any unknown id. A custom id waits for the first listing instead of flashing it. */
   const providerSelectValue = $derived.by(() => {
     const listed = $customMaps;
+    // A deleted user online map falls back too: re-resolve after every list change. The registry is
+    // current by then — the user-map store's settings subscriber (registered at import) runs inside the
+    // store write itself, before this derived is re-read.
+    void $settings.userMapProviders;
     if (!listed.loaded && isCustomProviderId(mapProvider)) return mapProvider;
     return getProviderById(mapProvider).id;
   });
+  let userMapsOpen = $state(false);
   const activeCustomMap = $derived.by(() => {
     void $customMaps; // re-resolve after every listing
     return customMapName(mapProvider);
@@ -463,41 +470,31 @@
   <div class="settabs">
     <SegmentedToggle
       full
-      options={[{ value: 'interface', label: $t('settings.interface') }, { value: 'data', label: $t('settings.tabData') }]}
+      options={[
+        { value: 'interface', label: $t('settings.interface') },
+        { value: 'map', label: $t('settings.map') },
+        { value: 'data', label: $t('settings.tabData') },
+      ]}
       value={tab}
-      onchange={(v) => panelState.patch({ settingsTab: v as 'interface' | 'data' })}
+      onchange={(v) => panelState.patch({ settingsTab: v as SettingsTab })}
     />
   </div>
 {/snippet}
 
 {#snippet body()}
   {#if tab === 'interface'}
-    <!-- ── UI ────────────────────────────────────────── -->
+    <!-- ── Display ───────────────────────────────────── -->
     <div class="s-group">
-      <h4 class="s-head">{$t('settings.groupUi')}</h4>
-      <div class="s-row">
-        <label class="s-label" for="lang-select">{$t('settings.language')}</label>
-        <select id="lang-select" class="s-select" value={localeValue} onchange={handleLocaleChange}>
-          {#each SUPPORTED_LOCALES as loc}<option value={loc.code}>{loc.label}</option>{/each}
-        </select>
-      </div>
-      <div class="s-row">
-        <label class="s-label" for="ui-scale">{$t('settings.uiScale')}</label>
-        <select id="ui-scale" class="s-select" value={uiScale} onchange={handleUiScaleChange}>
-          <option value={1}>100%</option>
-          <option value={1.25}>125%</option>
-          <option value={1.5}>150%</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- ── Map ───────────────────────────────────────── -->
-    <div class="s-group">
-      <h4 class="s-head">{$t('settings.map')}</h4>
+      <h4 class="s-head">{$t('settings.groupDisplay')}</h4>
       <div class="s-row">
         <label class="s-label" for="map-provider">{$t('settings.tileProvider')}</label>
         <select id="map-provider" class="s-select" value={providerSelectValue} onchange={handleMapProviderChange}>
           {#each MAP_PROVIDERS as p}<option value={p.id}>{p.label}</option>{/each}
+          {#if $settings.userMapProviders.length > 0}
+            <optgroup label={$t('settings.userMaps.group')}>
+              {#each $settings.userMapProviders as m (m.id)}<option value={userProviderId(m)}>{m.name}</option>{/each}
+            </optgroup>
+          {/if}
           {#if hasCustomMaps && $customMaps.providers.length > 0}
             <!-- ▦ marks a custom (local tile folder) map; a <select> option can hold text only. -->
             <optgroup label={$t('settings.customMaps')}>
@@ -505,48 +502,6 @@
             </optgroup>
           {/if}
         </select>
-      </div>
-      {#if hasCustomMaps}
-        <div class="s-row s-row-stack">
-          <span class="s-label" title={$t('settings.customMapsHint')}>{$t('settings.customMapsLocation')}</span>
-          <div class="path-picker-row">
-            <input class="s-input path-input" type="text" readonly value={customMapsPathShown} title={customMapsPathShown} />
-            <Button variant="standard" size="sm" onclick={chooseCustomMapsFolder}>{$t('settings.choose')}</Button>
-            <Button variant="standard" size="sm" disabled={!$settings.customMapsPath} onclick={resetCustomMapsFolder}>{$t('settings.useDefault')}</Button>
-          </div>
-          <div class="path-picker-row">
-            <span class="s-loc-coords custom-maps-status">
-              {$customMaps.scanning || customRescanBusy
-                ? $t('settings.customMapsScanning')
-                : $t('settings.customMapsCount', { values: { count: $customMaps.maps.length } })}
-            </span>
-            {#if activeCustomMap}
-              <Button variant="standard" size="sm" icon="map" onclick={showCustomMapArea} title={$t('settings.customMapsShowAreaHint')}>{$t('settings.customMapsShowArea')}</Button>
-            {/if}
-            <Button variant="standard" size="sm" icon="refresh" disabled={customRescanBusy} onclick={rescanCustomMapsClick} title={$t('settings.customMapsRescanHint')}>{$t('settings.customMapsRescan')}</Button>
-          </div>
-          {#if $customMaps.error}<span class="s-err">{$customMaps.error}</span>{/if}
-          {#if customAreaProblem === 'empty'}<span class="s-err">{$t('settings.customMapsNoArea')}</span>{/if}
-          {#if customAreaProblem === 'error'}<span class="s-err">{$t('settings.customMapsScanFailed')}</span>{/if}
-        </div>
-      {/if}
-      <div class="s-row">
-        <label class="s-label" for="altitude-curtain">{$t('settings.altitudeCurtain')}</label>
-        <Toggle checked={altitudeCurtain3D} id="altitude-curtain" onchange={(c) => onPatch({ altitudeCurtain3D: c })} />
-      </div>
-      <!-- Buildings come from Cesium Ion (the same account as World Terrain), so the toggle is dead
-           without a token — disabled rather than hidden, so it is discoverable and explains itself. -->
-      <div class="s-row">
-        <label class="s-label" for="buildings-3d" class:s-label-disabled={!cesiumIonToken}>{$t('settings.buildings3D')}</label>
-        <Toggle checked={!!cesiumIonToken && buildings3D} disabled={!cesiumIonToken} id="buildings-3d" onchange={(c) => onPatch({ buildings3D: c })} />
-      </div>
-      <div class="s-row">
-        <label class="s-label" for="real-lighting">{$t('settings.realLighting')}</label>
-        <Toggle checked={realLighting3D} id="real-lighting" onchange={(c) => onPatch({ realLighting3D: c })} />
-      </div>
-      <div class="s-row">
-        <label class="s-label" for="log-replay-time" class:s-label-disabled={!realLighting3D}>{$t('settings.logReplayTime')}</label>
-        <Toggle checked={realLighting3D && logReplayTime} disabled={!realLighting3D} id="log-replay-time" onchange={(c) => onPatch({ logReplayTime: c })} />
       </div>
       <div class="s-row">
         <label class="s-label" for="night-mode">{$t('settings.nightMode')}</label>
@@ -563,10 +518,6 @@
           <option value="on">{$t('settings.lowPower3DOn')}</option>
           <option value="auto">{$t('settings.lowPower3DAuto')}</option>
         </select>
-      </div>
-      <div class="s-row" title={$t('settings.highRes3DHint')}>
-        <span class="s-label">{$t('settings.highRes3D')}</span>
-        <Toggle checked={highRes3D} id="high-res-3d" onchange={(c) => onPatch({ highRes3D: c })} />
       </div>
       <div class="s-row">
         <span class="s-label">{$t('settings.userLocation')}</span>
@@ -590,6 +541,20 @@
           </select>
         </div>
       </div>
+    </div>
+
+    <!-- ── Widgets ───────────────────────────────────── -->
+    <div class="s-group">
+      <h4 class="s-head">{$t('settings.hudWidgets')}</h4>
+      {#each WIDGET_DEFS as wdef}
+        <div class="s-row">
+          <span class="s-label">{$t(wdef.labelKey)}</span>
+          <div class="widget-toggle-group">
+            <span class="widget-panel-indicator">{getWidgetPanelLabel(wdef.id)}</span>
+            <Toggle checked={isWidgetActive(wdef.id)} onchange={() => onToggleWidget(wdef.id)} />
+          </div>
+        </div>
+      {/each}
     </div>
 
     <!-- ── Units ─────────────────────────────────────── -->
@@ -635,108 +600,47 @@
       </div>
     </div>
 
-    <!-- ── Widgets ───────────────────────────────────── -->
+    <!-- ── Alerts ────────────────────────────────────── -->
     <div class="s-group">
-      <h4 class="s-head">{$t('settings.hudWidgets')}</h4>
-      {#each WIDGET_DEFS as wdef}
-        <div class="s-row">
-          <span class="s-label">{$t(wdef.labelKey)}</span>
-          <div class="widget-toggle-group">
-            <span class="widget-panel-indicator">{getWidgetPanelLabel(wdef.id)}</span>
-            <Toggle checked={isWidgetActive(wdef.id)} onchange={() => onToggleWidget(wdef.id)} />
-          </div>
-        </div>
-      {/each}
-    </div>
-  {:else}
-    <!-- ── Map (cache + 3D token) ────────────────────── -->
-    <div class="s-group">
-      <h4 class="s-head">{$t('settings.map')}</h4>
+      <h4 class="s-head">{$t('settings.alerts')}</h4>
       <div class="s-row">
-        <label class="s-label" for="map-cache">{$t('settings.tileCache')}</label>
-        <select id="map-cache" class="s-select" value={mapCacheMaxMB} onchange={handleCacheSizeChange}>
-          <option value={0}>{$t('settings.noCache')}</option>
-          <option value={100}>100 MB</option>
-          <option value={200}>200 MB</option>
-          <option value={500}>500 MB</option>
-          <option value={1000}>1 GB</option>
-          <option value={2000}>2 GB</option>
-          <option value={5000}>5 GB</option>
+        <span class="s-label">{$t('settings.altitude')}</span>
+        <UnitStepper bind:value={warnAlt} kind="altitude" settings={interfaceSettings} min={0} max={5000} step={10} decimals={0} onchange={onWarnAltChange} />
+      </div>
+      <div class="s-row">
+        <span class="s-label">{$t('settings.batteryAlert')}</span>
+        <NumberStepper bind:value={batAlert} min={0} max={100} step={5} decimals={0} unit="%" onchange={onBatAlertChange} />
+      </div>
+      <div class="s-row">
+        <span class="s-label">{$t('settings.systemMessages')}</span>
+        <select id="system-messages" class="s-select" value={systemMessages}
+          onchange={(e) => onPatch({ systemMessages: (e.target as HTMLSelectElement).value as SystemMessagesLevel })}>
+          <option value="off">{$t('settings.sysMsgOff')}</option>
+          <option value="error">{$t('settings.sysMsgError')}</option>
+          <option value="warning">{$t('settings.sysMsgWarning')}</option>
+          <option value="all">{$t('settings.sysMsgAll')}</option>
+          <option value="debug">{$t('settings.sysMsgDebug')}</option>
         </select>
       </div>
-      {#if mapCacheMaxMB > 0}
-        <div class="cache-bar-container">
-          <div class="cache-bar-track">
-            <div
-              class="cache-bar-fill"
-              class:cache-bar-warning={cacheStats.maxBytes > 0 && cacheStats.usedBytes / cacheStats.maxBytes > 0.85}
-              style="width: {cacheStats.maxBytes > 0 ? Math.min(100, cacheStats.usedBytes / cacheStats.maxBytes * 100).toFixed(1) : 0}%"
-            ></div>
-          </div>
-          <span class="cache-bar-label">
-            {fmtSize(cacheStats.usedBytes)} / {fmtSize(mapCacheMaxMB * 1024 * 1024)} · {cacheStats.tileCount} tiles
-          </span>
-          <Button variant="standard" size="sm" onclick={onClearCache} title={$t('settings.clear')}>{$t('settings.clear')}</Button>
-        </div>
-      {/if}
-
-      <!-- Terrain (Copernicus DEM) cache — unbounded on disk; size readout + clear only. -->
-      <div class="s-row">
-        <span class="s-label">{$t('settings.terrainCache')}</span>
-        <div class="cache-inline">
-          <span class="cache-bar-label">{fmtSize(terrainCache.bytes)} · {terrainCache.count} tiles</span>
-          <Button variant="standard" size="sm" onclick={clearTerrainCache} title={$t('settings.clear')}>{$t('settings.clear')}</Button>
-        </div>
-      </div>
-      <div class="s-row">
-        <label class="s-label" for="cesium-ion-token">Cesium Ion Token</label>
-        <input
-          id="cesium-ion-token"
-          class="s-input"
-          type="password"
-          placeholder="(optional)"
-          value={cesiumIonToken}
-          onchange={(e) => onPatch({ cesiumIonToken: (e.target as HTMLInputElement).value.trim() })}
-        />
-      </div>
-      <p class="cesium-hint">
-        {$t('settings.cesiumHintPre')} <a href="https://ion.cesium.com/signup" target="_blank" rel="noopener">ion.cesium.com</a> {$t('settings.cesiumHintPost')}
-      </p>
-      <!-- Airspace Manager (aeronautical data) — global toggle + provider + key; rest lives in the panel. -->
-      <div class="s-row">
-        <span class="s-label">{$t('settings.airspaceManager')}</span>
-        <Toggle checked={airspace.enabled} id="airspace-enabled" onchange={(c) => patchAirspace({ enabled: c })} />
-      </div>
-      {#if airspace.enabled}
-        <div class="s-row">
-          <label class="s-label" for="airspace-provider">{$t('settings.airspaceProvider')}</label>
-          <select id="airspace-provider" class="s-select" value={airspace.provider} onchange={(e) => patchAirspace({ provider: (e.target as HTMLSelectElement).value as AirspaceProvider })}>
-            <option value="none">{$t('settings.airspaceProviderNone')}</option>
-            <option value="openaip">OpenAIP</option>
-          </select>
-        </div>
-        {#if airspace.provider === 'openaip'}
-          <div class="s-row">
-            <label class="s-label" for="airspace-key">{$t('settings.airspaceApiKey')}</label>
-            <input
-              id="airspace-key"
-              class="s-input"
-              type="password"
-              placeholder="(OpenAIP API key)"
-              value={airspace.apiKey}
-              onchange={(e) => patchAirspace({ apiKey: (e.target as HTMLInputElement).value.trim() })}
-            />
-          </div>
-          <p class="cesium-hint">
-            {$t('settings.airspaceHintPre')} <a href="https://www.openaip.net/" target="_blank" rel="noopener">openaip.net</a> {$t('settings.airspaceHintPost')}
-          </p>
-        {/if}
-      {/if}
     </div>
 
-    <!-- ── Connection ────────────────────────────────── -->
+    <!-- ── UI ────────────────────────────────────────── -->
     <div class="s-group">
-      <h4 class="s-head">{$t('settings.groupConnection')}</h4>
+      <h4 class="s-head">{$t('settings.groupUi')}</h4>
+      <div class="s-row">
+        <label class="s-label" for="lang-select">{$t('settings.language')}</label>
+        <select id="lang-select" class="s-select" value={localeValue} onchange={handleLocaleChange}>
+          {#each SUPPORTED_LOCALES as loc}<option value={loc.code}>{loc.label}</option>{/each}
+        </select>
+      </div>
+      <div class="s-row">
+        <label class="s-label" for="ui-scale">{$t('settings.uiScale')}</label>
+        <select id="ui-scale" class="s-select" value={uiScale} onchange={handleUiScaleChange}>
+          <option value={1}>100%</option>
+          <option value={1.25}>125%</option>
+          <option value={1.5}>150%</option>
+        </select>
+      </div>
       <!-- Which protocol the connection bar starts on. "Last used" is the historic behaviour and
            stays the default; a fixed choice overrides the stored one on every launch. -->
       <div class="s-row" title={$t('settings.defaultProtocolHint')}>
@@ -808,6 +712,185 @@
       {/if}
     </div>
 
+    <!-- ── Updates ───────────────────────────────────── -->
+    <!-- Tailwind: always shown (upstream gates this group behind an `updatesSupported` helper
+         Tailwind does not have — its update check is its own, see stores/settings updateCheck). -->
+    <div class="s-group">
+      <h4 class="s-head">{$t('settings.updates')}</h4>
+      <div class="s-row">
+        <span class="s-label">{$t('settings.updateCheck')}</span>
+        <select id="update-check" class="s-select" value={updateCheck.mode}
+          onchange={(e) => onPatch({ updateCheck: { ...updateCheck, mode: (e.target as HTMLSelectElement).value as UpdateCheckMode } })}>
+          <option value="disabled">{$t('settings.updateDisabled')}</option>
+          <option value="release">{$t('settings.updateRelease')}</option>
+          <option value="patch">{$t('settings.updatePatch')}</option>
+          <option value="prerelease">{$t('settings.updatePrerelease')}</option>
+        </select>
+      </div>
+      <p class="cesium-hint">{$t('settings.updateHint')}</p>
+    </div>
+  {:else if tab === 'map'}
+    <!-- ── 3D view ───────────────────────────────────── -->
+    <div class="s-group">
+      <h4 class="s-head">{$t('settings.group3dView')}</h4>
+      <div class="s-row">
+        <label class="s-label" for="altitude-curtain">{$t('settings.altitudeCurtain')}</label>
+        <Toggle checked={altitudeCurtain3D} id="altitude-curtain" onchange={(c) => onPatch({ altitudeCurtain3D: c })} />
+      </div>
+      <!-- Buildings come from Cesium Ion (the same account as World Terrain), so the toggle is dead
+           without a token — disabled rather than hidden, so it is discoverable and explains itself. -->
+      <div class="s-row">
+        <label class="s-label" for="buildings-3d" class:s-label-disabled={!cesiumIonToken}>{$t('settings.buildings3D')}</label>
+        <Toggle checked={!!cesiumIonToken && buildings3D} disabled={!cesiumIonToken} id="buildings-3d" onchange={(c) => onPatch({ buildings3D: c })} />
+      </div>
+      <div class="s-row">
+        <label class="s-label" for="real-lighting">{$t('settings.realLighting')}</label>
+        <Toggle checked={realLighting3D} id="real-lighting" onchange={(c) => onPatch({ realLighting3D: c })} />
+      </div>
+      <div class="s-row">
+        <label class="s-label" for="log-replay-time" class:s-label-disabled={!realLighting3D}>{$t('settings.logReplayTime')}</label>
+        <Toggle checked={realLighting3D && logReplayTime} disabled={!realLighting3D} id="log-replay-time" onchange={(c) => onPatch({ logReplayTime: c })} />
+      </div>
+      <div class="s-row" title={$t('settings.highRes3DHint')}>
+        <span class="s-label">{$t('settings.highRes3D')}</span>
+        <Toggle checked={highRes3D} id="high-res-3d" onchange={(c) => onPatch({ highRes3D: c })} />
+      </div>
+    </div>
+
+    <!-- ── Mission Control ───────────────────────────── -->
+    <div class="s-group">
+      <h4 class="s-head">{$t('settings.missionControl')}</h4>
+      <div class="s-row">
+        <span class="s-label">{$t('settings.defaultWpAlt')}</span>
+        <UnitStepper bind:value={wpAlt} kind="altitude" settings={interfaceSettings} min={1} max={1000} step={5} decimals={0} onchange={onWpAltChange} />
+      </div>
+      <div class="s-row">
+        <span class="s-label">{$t('settings.defaultPhTime')}</span>
+        <NumberStepper bind:value={phTime} min={1} max={600} step={1} decimals={0} unit="s" onchange={onPhTimeChange} />
+      </div>
+    </div>
+
+    <!-- ── Providers ─────────────────────────────────── -->
+    <div class="s-group">
+      <h4 class="s-head">{$t('settings.groupProviders')}</h4>
+      {#if hasCustomMaps}
+        <div class="s-row s-row-stack">
+          <span class="s-label" title={$t('settings.customMapsHint')}>{$t('settings.customMapsLocation')}</span>
+          <div class="path-picker-row">
+            <input class="s-input path-input" type="text" readonly value={customMapsPathShown} title={customMapsPathShown} />
+            <Button variant="standard" size="sm" onclick={chooseCustomMapsFolder}>{$t('settings.choose')}</Button>
+            <Button variant="standard" size="sm" disabled={!$settings.customMapsPath} onclick={resetCustomMapsFolder}>{$t('settings.useDefault')}</Button>
+          </div>
+          <div class="path-picker-row">
+            <span class="s-loc-coords custom-maps-status">
+              {$customMaps.scanning || customRescanBusy
+                ? $t('settings.customMapsScanning')
+                : $t('settings.customMapsCount', { values: { count: $customMaps.maps.length } })}
+            </span>
+            {#if activeCustomMap}
+              <Button variant="standard" size="sm" icon="map" onclick={showCustomMapArea} title={$t('settings.customMapsShowAreaHint')}>{$t('settings.customMapsShowArea')}</Button>
+            {/if}
+            <Button variant="standard" size="sm" icon="refresh" disabled={customRescanBusy} onclick={rescanCustomMapsClick} title={$t('settings.customMapsRescanHint')}>{$t('settings.customMapsRescan')}</Button>
+          </div>
+          {#if $customMaps.error}<span class="s-err">{$customMaps.error}</span>{/if}
+          {#if customAreaProblem === 'empty'}<span class="s-err">{$t('settings.customMapsNoArea')}</span>{/if}
+          {#if customAreaProblem === 'error'}<span class="s-err">{$t('settings.customMapsScanFailed')}</span>{/if}
+        </div>
+      {/if}
+      <div class="s-row">
+        <span class="s-label" title={$t('settings.userMaps.rowHint')}>{$t('settings.userMaps.row')}</span>
+        <div class="s-loc">
+          <span class="s-loc-coords">{$t('settings.userMaps.count', { values: { count: $settings.userMapProviders.length } })}</span>
+          <Button variant="standard" size="sm" icon="edit" onclick={() => (userMapsOpen = true)}>{$t('settings.userMaps.manage')}</Button>
+        </div>
+      </div>
+      <div class="s-row">
+        <label class="s-label" for="cesium-ion-token">Cesium Ion Token</label>
+        <input
+          id="cesium-ion-token"
+          class="s-input"
+          type="password"
+          placeholder="(optional)"
+          value={cesiumIonToken}
+          onchange={(e) => onPatch({ cesiumIonToken: (e.target as HTMLInputElement).value.trim() })}
+        />
+      </div>
+      <p class="cesium-hint">
+        {$t('settings.cesiumHintPre')} <a href="https://ion.cesium.com/signup" target="_blank" rel="noopener">ion.cesium.com</a> {$t('settings.cesiumHintPost')}
+      </p>
+      <!-- Airspace Manager (aeronautical data) — global toggle + provider + key; rest lives in the panel. -->
+      <div class="s-row">
+        <span class="s-label">{$t('settings.airspaceManager')}</span>
+        <Toggle checked={airspace.enabled} id="airspace-enabled" onchange={(c) => patchAirspace({ enabled: c })} />
+      </div>
+      {#if airspace.enabled}
+        <div class="s-row">
+          <label class="s-label" for="airspace-provider">{$t('settings.airspaceProvider')}</label>
+          <select id="airspace-provider" class="s-select" value={airspace.provider} onchange={(e) => patchAirspace({ provider: (e.target as HTMLSelectElement).value as AirspaceProvider })}>
+            <option value="none">{$t('settings.airspaceProviderNone')}</option>
+            <option value="openaip">OpenAIP</option>
+          </select>
+        </div>
+        {#if airspace.provider === 'openaip'}
+          <div class="s-row">
+            <label class="s-label" for="airspace-key">{$t('settings.airspaceApiKey')}</label>
+            <input
+              id="airspace-key"
+              class="s-input"
+              type="password"
+              placeholder="(OpenAIP API key)"
+              value={airspace.apiKey}
+              onchange={(e) => patchAirspace({ apiKey: (e.target as HTMLInputElement).value.trim() })}
+            />
+          </div>
+          <p class="cesium-hint">
+            {$t('settings.airspaceHintPre')} <a href="https://www.openaip.net/" target="_blank" rel="noopener">openaip.net</a> {$t('settings.airspaceHintPost')}
+          </p>
+        {/if}
+      {/if}
+    </div>
+
+    <!-- ── Cache ─────────────────────────────────────── -->
+    <div class="s-group">
+      <h4 class="s-head">{$t('settings.groupCache')}</h4>
+      <div class="s-row">
+        <label class="s-label" for="map-cache">{$t('settings.tileCache')}</label>
+        <select id="map-cache" class="s-select" value={mapCacheMaxMB} onchange={handleCacheSizeChange}>
+          <option value={0}>{$t('settings.noCache')}</option>
+          <option value={100}>100 MB</option>
+          <option value={200}>200 MB</option>
+          <option value={500}>500 MB</option>
+          <option value={1000}>1 GB</option>
+          <option value={2000}>2 GB</option>
+          <option value={5000}>5 GB</option>
+        </select>
+      </div>
+      {#if mapCacheMaxMB > 0}
+        <div class="cache-bar-container">
+          <div class="cache-bar-track">
+            <div
+              class="cache-bar-fill"
+              class:cache-bar-warning={cacheStats.maxBytes > 0 && cacheStats.usedBytes / cacheStats.maxBytes > 0.85}
+              style="width: {cacheStats.maxBytes > 0 ? Math.min(100, cacheStats.usedBytes / cacheStats.maxBytes * 100).toFixed(1) : 0}%"
+            ></div>
+          </div>
+          <span class="cache-bar-label">
+            {fmtSize(cacheStats.usedBytes)} / {fmtSize(mapCacheMaxMB * 1024 * 1024)} · {cacheStats.tileCount} tiles
+          </span>
+          <Button variant="standard" size="sm" onclick={onClearCache} title={$t('settings.clear')}>{$t('settings.clear')}</Button>
+        </div>
+      {/if}
+
+      <!-- Terrain (Copernicus DEM) cache — unbounded on disk; size readout + clear only. -->
+      <div class="s-row">
+        <span class="s-label">{$t('settings.terrainCache')}</span>
+        <div class="cache-inline">
+          <span class="cache-bar-label">{fmtSize(terrainCache.bytes)} · {terrainCache.count} tiles</span>
+          <Button variant="standard" size="sm" onclick={clearTerrainCache} title={$t('settings.clear')}>{$t('settings.clear')}</Button>
+        </div>
+      </div>
+    </div>
+  {:else}
     <!-- ── Telemetry ─────────────────────────────────── -->
     <div class="s-group">
       <h4 class="s-head">{$t('settings.telemetry')}</h4>
@@ -964,10 +1047,13 @@
           <Button variant="standard" size="sm" onclick={onResetFlightLogPath}>{$t('settings.useDefault')}</Button>
         </div>
       </div>
-      <div class="s-row">
-        <span class="s-label" title={$t('settings.compactDbHint')}>{$t('settings.compactDb')}</span>
-        <Button variant="standard" size="sm" onclick={onCompactDb} title={$t('settings.compactDbHint')}>{$t('settings.compactDbBtn')}</Button>
-      </div>
+      <!-- Desktop only — see `hasDbCompact`. -->
+      {#if hasDbCompact}
+        <div class="s-row">
+          <span class="s-label" title={$t('settings.compactDbHint')}>{$t('settings.compactDb')}</span>
+          <Button variant="standard" size="sm" onclick={onCompactDb} title={$t('settings.compactDbHint')}>{$t('settings.compactDbBtn')}</Button>
+        </div>
+      {/if}
       {#if dbBackup}
         <div class="s-row" title={dbBackup.path}>
           <span class="s-label" title={$t('settings.dbBackupHint')}>
@@ -1033,59 +1119,6 @@
         <p class="s-err">{logOpenError}</p>
       {/if}
     </div>
-
-    <!-- ── Updates ───────────────────────────────────── -->
-    <div class="s-group">
-      <h4 class="s-head">{$t('settings.updates')}</h4>
-      <div class="s-row">
-        <span class="s-label">{$t('settings.updateCheck')}</span>
-        <select id="update-check" class="s-select" value={updateCheck.mode}
-          onchange={(e) => onPatch({ updateCheck: { ...updateCheck, mode: (e.target as HTMLSelectElement).value as UpdateCheckMode } })}>
-          <option value="disabled">{$t('settings.updateDisabled')}</option>
-          <option value="release">{$t('settings.updateRelease')}</option>
-          <option value="patch">{$t('settings.updatePatch')}</option>
-          <option value="prerelease">{$t('settings.updatePrerelease')}</option>
-        </select>
-      </div>
-      <p class="cesium-hint">{$t('settings.updateHint')}</p>
-    </div>
-
-    <!-- ── Mission Control ───────────────────────────── -->
-    <div class="s-group">
-      <h4 class="s-head">{$t('settings.missionControl')}</h4>
-      <div class="s-row">
-        <span class="s-label">{$t('settings.defaultWpAlt')}</span>
-        <UnitStepper bind:value={wpAlt} kind="altitude" settings={interfaceSettings} min={1} max={1000} step={5} decimals={0} onchange={onWpAltChange} />
-      </div>
-      <div class="s-row">
-        <span class="s-label">{$t('settings.defaultPhTime')}</span>
-        <NumberStepper bind:value={phTime} min={1} max={600} step={1} decimals={0} unit="s" onchange={onPhTimeChange} />
-      </div>
-    </div>
-
-    <!-- ── Alerts ────────────────────────────────────── -->
-    <div class="s-group">
-      <h4 class="s-head">{$t('settings.alerts')}</h4>
-      <div class="s-row">
-        <span class="s-label">{$t('settings.altitude')}</span>
-        <UnitStepper bind:value={warnAlt} kind="altitude" settings={interfaceSettings} min={0} max={5000} step={10} decimals={0} onchange={onWarnAltChange} />
-      </div>
-      <div class="s-row">
-        <span class="s-label">{$t('settings.batteryAlert')}</span>
-        <NumberStepper bind:value={batAlert} min={0} max={100} step={5} decimals={0} unit="%" onchange={onBatAlertChange} />
-      </div>
-      <div class="s-row">
-        <span class="s-label">{$t('settings.systemMessages')}</span>
-        <select id="system-messages" class="s-select" value={systemMessages}
-          onchange={(e) => onPatch({ systemMessages: (e.target as HTMLSelectElement).value as SystemMessagesLevel })}>
-          <option value="off">{$t('settings.sysMsgOff')}</option>
-          <option value="error">{$t('settings.sysMsgError')}</option>
-          <option value="warning">{$t('settings.sysMsgWarning')}</option>
-          <option value="all">{$t('settings.sysMsgAll')}</option>
-          <option value="debug">{$t('settings.sysMsgDebug')}</option>
-        </select>
-      </div>
-    </div>
   {/if}
 {/snippet}
 
@@ -1103,6 +1136,9 @@
      here the overlay covers the whole panels layer. -->
 {#if showLogPicker}
   <LogFilePicker files={logFiles} onPick={sharePickedLog} onClose={() => (showLogPicker = false)} />
+{/if}
+{#if userMapsOpen}
+  <UserMapsDialog onClose={() => (userMapsOpen = false)} />
 {/if}
 
 <style>
@@ -1180,7 +1216,7 @@
   .custom-maps-status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .path-input { flex: 1; min-width: 0; }
 
-  /* The one kept hint (Cesium token) — bumped up a touch so it's actually readable. */
+  /* Inline hint text (Cesium token, airspace key, update check) — bumped up a touch so it's actually readable. */
   .cesium-hint {
     font-size: 11px;
     color: #9a9a9a;

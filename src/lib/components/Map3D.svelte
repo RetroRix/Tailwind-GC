@@ -48,6 +48,7 @@
   import { settings } from "$lib/stores/settings";
   import { gcsLocation } from "$lib/stores/gcsLocation";
   import { getProviderById, isCustomProviderId, isCustomTileUrl } from "$lib/config/mapProviders";
+  import { fillTileTemplate } from "$lib/helpers/tileTemplate";
   import type { MapProvider } from "$lib/config/mapProviders";
   import { ensureCustomMapsLoaded, watchMapProvider, onCustomMapFocus } from "$lib/stores/customMaps";
   import { getCachedTile, putCachedTile, initTileCache } from "$lib/cache/tileCache";
@@ -606,18 +607,11 @@
   }
 
   /**
-   * Build the actual tile URL from a template + tile coordinates.
+   * Build the actual tile URL from a template + tile coordinates (incl. a user map's `{-y}` TMS row).
    * Used as the IndexedDB cache key.
    */
   function buildTileUrl(template: string, x: number, y: number, z: number, subdomains: string[]): string {
-    let url = template
-      .replace('{x}', String(x))
-      .replace('{y}', String(y))
-      .replace('{z}', String(z));
-    if (subdomains.length > 0) {
-      url = url.replace('{s}', subdomains[(x + y + z) % subdomains.length]);
-    }
-    return url;
+    return fillTileTemplate(template, z, x, y, subdomains);
   }
 
   /** Tile coordinates + provider for over-zoom placeholder detection. */
@@ -696,16 +690,23 @@
     const hasSubdomains = cesiumUrl.includes('{s}');
     const subdomains = hasSubdomains ? ['a', 'b', 'c'] : [];
 
+    // With High-Resolution 3D off the globe renders at half the pixel density, but Cesium picks tile
+    // levels in CSS pixels (QuadtreePrimitive divides the screen-space error by pixelRatio), so it
+    // would still load tiles twice as fine as the picture can show. Telling it the tiles are twice as
+    // wide makes it take the imagery one level lower: a quarter of the tiles, matching the picture.
+    const texelPx = (provider.custom?.tileSize ?? provider.tileSize ?? 256) * (highRes3DSetting ? 1 : 2);
+
     const imgProvider = new Cesium.UrlTemplateImageryProvider({
       url: cesiumUrl,
       subdomains: hasSubdomains ? subdomains : undefined,
       maximumLevel: provider.cesiumMaxZoom ?? provider.maxZoom,
-      // A custom map's real tile pixel size (Cesium default 256): Cesium picks the imagery level
-      // from texel spacing (ImageryLayer getLevelWithMaximumTexelSpacing divides by tileWidth), so a
-      // 512 px source is drawn from one level lower — its own native density. Levels stay file
-      // levels (maximumLevel = a custom map's highest level, the below-lowest check below).
-      tileWidth: provider.custom?.tileSize ?? 256,
-      tileHeight: provider.custom?.tileSize ?? 256,
+      // The real tile pixel size of a custom or user online map (Cesium default 256): Cesium picks
+      // the imagery level from texel spacing (ImageryLayer getLevelWithMaximumTexelSpacing divides
+      // by tileWidth), so a 512 px source is drawn from one level lower — its own native density.
+      // Levels stay file levels for a custom map (maximumLevel = its highest level, the
+      // below-lowest check below).
+      tileWidth: texelPx,
+      tileHeight: texelPx,
       credit: new Cesium.Credit(provider.attribution, false),
     });
 
@@ -1486,6 +1487,8 @@
       if (highRes !== highRes3DSetting) {
         highRes3DSetting = highRes;
         applyRenderResolution();
+        // The imagery level follows the render resolution — rebuild the layers with the new tile width.
+        applyMapProvider(getProviderById(next.mapProvider));
       }
       const aspEnabledChg = next.airspace.enabled !== airspaceEnabled;
       if (aspEnabledChg || next.airspace.layers.obstacles.d3 !== obstacleD3 || next.airspace.obstacleDistanceKm !== obstacleDistKm) {

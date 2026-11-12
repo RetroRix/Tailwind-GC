@@ -111,6 +111,272 @@ pub fn open_database(path: &Path) -> SqlResult<Connection> {
     Ok(conn)
 }
 
+/// Freelist size (pages) above which `open_database` starts a reclaim: 4096 pages = 16 MiB at 4 KiB
+/// pages. Below that the next delete picks the pages up anyway; above it something big was left behind.
+const RECLAIM_ON_OPEN_PAGES: i64 = 4096;
+
+/// Pages per `PRAGMA incremental_vacuum(N)` call of the background reclaim. Each call is its own
+/// write transaction: a small chunk keeps the write lock short — a recording or import waits at most
+/// about one chunk, PROVIDED its write transaction takes the lock up front (`write_tx`; a deferred
+/// read→write upgrade fails instead of waiting) — and lets the WAL auto-checkpoint between chunks
+/// instead of growing by the whole freelist.
+/// Measured on copies of a 1.2 GB archive (113k free pages, 4 KiB pages): a 1024-page chunk takes tens
+/// of ms on an SSD (34 ms median / 46 ms p95 including the auto-checkpoint, ~4.2 s for the whole
+/// freelist, WAL peak 7 MB); on a 7200 rpm hard disk chunks take a few hundred ms (2048-page chunks:
+/// 0.39–0.53 s median, 22–29 s in total).
+const RECLAIM_CHUNK_PAGES: i64 = 1024;
+
+/// Pause of the background reclaim between two chunks. Writers waiting for the lock must get a real
+/// window between chunks — also when the auto-checkpoint cannot run because a long-lived reader pins
+/// the WAL and the chunks would otherwise follow back to back.
+const RECLAIM_CHUNK_PAUSE: std::time::Duration = std::time::Duration::from_millis(5);
+
+/// How long a reclaim chunk waits for the write lock before it gives up (the remainder stays on the
+/// freelist for the next trigger).
+const RECLAIM_BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Directories whose databases are never reclaimed: the scratch store of "open a log without importing
+/// it" (registered by `commands::flightlog::scratch_dir`). It is thrown away whole, so reclaiming it is
+/// wasted I/O — and on Windows its wipe fails while a reclaim thread holds the database open.
+static NO_RECLAIM_DIRS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Never reclaim a database inside `dir` (see `NO_RECLAIM_DIRS`).
+pub(crate) fn exclude_from_reclaim(dir: &Path) {
+    let dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let mut dirs = NO_RECLAIM_DIRS.lock().unwrap_or_else(|e| e.into_inner());
+    if !dirs.contains(&dir) {
+        dirs.push(dir);
+    }
+}
+
+/// Whether the database file `db_file` (an absolute path, as `Connection::path` names it) lies in a
+/// directory registered with `exclude_from_reclaim`. Compared in canonical form: SQLite names the file
+/// with symlinks resolved (on macOS the temp folder sits behind `/var` → `/private/var`), which
+/// `std::path::absolute` does not do.
+fn reclaim_excluded(db_file: &Path) -> bool {
+    let canonical = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let file = canonical(db_file);
+    NO_RECLAIM_DIRS.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|dir| file.starts_with(canonical(dir)))
+}
+
+/// Database files a background reclaim is running on, each with a "go round once more" flag set by a
+/// trigger that arrived meanwhile (single flight per file).
+static RECLAIMS_IN_FLIGHT: std::sync::Mutex<Vec<(PathBuf, bool)>> = std::sync::Mutex::new(Vec::new());
+
+fn reclaims_in_flight() -> std::sync::MutexGuard<'static, Vec<(PathBuf, bool)>> {
+    RECLAIMS_IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Database files a "Compact Database" (full `VACUUM`, `compact_database`) is running on — single flight
+/// per file. While a file is listed, no background reclaim starts on it and a running one stops before
+/// its next chunk: the VACUUM empties the freelist anyway, and a reclaim chunk waiting for the write lock
+/// the VACUUM holds for minutes would only time out.
+///
+/// Lock order: `RECLAIMS_IN_FLIGHT` → `COMPACTS_IN_FLIGHT`, never the reverse.
+static COMPACTS_IN_FLIGHT: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+fn compacts_in_flight() -> std::sync::MutexGuard<'static, Vec<PathBuf>> {
+    COMPACTS_IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Whether a compact is running on the database file `path` (as `Connection::path` names it).
+pub(crate) fn compact_running(path: &Path) -> bool {
+    compacts_in_flight().iter().any(|p| p == path)
+}
+
+fn freelist_pages(conn: &Connection) -> SqlResult<i64> {
+    conn.query_row("PRAGMA freelist_count", [], |row| row.get(0))
+}
+
+/// Bytes on the freelist (`freelist_count × page_size`).
+fn freelist_bytes(conn: &Connection) -> SqlResult<i64> {
+    let page_size: i64 = conn.query_row("PRAGMA page_size", [], |row| row.get(0))?;
+    Ok(freelist_pages(conn)? * page_size)
+}
+
+/// What one `reclaim_free_pages` run did.
+#[derive(Debug, Default)]
+struct ReclaimStats {
+    pages: i64,
+    chunks: u32,
+    /// The longest single chunk — the longest the write lock was held.
+    longest: std::time::Duration,
+}
+
+/// Hand the whole freelist back to the file system (`auto_vacuum = INCREMENTAL`, see `open_database`),
+/// `chunk_pages` at a time, each chunk its own implicit transaction. `PRAGMA incremental_vacuum(N)`
+/// frees one page per result row it yields, so every call is stepped to the end (`execute_batch` steps
+/// once and frees exactly one page). Loops until `freelist_count` is 0, so pages freed by others while
+/// it runs go too; `pause` is slept before every chunk but the first. Synchronous — the app goes
+/// through `spawn_reclaim`. `stop` is asked before every chunk; once it says yes the run ends there and
+/// the rest stays on the freelist (a compact took the file over).
+fn reclaim_free_pages(
+    conn: &Connection,
+    chunk_pages: i64,
+    pause: std::time::Duration,
+    stop: &dyn Fn() -> bool,
+) -> SqlResult<ReclaimStats> {
+    let mut stats = ReclaimStats::default();
+    while freelist_pages(conn)? > 0 {
+        if stats.chunks > 0 && !pause.is_zero() {
+            std::thread::sleep(pause);
+        }
+        if stop() {
+            break;
+        }
+        let started = std::time::Instant::now();
+        let mut freed = 0;
+        {
+            let mut stmt = conn.prepare(&format!("PRAGMA incremental_vacuum({chunk_pages})"))?;
+            let mut rows = stmt.query([])?;
+            while rows.next()?.is_some() {
+                freed += 1;
+            }
+        }
+        if freed == 0 {
+            break; // not an INCREMENTAL database — nothing can be handed back this way
+        }
+        stats.pages += freed;
+        stats.chunks += 1;
+        stats.longest = stats.longest.max(started.elapsed());
+    }
+    Ok(stats)
+}
+
+/// Reclaim the free pages of `conn`'s database file in a background thread, so a delete or an upgrade
+/// never blocks its (often main-thread) caller and never fails on the reclaim. The thread opens its own
+/// plain connection (no `open_database`: no migration, no backup). Single flight per file: a trigger
+/// while one runs makes it go round once more instead of starting a second one. Errors are logged
+/// only — whatever stays on the freelist is picked up by the next trigger. A connection without a
+/// file (in-memory, the tests) is reclaimed synchronously right here. No reclaim starts on a file a
+/// compact is running on (`COMPACTS_IN_FLIGHT`).
+pub(crate) fn spawn_reclaim(conn: &Connection) {
+    let path = match conn.path() {
+        Some(p) if !p.is_empty() => PathBuf::from(p),
+        _ => {
+            if let Err(e) = reclaim_free_pages(conn, RECLAIM_CHUNK_PAGES, std::time::Duration::ZERO, &|| false) {
+                log::warn!("[flightlog] free-page reclaim failed: {e}");
+            }
+            return;
+        }
+    };
+    if reclaim_excluded(&path) {
+        return;
+    }
+    {
+        let mut running = reclaims_in_flight();
+        if compact_running(&path) {
+            return; // the VACUUM empties the freelist itself
+        }
+        if let Some(entry) = running.iter_mut().find(|(p, _)| *p == path) {
+            entry.1 = true;
+            return;
+        }
+        running.push((path.clone(), false));
+    }
+    let spawned = std::thread::Builder::new()
+        .name("db-reclaim".into())
+        .spawn({
+            let path = path.clone();
+            move || reclaim_thread(&path)
+        });
+    if let Err(e) = spawned {
+        reclaims_in_flight().retain(|(p, _)| *p != path);
+        log::warn!("[flightlog] could not start the free-page reclaim: {e}");
+    }
+}
+
+/// Removes the in-flight entry if the thread ends without doing so itself (error, panic).
+struct ReclaimInFlight<'a> {
+    path: &'a Path,
+    armed: bool,
+}
+
+impl Drop for ReclaimInFlight<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            reclaims_in_flight().retain(|(p, _)| p != self.path);
+        }
+    }
+}
+
+fn reclaim_thread(path: &Path) {
+    let mut entry = ReclaimInFlight { path, armed: true };
+    let started = std::time::Instant::now();
+    let mut total = ReclaimStats::default();
+    let mut freelist: Option<(i64, i64)> = None; // bytes before the first / after the last round
+    loop {
+        match reclaim_file(path) {
+            Ok((before, stats, after)) => {
+                freelist = Some((freelist.map_or(before, |(b, _)| b), after));
+                total.pages += stats.pages;
+                total.chunks += stats.chunks;
+                total.longest = total.longest.max(stats.longest);
+            }
+            Err(e) => {
+                log::warn!("[flightlog] free-page reclaim of {} failed: {e}", path.display());
+                break;
+            }
+        }
+        // The file is closed again (`reclaim_file`); go round once more if a trigger came meanwhile —
+        // unless a compact has taken the file over (it waits for this thread to end).
+        let mut running = reclaims_in_flight();
+        match running.iter().position(|(p, _)| p == path) {
+            Some(i) if running[i].1 && !compact_running(path) => running[i].1 = false,
+            Some(i) => {
+                running.remove(i);
+                entry.armed = false;
+                break;
+            }
+            None => {
+                entry.armed = false;
+                break;
+            }
+        }
+    }
+    if let Some((before, after)) = freelist.filter(|_| total.pages > 0) {
+        log::info!(
+            "[flightlog] reclaimed {} free pages in {} ms ({} chunks, longest {} ms): freelist {:.1} MB -> {:.1} MB",
+            total.pages,
+            started.elapsed().as_millis(),
+            total.chunks,
+            total.longest.as_millis(),
+            before as f64 / 1_048_576.0,
+            after as f64 / 1_048_576.0
+        );
+    }
+}
+
+/// One reclaim round on its own connection: freelist bytes before, what was done, bytes after. Opened
+/// without CREATE — a database deleted meanwhile (the scratch store) must not come back as an empty file.
+fn reclaim_file(path: &Path) -> SqlResult<(i64, ReclaimStats, i64)> {
+    let conn = Connection::open_with_flags(
+        path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    conn.busy_timeout(RECLAIM_BUSY_TIMEOUT)?;
+    let before = freelist_bytes(&conn)?;
+    let stats = reclaim_free_pages(&conn, RECLAIM_CHUNK_PAGES, RECLAIM_CHUNK_PAUSE, &|| compact_running(path))?;
+    Ok((before, stats, freelist_bytes(&conn)?))
+}
+
+/// Whether a background reclaim is running on the database file `path` (as `Connection::path` names it).
+#[cfg(test)]
+fn reclaim_running(path: &str) -> bool {
+    reclaims_in_flight().iter().any(|(p, _)| p == Path::new(path))
+}
+
+/// Wait (bounded) until no background reclaim runs on `path`; panics after `limit`.
+#[cfg(test)]
+fn wait_for_reclaim(path: &str, limit: std::time::Duration) -> std::time::Duration {
+    let started = std::time::Instant::now();
+    while reclaim_running(path) {
+        assert!(started.elapsed() < limit, "the background reclaim of {path} did not finish within {limit:?}");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    started.elapsed()
+}
+
 /// Sibling file of the DB holding the single pre-migration backup — it lives next to `flights.db`
 /// on purpose, so it follows the user-configured DB folder and can be moved/kept manually.
 pub fn backup_path_for(db_path: &Path) -> PathBuf {
@@ -144,11 +410,107 @@ fn backup_before_migration(conn: &Connection, db_path: &Path, from_version: u32)
     Ok(())
 }
 
+/// Error of a compact started on a file that is already being compacted. The `compact-running:` prefix
+/// is a STABLE marker the frontend matches on (`compactDb` in +page.svelte) — change both together.
+pub const COMPACT_RUNNING_ERROR: &str = "compact-running: a database compact is already running";
+
+/// How long the compact's VACUUM waits for the write lock another connection holds (an import batch, a
+/// flight being saved) before it fails — the default 5 s is short for a slow drive.
+const COMPACT_BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// How long a compact waits for a background reclaim of its file to stop. The reclaim ends before its
+/// next chunk, and a chunk waits at most `RECLAIM_BUSY_TIMEOUT` for the lock; past this bound the
+/// VACUUM starts anyway and its own busy timeout applies.
+const COMPACT_RECLAIM_WAIT: std::time::Duration = std::time::Duration::from_secs(40);
+
+/// A compact's entry in `COMPACTS_IN_FLIGHT`; removed when dropped (also on an error or a panic).
+pub(crate) struct CompactGuard {
+    path: Option<PathBuf>,
+}
+
+impl Drop for CompactGuard {
+    fn drop(&mut self) {
+        if let Some(path) = &self.path {
+            compacts_in_flight().retain(|p| p != path);
+        }
+    }
+}
+
+/// Register a compact of `conn`'s database file (single flight: a second one gets
+/// `COMPACT_RUNNING_ERROR`) and wait until no background reclaim runs on it any more — a running one
+/// stops before its next chunk, new ones do not start while the guard lives (`spawn_reclaim`). This
+/// covers the reclaim the compact's own `open_database` starts on a large freelist as well. A
+/// connection without a file (in-memory) is unreachable for anyone else and needs no registration.
+/// Crate-visible for tests elsewhere that need a compact "running" on a file.
+pub(crate) fn begin_compact(conn: &Connection) -> Result<CompactGuard, String> {
+    let Some(path) = conn.path().filter(|p| !p.is_empty()).map(PathBuf::from) else {
+        return Ok(CompactGuard { path: None });
+    };
+    {
+        // Under the reclaim lock: `spawn_reclaim` checks for a compact and registers its reclaim in one
+        // step under the same lock, so a reclaim is either visible to the wait below or never starts.
+        let _reclaims = reclaims_in_flight();
+        let mut compacts = compacts_in_flight();
+        if compacts.contains(&path) {
+            return Err(COMPACT_RUNNING_ERROR.to_string());
+        }
+        compacts.push(path.clone());
+    }
+    let guard = CompactGuard { path: Some(path.clone()) };
+    let started = std::time::Instant::now();
+    while reclaims_in_flight().iter().any(|(p, _)| *p == path) {
+        if started.elapsed() > COMPACT_RECLAIM_WAIT {
+            log::warn!(
+                "[flightlog] the background reclaim of {} did not stop within {} s — compacting anyway",
+                path.display(),
+                COMPACT_RECLAIM_WAIT.as_secs()
+            );
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    Ok(guard)
+}
+
 /// Full defragmenting VACUUM — rebuilds the whole DB file to squeeze out fragmentation. Expensive
-/// (cost ∝ DB size); exposed only as an explicit "Compact Database" maintenance action. Routine
-/// deletes use incremental_vacuum instead (see `open_database`).
-pub fn compact_database(conn: &Connection) -> SqlResult<()> {
-    conn.execute_batch("VACUUM;")
+/// (cost ∝ DB size, minutes for a GB-sized archive on a hard disk or SD card); exposed only as the
+/// explicit "Compact Database" maintenance action. Routine deletes use incremental_vacuum instead (see
+/// `open_database`). Single flight per file, and no background reclaim runs on the file meanwhile
+/// (`begin_compact`). Sets `conn`'s busy timeout to `COMPACT_BUSY_TIMEOUT`. Returns the database
+/// size before and after.
+pub fn compact_database(conn: &Connection) -> Result<CompactStats, String> {
+    let _guard = begin_compact(conn)?;
+    let size = |conn: &Connection| -> SqlResult<i64> {
+        let page_count: i64 = conn.query_row("PRAGMA page_count", [], |r| r.get(0))?;
+        let page_size: i64 = conn.query_row("PRAGMA page_size", [], |r| r.get(0))?;
+        Ok(page_count * page_size)
+    };
+    let before = size(conn).map_err(|e| e.to_string())?;
+    let started = std::time::Instant::now();
+    conn.busy_timeout(COMPACT_BUSY_TIMEOUT).map_err(|e| e.to_string())?;
+    if let Err(e) = conn.execute_batch("VACUUM;") {
+        log::warn!(
+            "[flightlog] database compact failed after {} ms: {e}",
+            started.elapsed().as_millis()
+        );
+        return Err(format!("Compact failed: {e}"));
+    }
+    let after = size(conn).map_err(|e| e.to_string())?;
+    log::info!(
+        "[flightlog] database compacted in {} ms: {:.1} MB -> {:.1} MB",
+        started.elapsed().as_millis(),
+        before as f64 / 1_048_576.0,
+        after as f64 / 1_048_576.0
+    );
+    Ok(CompactStats { size_before: before, size_after: after })
+}
+
+/// The database's size (pages × page size, bytes) before and after a compact — the difference is what
+/// the compact gave back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct CompactStats {
+    pub size_before: i64,
+    pub size_after: i64,
 }
 
 /// Resolve the database file path based on settings.

@@ -25,6 +25,8 @@
   import CesiumKeyPrompt from "$lib/components/CesiumKeyPrompt.svelte";
   import LogPlayer from "$lib/components/logbook/LogPlayer.svelte";
   import HiresParseModal from "$lib/components/logbook/HiresParseModal.svelte";
+  import CompactDbModal from "$lib/components/logbook/CompactDbModal.svelte";
+  import { stripLogNumber } from "$lib/helpers/flightlogHelpers";
   import RawTelemetryModal from "$lib/components/RawTelemetryModal.svelte";
   import PhoneBottomChips from "$lib/components/phone/PhoneBottomChips.svelte";
   import PhoneDebugButton from "$lib/components/phone/PhoneDebugButton.svelte";
@@ -683,6 +685,9 @@
   let logbookLoading = $state(false);
   let blackboxImporting = $state(false);
   let blackboxImportProgress = $state<BlackboxImportProgress | null>(null);
+  // "Compact Database" running: shows the blocking CompactDbModal and keeps a second click from
+  // starting another run (the backend refuses one per file as well).
+  let dbCompacting = $state(false);
   let flightSummaries = $state<FlightSummary[]>([]);
   let selectedFlight: Flight | null = $state(null);
   let selectedFlightTrack = $state<TelemetryRecord[]>([]);
@@ -930,7 +935,7 @@
   // One geolocation check at app start (refreshes the persisted user location for Night-Mode auto).
   ensureUserLocation();
 
-  /** Protocol the connection bar starts on. Settings → Connection owns the choice: "Last used"
+  /** Protocol the connection bar starts on. Settings → Interface → UI owns the choice: "Last used"
    *  (the default, and the behaviour Kite has always had) restores the stored protocol, while a
    *  fixed value wins over that store on every launch. Only a protocol we actually support is
    *  honoured, with MSP as the fallback: the old form mapped everything that was not MAVLink onto
@@ -1567,12 +1572,18 @@
   const canOpenLogFile = $derived(!isMobile && flightLoggingEnabled);
   const isOpenableLog = (p: string) => new RegExp(`\\.(${OPEN_EXTS.join('|')})$`, 'i').test(p);
 
-  /** Parse one file into the scratch dir; returns the scratch flights it produced. */
-  async function parseIntoScratch(filePath: string, dir: string): Promise<OpenedFlight[]> {
+  /** Parse one file into the scratch dir; returns the scratch flights it produced and, for a multi-log
+   *  Blackbox file, the logs that failed (one bad log does not stop the others). A single-log file or
+   *  another format still rejects as a whole. */
+  async function parseIntoScratch(
+    filePath: string,
+    dir: string,
+  ): Promise<{ flights: OpenedFlight[]; failures: string[] }> {
     const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
     const lang = $locale ?? 'en';
     const idOf = (r: BlackboxImportStatus) => (r.type === 'duplicate' ? null : r.flight_id);
     const out: OpenedFlight[] = [];
+    const failures: string[] = [];
     if (ext === 'bin') {
       const id = idOf(await logbookCtrl.importArdupilot(filePath, dir, true, lang));
       if (id != null) out.push({ id, sourcePath: filePath });
@@ -1588,12 +1599,16 @@
         if (id != null) out.push({ id, sourcePath: filePath });
       } else {
         for (let index = 0; index < logCount; index++) {
-          const id = idOf(await logbookCtrl.importBlackbox(filePath, dir, index, true, lang));
-          if (id != null) out.push({ id, sourcePath: filePath, logIndex: index });
+          try {
+            const id = idOf(await logbookCtrl.importBlackbox(filePath, dir, index, true, lang));
+            if (id != null) out.push({ id, sourcePath: filePath, logIndex: index });
+          } catch (e) {
+            failures.push(multiLogFailure(index + 1, String(e)));
+          }
         }
       }
     }
-    return out;
+    return { flights: out, failures };
   }
 
   /** Open one or more log files for replay. Appends to an already open set; a selected main-DB
@@ -1621,7 +1636,9 @@
     try {
       for (const filePath of files) {
         try {
-          added.push(...(await parseIntoScratch(filePath, dir)));
+          const parsed = await parseIntoScratch(filePath, dir);
+          added.push(...parsed.flights);
+          for (const f of parsed.failures) failures.push(`${baseName(filePath)}: ${f}`);
         } catch (e) {
           failures.push(`${baseName(filePath)}: ${String(e)}`);
         }
@@ -1785,7 +1802,8 @@
 
   /** A Configurator flash download holds one log per arm/disarm cycle, and `blackbox_decode --stdout`
    *  refuses such a file without `--index`. Import every log as its own flight; a single-log file
-   *  keeps passing no index at all. */
+   *  keeps passing no index at all. One bad log does not stop the others: failures are collected and
+   *  reported together with the count at the end (nothing extra when every log went in). */
   async function performBlackboxImport(filePath: string) {
     const logCount = await logbookCtrl.countBlackboxLogs(filePath);
     if (logCount <= 1) {
@@ -1798,9 +1816,28 @@
       buttons: [{ label: $t('logbook.multiLogImportAll'), value: 'all', primary: true }],
     });
     if (answer !== 'all') return;
+    let imported = 0;
+    let skipped = 0;
+    const failures: string[] = [];
     for (let index = 0; index < logCount; index++) {
-      await performImport(filePath, index, false);
+      try {
+        if ((await performImport(filePath, index, false)) === 'imported') imported++;
+        else skipped++;
+      } catch (e) {
+        failures.push(multiLogFailure(index + 1, String(e)));
+      }
     }
+    if (failures.length === 0) return;
+    const lines = [$t('logbook.multiLogSummary', { values: { imported, total: logCount } })];
+    if (skipped > 0) lines.push($t('logbook.multiLogSkipped', { values: { count: skipped } }));
+    lines.push('', $t('logbook.multiLogFailedHeader', { values: { count: failures.length } }), ...failures);
+    await showInfo($t('logbook.multiLogSummaryTitle', { values: { file: baseName(filePath) } }), lines.join('\n'));
+  }
+
+  /** One failed log of a multi-log file for a summary, numbered once through the locale. */
+  function multiLogFailure(logNumber: number, error: string): string {
+    const reason = stripLogNumber(error, logNumber);
+    return $t('logbook.multiLogFailedItem', { values: { n: logNumber, reason } });
   }
 
   async function performRawImport(filePath: string) {
@@ -2075,13 +2112,35 @@
   }
 
   async function compactDb() {
-    try {
-      const sizeBytes = await logbookCtrl.compactDb(flightLogDbPath);
-      const mb = (sizeBytes / (1024 * 1024)).toFixed(1);
-      await showInfo($t('settings.compactDb'), $t('settings.compactDbDone', { values: { size: `${mb} MB` } }));
-    } catch (e) {
-      errorMsg = String(e);
+    if (dbCompacting) return;
+    // An import writes to the same database in batches; a compact in between would lock it out.
+    if (blackboxImporting) {
+      errorMsg = $t('settings.compactDbBusyImport');
+      return;
     }
+    dbCompacting = true;
+    let stats: Awaited<ReturnType<typeof logbookCtrl.compactDb>>;
+    try {
+      stats = await logbookCtrl.compactDb(flightLogDbPath);
+    } catch (e) {
+      // `compact-recording:` / `compact-running:` are stable markers of flightlog_compact_db.
+      const msg = String(e);
+      if (msg.includes('compact-recording:')) errorMsg = $t('settings.compactDbBusyRecording');
+      else if (msg.includes('compact-running:')) errorMsg = $t('settings.compactDbBusyRunning');
+      else errorMsg = msg;
+      return;
+    } finally {
+      dbCompacting = false;
+    }
+    const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    const freed = Math.max(0, stats.size_before - stats.size_after);
+    await showInfo(
+      $t('settings.compactDb'),
+      [
+        $t('settings.compactDbDone', { values: { size: mb(stats.size_after) } }),
+        $t('settings.compactDbFreed', { values: { freed: mb(freed) } }),
+      ].join('\n'),
+    );
   }
 
   async function exportTrack() {
@@ -2108,7 +2167,13 @@
   }
 
 
-  async function performImport(filePath: string, logIndex: number | undefined, forceImport: boolean) {
+  /** Import one INAV Blackbox log. Resolves 'skipped' when the user declined a duplicate, 'imported'
+   *  otherwise; a failed import rejects. */
+  async function performImport(
+    filePath: string,
+    logIndex: number | undefined,
+    forceImport: boolean,
+  ): Promise<'imported' | 'skipped'> {
     const result = await logbookCtrl.importBlackbox(filePath, flightLogDbPath, logIndex, forceImport, $locale ?? 'en');
     
     if (result.type === 'duplicate') {
@@ -2124,8 +2189,9 @@
       });
       
       if (answer === 'force') {
-        await performImport(filePath, logIndex, true);
+        return performImport(filePath, logIndex, true);
       }
+      return 'skipped';
     } else {
       if (result.type === 'success_linkable') {
         const answer = await showDialog({
@@ -2134,10 +2200,16 @@
           buttons: [{ label: $t('logbook.linkYes'), value: 'link', primary: true }],
         });
         if (answer === 'link') {
-          await logbookCtrl.linkFlights(result.flight_id, result.linkable_flight_id, flightLogDbPath);
+          // The flight is stored already: a failed link is reported, the import still counts.
+          try {
+            await logbookCtrl.linkFlights(result.flight_id, result.linkable_flight_id, flightLogDbPath);
+          } catch (e) {
+            errorMsg = $t('logbook.linkFailed', { values: { id: result.linkable_flight_id, error: String(e) } });
+          }
         }
       }
       await afterRealImport(result.flight_id);
+      return 'imported';
     }
   }
 
@@ -3529,8 +3601,11 @@
        (docked frame: it parks BEHIND the widget column like the video does) or the column's tile
        area (widget: it scrolls out with the page instead of hanging over the glass). Desktop: a
        transparent, non-clipping wrapper. Same coordinate system as before (inset 0). -->
+  <!-- `inert={dbCompacting}` here and on the other layers below: while "Compact Database" runs, nothing
+       behind CompactDbModal takes focus or keys (the modal itself sits outside those subtrees). -->
   <div
     class="map-clip"
+    inert={dbCompacting}
     class:clip-map-area={phoneUi && mapFloating}
     class:clip-column={phoneUi && mapInWidget}
     style:--phone-pad="{PHONE_GRID_PAD}px"
@@ -3608,7 +3683,7 @@
   <!-- --toast-dock-inset = the open left-docked panel's right edge (0 when none); the system-message
        toasts read it to centre in the free area beside the panel (issue #10). The radar banner ignores
        it and stays frame-centred + on top. -->
-  <div class="app-toasts" style:--toast-dock-inset="{panelHidden ? 0 : $panelDockRight}px">
+  <div class="app-toasts" inert={dbCompacting} style:--toast-dock-inset="{panelHidden ? 0 : $panelDockRight}px">
     <!-- Conflict-alert banner (renders nothing when idle). -->
     <RadarAlertBanner {interfaceSettings} />
     <!-- FC system messages (MAVLink STATUSTEXT) as top-edge toasts (renders nothing when idle). -->
@@ -3650,7 +3725,7 @@
   <!-- Phone: the docked frame's size toggle, redrawn above the swapped-in map in the frame's
        top-left corner (PhoneVideoDock draws it in video mode — same corner, same look). -->
   {#if mapFloating && $videoState.status === 'live' && phoneUi && $videoState.floating}
-    <div class="miniframe-ctl" style={mapFrameStyle}>
+    <div class="miniframe-ctl" inert={dbCompacting} style={mapFrameStyle}>
       <button
         class="mf-corner mf-size"
         style="top:{4 * uiScale}px; left:{4 * uiScale}px; width:{26 * uiScale}px; height:{26 * uiScale}px; padding:{2 * uiScale}px 0 0 {2 * uiScale}px; border-width:{4 * uiScale}px 0 0 {4 * uiScale}px; border-top-left-radius:{8 * uiScale}px;"
@@ -3666,7 +3741,7 @@
   {/if}
 
   <!-- ======= UI CHROME LAYER — zoomed by --ui-scale ======= -->
-  <div class="ui-scale">
+  <div class="ui-scale" inert={dbCompacting}>
 
 <!-- Dialogs render in the panels layer below — as .ui-scale children their z-index could
      never beat the in-frame mini-map either (same stacking-context wall as the panels). -->
@@ -4002,6 +4077,9 @@
        exactly like they cover the floating video window. The host replicates .app's positioning
        context and grid vars so PanelShell geometry is untouched. -->
   <div class="ui-scale panels-layer">
+    <!-- Everything in this layer except CompactDbModal (below) goes inert while it shows; the wrapper
+         adds no box (display: contents), so geometry and stacking stay as they were. -->
+    <div class="panels-inert" inert={dbCompacting}>
     <div
       class="panels-host"
       class:panels-hidden={panelHidden}
@@ -4175,6 +4253,10 @@
     <EndFlightDialog bind:this={endFlightDialog} {interfaceSettings} />
     <RecoveryPrompt bind:this={recoveryPrompt} />
     <DisconnectArmedDialog bind:this={disconnectArmedDialog} />
+    </div><!-- .panels-inert -->
+    {#if dbCompacting}
+      <CompactDbModal />
+    {/if}
   </div>
 
   <!-- Cursor-positioned overlays stay OUTSIDE the zoom so their fixed clientX/clientY
@@ -4279,6 +4361,9 @@
   }
   .panels-host > :global(*) {
     pointer-events: auto;
+  }
+  .panels-inert {
+    display: contents;
   }
 
   .app {
