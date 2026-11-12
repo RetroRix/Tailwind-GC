@@ -32,6 +32,50 @@ export interface CustomMapSpec {
   name: string;
   minZoom: number;
   maxZoom: number;
+  /** Tile pixel size detected by the backend from one tile's header — one size for the whole map. */
+  tileSize: TileSize;
+}
+
+/** A tile pixel size: custom maps are drawn at the size their tiles really are. */
+export type TileSize = 128 | 256 | 512;
+
+/** Normalise a detected tile pixel size to the nearest supported one (128 / 256 / 512);
+ *  anything unreadable or non-finite becomes 256. */
+export function normalizeTileSize(n: unknown): TileSize {
+  if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) return 256;
+  const exp = Math.max(7, Math.min(9, Math.round(Math.log2(n))));
+  return (1 << exp) as TileSize;
+}
+
+/** Leaflet layer options for a custom (offline folder) map whose tiles are `tileSize` px and whose
+ *  highest FILE level is `maxLevel` (the folder names; the same level shift upstream applies to its
+ *  user online maps — file level = map zoom + `zoomOffset`, so a 512 px map's level Z is native at
+ *  map zoom Z+1, a 128 px one's at Z−1), and over-zoom up to two map zooms past the highest native
+ *  one (at least 20). `minNativeZoom` / `maxNativeZoom` are MAP zooms (Leaflet's GridLayer compares
+ *  them with the map zoom before the offset is added for the URL level). */
+export function customLayerZoom(
+  maxLevel: number,
+  tileSize: TileSize,
+): {
+  tileSize: number;
+  zoomOffset: number;
+  maxNativeZoom: number;
+  minNativeZoom?: number;
+  maxZoom: number;
+  className: string;
+} {
+  const zoomOffset = Math.round(Math.log2(256 / tileSize)); // 512 → −1, 256 → 0, 128 → +1
+  const maxNativeZoom = Math.max(0, maxLevel - zoomOffset);
+  return {
+    tileSize,
+    // Leaflet puts it on the layer container: Map.svelte's seam rules (tile-overlap / tile-snap)
+    // force a tile size and need the real one for 512 / 128 px tiles.
+    className: `kite-tiles-${tileSize}`,
+    zoomOffset,
+    maxNativeZoom,
+    ...(zoomOffset < 0 ? { minNativeZoom: -zoomOffset } : {}),
+    maxZoom: Math.max(20, maxNativeZoom + 2),
+  };
 }
 
 export const MAP_PROVIDERS: MapProvider[] = [
@@ -174,16 +218,17 @@ export function parseCustomTileUrl(url: string): { map: string; z: number; x: nu
 }
 
 /** Build the provider entry of a custom map. No attribution (the user's own tiles). The 2D zoom range
- *  reaches the higher of 20 (like the built-in providers) and two levels above the map's highest level;
- *  above that level Leaflet scales the top level up (`maxNativeZoom`). The 3D view stops at the highest
- *  level that exists. */
+ *  reaches the higher of 20 (like the built-in providers) and two map zooms above the one that shows
+ *  the map's highest level natively; above that Leaflet scales the top level up (`maxNativeZoom`, see
+ *  `customLayerZoom`). The 3D view stops at the highest level that exists (Cesium levels are file
+ *  levels; the tile size goes to Cesium as `tileWidth`/`tileHeight`). */
 export function customProvider(spec: CustomMapSpec): MapProvider {
   return {
     id: `${CUSTOM_PROVIDER_PREFIX}${spec.name}`,
     label: spec.name,
     url: customTileTemplate(spec.name),
     attribution: "",
-    maxZoom: Math.max(20, spec.maxZoom + 2),
+    maxZoom: customLayerZoom(spec.maxZoom, spec.tileSize).maxZoom,
     cesiumMaxZoom: spec.maxZoom,
     custom: spec,
   };

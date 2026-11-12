@@ -700,6 +700,12 @@
       url: cesiumUrl,
       subdomains: hasSubdomains ? subdomains : undefined,
       maximumLevel: provider.cesiumMaxZoom ?? provider.maxZoom,
+      // A custom map's real tile pixel size (Cesium default 256): Cesium picks the imagery level
+      // from texel spacing (ImageryLayer getLevelWithMaximumTexelSpacing divides by tileWidth), so a
+      // 512 px source is drawn from one level lower — its own native density. Levels stay file
+      // levels (maximumLevel = a custom map's highest level, the below-lowest check below).
+      tileWidth: provider.custom?.tileSize ?? 256,
+      tileHeight: provider.custom?.tileSize ?? 256,
       credit: new Cesium.Credit(provider.attribution, false),
     });
 
