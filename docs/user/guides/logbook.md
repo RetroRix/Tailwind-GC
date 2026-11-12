@@ -133,7 +133,8 @@ Use **Import** to pull in logs from outside Tailwind (one file or a batch). Supp
 A progress bar tracks the import. INAV Blackbox needs the **`blackbox_decode`** helper, which Tailwind
 fetches automatically the first time you import one. A `.bbl` pulled from the flight controller's
 flash usually holds **several flights** — one per arm / disarm cycle. Tailwind detects that and offers to
-import them all, each as its own logbook entry. Imported telemetry logs (`.tlog` / `.rawmsp`) are
+import them all, each as its own logbook entry. A log in the file that cannot be read does not stop the others: Tailwind imports the
+rest and then lists which logs failed and why. Imported telemetry logs (`.tlog` / `.rawmsp`) are
 treated as telemetry recordings and **split into separate flights on the arm / disarm markers** in the
 log, the same way a live recording is.
 
