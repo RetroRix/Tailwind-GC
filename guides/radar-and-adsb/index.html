@@ -1961,11 +1961,13 @@ address, so the same plane seen by two feeds appears once):</p>
   (10–100 km) and the <strong>poll interval</strong> (2–30 s) under <strong>Online service</strong>. Online feeds are fetched
   <strong>around the area you're looking at</strong> — the 2D map centre or the 3D camera focus — so panning the map
   moves the query. No hardware needed.</li>
-<li><strong>Local receiver</strong> — a USB ADS-B receiver (e.g. ADSBee, PicoADSB) that streams <strong>MAVLink
-  <code>ADSB_VEHICLE</code> (message #246)</strong>. Add a receiver row under <strong>Local sources</strong>, pick its <strong>serial port</strong>
-  and <strong>baud</strong>, and Tailwind reads the traffic directly — fully offline. Tailwind accepts <strong>both MAVLink v1 and
-  v2</strong> automatically (it detects the frame version itself — there's no setting to match), so just point
-  the receiver at the port. (Network / Wi-Fi receivers are coming.)</li>
+<li><strong>Local receiver</strong> — an ADS-B receiver (e.g. ADSBee, PicoADSB) that streams <strong>MAVLink
+  <code>ADSB_VEHICLE</code> (message #246)</strong>. Add a receiver row under <strong>Local sources</strong> and pick how it
+  connects: a <strong>serial port</strong> (USB) and <strong>baud</strong>, or the <strong>network</strong> — <strong>TCP</strong> or <strong>UDP</strong> with a
+  host and port for a receiver on your LAN (a UDP source listens on the port you set; the default
+  is 14551). Tailwind reads the traffic directly — fully offline. Tailwind accepts <strong>both MAVLink
+  v1 and v2</strong> automatically (it detects the frame version itself — there's no setting to match),
+  so just point the receiver at the port.</li>
 <li><strong>From your UAV</strong> — on <strong>INAV 8.0+</strong>, if your aircraft has its own ADS-B receiver, Tailwind can download
   its traffic list over the existing flight link (the <strong>UAV Source</strong> toggle). This appears only when the
   connected FC supports it; ArduPilot and PX4 don't offer this path.</li>
@@ -1987,9 +1989,9 @@ feed that fails (typically a provider's rate limit, HTTP 429) is <strong>backed 
 the spacing of that feed's requests after every failed attempt, up to one minute, and returns to your
 poll interval as soon as a request succeeds again. The other feeds keep their normal rate. An
 <strong>enabled</strong> row collapses to a single line (name · count · toggle); a <strong>disabled</strong> row expands to show
-its fields (URL / API key for online, port / baud for a receiver) and a <strong>delete</strong> button. New rows
-start disabled so you can fill them in first. A serial port already used by another source is shown as
-<em>in use</em> in the other pickers.</p>
+its fields (URL / API key for online, transport / port / host for a receiver) and a <strong>delete</strong> button. New rows
+start disabled so you can fill them in first. A serial port already used by another source — or by
+the flight link — is shown as <em>in use</em> in the other pickers.</p>
 <div class="admonition tip">
 <p class="admonition-title">Online ADS-B needs internet</p>
 <p>The online services need connectivity. In the field with no connection, a <strong>local receiver</strong> or the
@@ -1998,8 +2000,9 @@ start disabled so you can fill them in first. A serial port already used by anot
 <h2 id="formationflight">FormationFlight<a class="headerlink" href="#formationflight" title="Permanent link">&para;</a></h2>
 <p><strong>FormationFlight</strong> (the open-source ESP32 mesh radar, formerly INAV-Radar) lets a group of pilots see
 each other. Each aircraft carries an ESP32 module that broadcasts its position over its radio and relays
-the peers it hears. Connect a <strong>receiver module</strong> to Tailwind over <strong>serial</strong> (on the FormationFlight tab:
-pick the port, set a <strong>node name</strong>).</p>
+the peers it hears. Connect a <strong>receiver module</strong> to Tailwind over <strong>serial</strong> or the <strong>network</strong>
+(<strong>TCP</strong> / <strong>UDP</strong>, default UDP port 14552) — on the FormationFlight tab: pick the transport and
+port, set a <strong>node name</strong>.</p>
 <p>To join the mesh, Tailwind presents itself to the module as an INAV flight controller located at your <strong>GCS
 position</strong>, so the module shares your location with the formation and relays the other peers back to you.
 Peers appear as <strong>letters (A–F)</strong> with their position, heading, speed and a <strong>link-quality</strong> indicator

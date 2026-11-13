@@ -2099,6 +2099,10 @@ ground station shows up too. For a <strong>fixed-wing</strong> vehicle a dashed 
 loiter track the aircraft will actually fly: the radius you set for this Fly Here, or the firmware's
 configured default (<code>WP_LOITER_RAD</code> / <code>NAV_LOITER_RAD</code>) when you didn't set one. A copter simply holds
 the point, so it gets no circle. Both disappear when the FC leaves guided or the link drops.</p>
+<p><strong>On the 3D map</strong> the same click works in every camera mode except FPV: click the terrain and the
+Fly Here form opens, anchored to the point you clicked. The sent target is drawn as a green point
+with a dashed line from the aircraft. Clicking your own aircraft or a radar contact never opens the
+form — those clicks keep their usual meaning.</p>
 <div class="admonition note">
 <p class="admonition-title">Why there's no 'set heading' for planes</p>
 <p>Set Heading is offered for <strong>ArduCopter in Guided only</strong> (it simply yaws the nose). It is
