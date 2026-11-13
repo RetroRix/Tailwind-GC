@@ -17,6 +17,30 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.14
+
+Three improvements and a batch of fixes ported from upstream Kite GC's development line:
+
+-   **Search the map.** The magnifier in the map's toolbar opens a search line: type a
+    place name and press **Enter**, then pick from the matches — or type coordinates
+    (for example `48.137154, 11.576124`) to jump straight there. The target button beside
+    the line jumps to your own location, and the map drops a pin where you landed. On the
+    phone, the search button sits at the top of the map's corner column.
+-   **Guided "Fly Here" on the 3D map.** Clicking the terrain in the 3D view now opens
+    the same Fly Here form as the 2D map — in every camera mode except FPV. The
+    FC-confirmed target is drawn as a green point with a dashed line from the aircraft,
+    and clicking your own aircraft or a radar contact never opens the form by accident.
+-   **Radar receivers over the network.** Local ADS-B receivers and FormationFlight
+    modules can now connect over **TCP** and **UDP** as well as serial — point Tailwind
+    at a receiver on your network (the defaults are UDP 14551 for ADS-B, UDP 14552 for
+    FormationFlight). Serial ports are also checked against the flight link, so radar
+    and the flight controller can't silently claim the same port.
+-   **Fixes.** Leaving FPV in the 3D view returns the free camera to a controllable
+    viewpoint; on tablets the 2D map's buttons sit in the corner again; the Android
+    background-service notification shows Tailwind's plane instead of a placeholder;
+    panels no longer vanish after opening over native video in Power Saving mode; and
+    the bottom dock now gives up only the width the video window actually takes.
+
 ## What's new in Tailwind v1.1.0-tailwind.13
 
 Four improvements ported from upstream Kite GC's development line:

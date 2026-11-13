@@ -46,11 +46,13 @@ address, so the same plane seen by two feeds appears once):
   (10–100 km) and the **poll interval** (2–30 s) under **Online service**. Online feeds are fetched
   **around the area you're looking at** — the 2D map centre or the 3D camera focus — so panning the map
   moves the query. No hardware needed.
-- **Local receiver** — a USB ADS-B receiver (e.g. ADSBee, PicoADSB) that streams **MAVLink
-  `ADSB_VEHICLE` (message #246)**. Add a receiver row under **Local sources**, pick its **serial port**
-  and **baud**, and Tailwind reads the traffic directly — fully offline. Tailwind accepts **both MAVLink v1 and
-  v2** automatically (it detects the frame version itself — there's no setting to match), so just point
-  the receiver at the port. (Network / Wi-Fi receivers are coming.)
+- **Local receiver** — an ADS-B receiver (e.g. ADSBee, PicoADSB) that streams **MAVLink
+  `ADSB_VEHICLE` (message #246)**. Add a receiver row under **Local sources** and pick how it
+  connects: a **serial port** (USB) and **baud**, or the **network** — **TCP** or **UDP** with a
+  host and port for a receiver on your LAN (a UDP source listens on the port you set; the default
+  is 14551). Tailwind reads the traffic directly — fully offline. Tailwind accepts **both MAVLink
+  v1 and v2** automatically (it detects the frame version itself — there's no setting to match),
+  so just point the receiver at the port.
 - **From your UAV** — on **INAV 8.0+**, if your aircraft has its own ADS-B receiver, Tailwind can download
   its traffic list over the existing flight link (the **UAV Source** toggle). This appears only when the
   connected FC supports it; ArduPilot and PX4 don't offer this path.
@@ -73,9 +75,9 @@ feed that fails (typically a provider's rate limit, HTTP 429) is **backed off au
 the spacing of that feed's requests after every failed attempt, up to one minute, and returns to your
 poll interval as soon as a request succeeds again. The other feeds keep their normal rate. An
 **enabled** row collapses to a single line (name · count · toggle); a **disabled** row expands to show
-its fields (URL / API key for online, port / baud for a receiver) and a **delete** button. New rows
-start disabled so you can fill them in first. A serial port already used by another source is shown as
-*in use* in the other pickers.
+its fields (URL / API key for online, transport / port / host for a receiver) and a **delete** button. New rows
+start disabled so you can fill them in first. A serial port already used by another source — or by
+the flight link — is shown as *in use* in the other pickers.
 
 !!! tip "Online ADS-B needs internet"
     The online services need connectivity. In the field with no connection, a **local receiver** or the
@@ -85,8 +87,9 @@ start disabled so you can fill them in first. A serial port already used by anot
 
 **FormationFlight** (the open-source ESP32 mesh radar, formerly INAV-Radar) lets a group of pilots see
 each other. Each aircraft carries an ESP32 module that broadcasts its position over its radio and relays
-the peers it hears. Connect a **receiver module** to Tailwind over **serial** (on the FormationFlight tab:
-pick the port, set a **node name**).
+the peers it hears. Connect a **receiver module** to Tailwind over **serial** or the **network**
+(**TCP** / **UDP**, default UDP port 14552) — on the FormationFlight tab: pick the transport and
+port, set a **node name**.
 
 To join the mesh, Tailwind presents itself to the module as an INAV flight controller located at your **GCS
 position**, so the module shares your location with the formation and relays the other peers back to you.
