@@ -179,6 +179,7 @@
     position: relative; /* anchor for the reconnect overlay */
     background: rgba(30, 30, 30, 0.75);
     backdrop-filter: var(--glass-blur, blur(6px));
+    -webkit-backdrop-filter: var(--glass-blur, blur(6px));
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     padding: 3px;
@@ -257,5 +258,6 @@
   .widget-card.nv-armed {
     background: transparent;
     backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 </style>

@@ -2792,6 +2792,7 @@
     align-items: center;
     justify-content: center;
     backdrop-filter: var(--glass-blur, blur(6px));
+    -webkit-backdrop-filter: var(--glass-blur, blur(6px));
     transition: background 0.2s, border-color 0.2s, color 0.2s;
     padding: 0;
   }
@@ -2818,6 +2819,7 @@
     border-color: rgba(55, 168, 219, 0.45);
     color: rgba(199, 223, 232, 0.95);
     backdrop-filter: var(--glass-blur, blur(6px));
+    -webkit-backdrop-filter: var(--glass-blur, blur(6px));
   }
 
   .map-heading-btn.mode-follow,
@@ -2826,6 +2828,7 @@
     border-color: rgba(55, 168, 219, 0.7);
     color: #37a8db;
     backdrop-filter: var(--glass-blur, blur(6px));
+    -webkit-backdrop-filter: var(--glass-blur, blur(6px));
   }
 
   .map-heading-btn.mode-free:hover {
