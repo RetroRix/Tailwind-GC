@@ -40,6 +40,10 @@ pub struct UdpTransport {
     /// The first ICMP "port unreachable" of the session is logged at warn (a tester's log must show why
     /// nothing arrives); every further one goes to debug so a dead peer doesn't flood the log.
     peer_unreachable_logged: bool,
+    /// Set when the bind did not get the configured local port (fell back to an ephemeral one) — a
+    /// listener-style caller (the radar sources) must treat that as a failed open: it would never
+    /// hear the device pushing to the configured port.
+    diagnostic_note: Option<String>,
 }
 
 impl UdpTransport {
@@ -60,6 +64,7 @@ impl UdpTransport {
 
         // Prefer binding to the same port number the user targeted (listener-friendly). If that port
         // is busy, fall back to an ephemeral one so client-style links still work.
+        let mut diagnostic_note = None;
         let socket = match UdpSocket::bind(("0.0.0.0", port)) {
             Ok(s) => {
                 log::info!("UDP bound to local port {} (listening for {})", port, addr);
@@ -70,6 +75,7 @@ impl UdpTransport {
                     "UDP bind to local port {} failed ({}) — falling back to an ephemeral port",
                     port, e
                 );
+                diagnostic_note = Some(format!("local UDP port {} was in use; bound an ephemeral port instead", port));
                 UdpSocket::bind("0.0.0.0:0")
                     .map_err(|e| format!("UDP bind failed: {}", e))?
             }
@@ -84,7 +90,13 @@ impl UdpTransport {
             peer,
             socket,
             peer_unreachable_logged: false,
+            diagnostic_note,
         })
+    }
+
+    /// Why this transport is not in its configured state, if it isn't (see the field docs).
+    pub fn diagnostic_note(&self) -> Option<&str> {
+        self.diagnostic_note.as_deref()
     }
 
     /// True for the errors Windows reports on a UDP socket after an ICMP "port unreachable" came back
