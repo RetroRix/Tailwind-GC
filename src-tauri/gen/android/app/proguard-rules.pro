@@ -49,3 +49,5 @@
 -keep class com.tailwindgc.app.NetInfo { *; }
 # Link foreground-service bridge (android/link_service.rs → LinkService) — JNI-only, same rule.
 -keep class com.tailwindgc.app.LinkService { *; }
+# Install-source lookup (android/install_source.rs → InstallSource) — JNI-only, same rule.
+-keep class com.tailwindgc.app.InstallSource { *; }

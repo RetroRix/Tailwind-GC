@@ -70,10 +70,16 @@ version you have, the one that is available, and the release notes, plus four ch
 - **Update and Restart** downloads the new version, installs it and restarts Tailwind. On Windows and
   Linux this runs the installer of the package you installed (a `.deb`/`.rpm` asks for your password);
   on macOS the app bundle is replaced in place. A **portable** copy replaces its own executable and
-  restarts. On Android and iOS the button opens the app store instead.
+  restarts. Not on Android, see below.
 - **Open Release Page** shows the release on GitHub in your browser, with every download.
 - **Remind me later** asks again at the next start.
 - **Skip this version** suppresses the notice for that one version only.
+
+**Android** has no in-app install. The update notice follows where the app was installed from:
+Tailwind ships only as an `.apk` from GitHub (there is no store listing), so the notice offers
+**Open Release Page**, where the new `.apk` is, in place of *Update and Restart*, and the setting
+keeps all four channel choices. (The same mechanism would point a store installation at its store
+instead, if a listing ever exists.)
 
 ## Map tab { #map }
 

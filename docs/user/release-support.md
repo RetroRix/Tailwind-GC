@@ -67,5 +67,13 @@ Patch releases are published on the [GitHub releases page](https://github.com/Re
 like every other version. With **Check for updates** set to *Stable releases* in the settings, Tailwind
 tells you at start-up when a newer stable version exists (see [Settings](reference/settings.md)).
 
+**Google Play carries only the newest version.** A copy installed from there has no
+*Patch releases only* choice, and once a new feature release is out, Google Play no longer delivers
+patch releases of the line before it. Those remain available as `.apk` on the GitHub releases page.
+The `.apk` is signed with the same key as the Play version, so it installs over it and keeps your
+data — as long as Google Play has not installed the new feature release yet; Android does not
+install an older version over a newer one. To stay on a release line, switch off automatic updates
+for Kite in the Play Store first (see [Settings → Updates](reference/settings.md#updates)).
+
 Found a problem in a supported line? See [Reporting a problem](troubleshooting/reporting-issues.md) —
 please mention the version you run, so the fix reaches your release line.
