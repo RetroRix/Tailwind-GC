@@ -210,11 +210,8 @@
     applyFollowFrame();
   }
 
-  // The model is rasterised in software (uavTopDown.ts) — the one expensive step of a follow frame.
-  // It runs at the ATTITUDE DATA rate, not the display rate: the marker position and the map
-  // centre keep gliding every frame (cheap Leaflet calls), but the drawing only changes when the
-  // telemetry attitude changed, so the raster is skipped while the eased position catches up.
-  // Marc, 2026-09-08: no smoothing on the 2D model — a real update, a real redraw, nothing else.
+  // The model is redrawn only when the attitude changed by a whole degree; position and centre glide
+  // every frame without it.
   let modelDrawnKey = '';
 
   const ARMING_FLAG_ARMED = 2;
@@ -1437,7 +1434,9 @@
     if (activeFollowMarker) {
       activeFollowMarker.setLatLng(ll);
       const t = followTarget ?? followCurrent;
-      const key = `${t.heading}|${t.pitch}|${t.roll}|${activeColor}|${activeFollowMarker === uavMarker}`;
+      // Whole degrees: a redraw is the one paint of a follow frame, and attitude noise would force it every frame.
+      const q = Math.round;
+      const key = `${q(t.heading)}|${q(t.pitch)}|${q(t.roll)}|${activeColor}|${activeFollowMarker === uavMarker}`;
       if (key !== modelDrawnKey) {
         modelDrawnKey = key;
         drawModel(activeFollowMarker, t.heading, t.pitch, t.roll, activeColor);
