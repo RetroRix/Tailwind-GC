@@ -1,28 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Marc Hoffmann (b14ckyy)
 
-//! What the host OS is told about the link: that one is active, and whether the display has to
-//! stay awake for it.
-//!
-//! Android: run the foreground service with the notification for the life of the link (Dev-Docs
-//! active/BACKGROUND_TELEMETRY.md). Screen-off is not held open — a Doze-dropped link is an
-//! ordinary lost link. Desktop: nothing.
-//!
-//! Android + iOS: keep the display awake while there is something to watch (`wants_awake`) — the
-//! vehicle is armed, or the link cannot tell (a telemetry feed without an arming flag), or the
-//! continuous raw recording runs, or the user asked for it in the settings. A connected but
-//! disarmed vehicle leaves the display to the OS timeout. Android: the window flag
-//! FLAG_KEEP_SCREEN_ON (no WAKE_LOCK); iOS: `UIApplication.idleTimerDisabled`. Both keep the display
-//! on AND undimmed — neither system offers "on, but may dim" — and both end with the foreground.
-//! Neither switches a display back ON: a screen that went dark while disarmed stays dark at arming.
-//!
-//! The raw-recording rule exists for iOS, which cannot record with the display off (Android can,
-//! through its foreground service); it applies to both so that a phone and an iPad behave alike
-//! (Marc, 2026-11-15) — do not drop it on Android as redundant.
-//!
-//! "Active" = a transport is open, bytes or not. `link_up` on every connect; `link_down` on the
-//! user's disconnect of the last link and on a lost MSP link (a lost MAVLink link arrives through
-//! the frontend's disconnect).
+//! What the host OS is told about the link: that one is active (Android foreground service) and whether
+//! the display stays awake (`wants_awake`, every platform). The raw-recording rule exists for iOS but
+//! deliberately applies to Android too — do not drop it there as redundant.
 //!
 //! GATE(fleet): ONE state for all links. With several vehicles the last status wins and a second
 //! connect replaces the first link's `raw_always`; per-link state needs the link id in
@@ -60,10 +41,9 @@ static AWAKE: Mutex<(Awake, bool)> = Mutex::new((
     false,
 ));
 
-/// Change the inputs and tell the OS when the outcome changed — or in any case with `force` (a
-/// fresh window does not carry the flag of the one before it). The OS is told while the lock is
-/// held, so two updates cannot reach it in the wrong order; neither platform call takes this lock
-/// or blocks (both post to the main thread).
+/// Change the inputs and tell the OS when the outcome changed, or always with `force` (a fresh window
+/// does not carry the old one's flag). Told under the lock so updates cannot arrive out of order;
+/// no platform call takes this lock or blocks.
 fn update(force: bool, change: impl FnOnce(&mut Awake)) {
     let mut g = AWAKE.lock().unwrap_or_else(|p| p.into_inner());
     change(&mut g.0);
@@ -107,12 +87,61 @@ fn keep_awake(on: bool) {
     }
 }
 
+/// Desktop: one thread owns the inhibitor for the life of the process. Windows binds the request to the
+/// thread that made it (`SetThreadExecutionState`), and callers here come and go with their links.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-fn keep_awake(_on: bool) {}
+fn keep_awake(on: bool) {
+    use std::sync::{mpsc, OnceLock};
+    static KEEPER: OnceLock<Option<mpsc::Sender<bool>>> = OnceLock::new();
+    let keeper = KEEPER.get_or_init(|| {
+        let (tx, rx) = mpsc::channel::<bool>();
+        let spawned = std::thread::Builder::new().name("keep-awake".into()).spawn(move || {
+            let request = |idle: bool| {
+                keepawake::Builder::default()
+                    .display(true)
+                    .idle(idle)
+                    .reason("Flight monitoring")
+                    .app_name("Tailwind Ground Control")
+                    .app_reverse_domain("com.tailwindgc.app")
+                    .create()
+            };
+            let mut held: Option<keepawake::KeepAwake> = None;
+            for on in rx {
+                if !on {
+                    // The crate's Linux release unwraps its D-Bus reply; a panic here would end the thread.
+                    let old = held.take();
+                    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || drop(old))).is_err() {
+                        log::warn!("[screen] releasing keep awake failed");
+                    }
+                } else if held.is_none() {
+                    // Linux takes the display and the idle inhibit from two services and gives up both
+                    // when one is missing — the display alone is what the rule is about.
+                    held = request(true)
+                        .or_else(|_| request(false))
+                        .map_err(|e| log::warn!("[screen] keep awake failed: {e}"))
+                        .ok();
+                }
+                log::info!("[screen] keep awake: {}", held.is_some());
+            }
+        });
+        match spawned {
+            Ok(_) => Some(tx),
+            Err(e) => {
+                log::warn!("[screen] no keep-awake thread: {e}");
+                None
+            }
+        }
+    });
+    if let Some(tx) = keeper {
+        if tx.send(on).is_err() {
+            log::warn!("[screen] keep-awake thread gone");
+        }
+    }
+}
 
 /// Settings → "Stay awake without connection". The frontend sends it at startup and on every
 /// change — the startup call also re-applies the current outcome to a window that was created
-/// while the process lived on. Desktop builds accept it and do nothing.
+/// while the process lived on.
 #[tauri::command]
 pub fn set_stay_awake(enabled: bool, app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "ios")]
