@@ -541,7 +541,9 @@ fn connect_msp(
         let mut proto = state.protocol.lock().map_err(|e| e.to_string())?;
         *proto = Some(ActiveProtocol::Msp(handle));
     }
-    crate::link_presence::link_up(&fc_info, "MSP");
+    // Continuous raw recording keeps the display awake for the whole link (link_presence rule).
+    let raw_always = flight_log_enabled.unwrap_or(false) && flight_log_raw_always.unwrap_or(false);
+    crate::link_presence::link_up(&fc_info, "MSP", raw_always);
     {
         let mut info = state.fc_info.lock().map_err(|e| e.to_string())?;
         *info = Some(fc_info.clone());
@@ -671,7 +673,9 @@ fn connect_mavlink(
         let mut proto = state.protocol.lock().map_err(|e| e.to_string())?;
         *proto = Some(ActiveProtocol::Mavlink(handle));
     }
-    crate::link_presence::link_up(&fc_info, "MAVLink");
+    // Continuous raw recording keeps the display awake for the whole link (link_presence rule).
+    let raw_always = flight_log_enabled.unwrap_or(false) && flight_log_raw_always.unwrap_or(false);
+    crate::link_presence::link_up(&fc_info, "MAVLink", raw_always);
     {
         let mut info = state.fc_info.lock().map_err(|e| e.to_string())?;
         *info = Some(fc_info.clone());
@@ -744,7 +748,8 @@ fn connect_passive_telemetry(
         let mut proto = state.protocol.lock().map_err(|e| e.to_string())?;
         *proto = Some(ActiveProtocol::PassiveTelemetry(handle));
     }
-    crate::link_presence::link_up(&fc_info, "Telemetry");
+    // A passive telemetry link never records raw data → no continuous-recording keep-awake.
+    crate::link_presence::link_up(&fc_info, "Telemetry", false);
     {
         let mut info = state.fc_info.lock().map_err(|e| e.to_string())?;
         *info = Some(fc_info.clone());
