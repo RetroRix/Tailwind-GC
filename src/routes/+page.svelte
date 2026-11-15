@@ -4140,6 +4140,7 @@
             {logReplayTime}
             {nightMode2D}
             lowPower3D={$settings.lowPower3D}
+            highRes3D={$settings.highRes3D}
             {gcsMode}
             userLocation={$userGeoLocation}
             onGeoCheck={requestUserLocation}
