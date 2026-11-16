@@ -2389,5 +2389,13 @@
     "importDone": "Imported {areas} — {tiles} tiles added to the cache.",
     "noManifest": "That file has no manifest.json — it isn't a Tailwind .mappack.",
     "badManifest": "That pack's manifest isn't a Tailwind map pack."
+  },
+  "hud": {
+    "noLink": "NO LINK",
+    "lastData": "last data",
+    "heading": "HDG",
+    "altitude": "ALT",
+    "battery": "BAT",
+    "lastKnownPosition": "Last known position"
   }
 }

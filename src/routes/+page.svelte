@@ -106,6 +106,7 @@
   import { startDetachedVideo, stopDetachedVideo } from "$lib/controllers/detachedVideo";
   import PhoneVideoDock from "$lib/components/phone/PhoneVideoDock.svelte";
   import MapSearch from "$lib/components/MapSearch.svelte";
+  import StaleDataHud from "$lib/components/StaleDataHud.svelte";
   import PhoneBottomBar from "$lib/components/phone/PhoneBottomBar.svelte";
   import PhoneDragGhost from "$lib/components/phone/PhoneDragGhost.svelte";
   import { setNativeRightBound } from "$lib/controllers/nativeVideo";
@@ -3786,6 +3787,7 @@
   style:--grid-side-width={gridSideWidth}
   style:--panel-bottom-reserve={panelBottomReserve}
 >
+  <StaleDataHud />
   {#if phoneUi}
   <!-- ======= PHONE CHROME (Dev-Docs active/PHONE_UI.md) ======= -->
   <div class="phone-conn">

@@ -16,7 +16,7 @@
   import L from "leaflet";
   import "leaflet/dist/leaflet.css";
   import { settings } from "$lib/stores/settings";
-  import { telemetry } from "$lib/stores/telemetry";
+  import { telemetry, staleSnapshot } from "$lib/stores/telemetry";
   import { safehomeWorking, isSafehomeEmpty, setSafehomePosition } from "$lib/stores/safehome";
   import {
     geozoneWorking, geozoneEditing, geozoneMissionResult, GEOZONE_SHAPE_CIRCULAR,
@@ -234,7 +234,9 @@
   let mapResizeObs: ResizeObserver | undefined;
   let map = $state<L.Map | undefined>(undefined);
   let uavMarker: L.Marker | undefined;
+  let staleMarker: L.Marker | undefined;
   let unsubTelemetry: (() => void) | undefined;
+  let unsubStale: (() => void) | undefined;
   let unsubSettings: (() => void) | undefined;
   let unsubFrameMission: (() => void) | undefined;
   let unsubConnForJump: (() => void) | undefined;
@@ -2167,6 +2169,32 @@
       }
     });
 
+    // Stale-data HUD (map half): while the link is down, a grey marker holds the last known
+    // position so the pilot can see where the craft was when the data stopped.
+    unsubStale = staleSnapshot.subscribe((snap) => {
+      if (!map) return;
+      const d = snap?.data;
+      if (d && d.fixType > 0 && isValidGpsCoordinate(d.lat, d.lon)) {
+        const icon = L.divIcon({
+          className: 'stale-pos-icon',
+          html: `<div style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+                             background: rgba(90, 90, 90, 0.85); border: 2px dashed #ddd; border-radius: 50%;
+                             font-size: 13px; color: #eee; box-shadow: 0 0 6px rgba(0,0,0,0.4);">✈</div>`,
+          iconSize: [26, 26],
+          iconAnchor: [13, 13],
+        });
+        if (!staleMarker) {
+          staleMarker = L.marker([d.lat, d.lon], { icon, interactive: false, zIndexOffset: 900 }).addTo(map);
+          staleMarker.bindTooltip(get(t)('hud.lastKnownPosition'), { direction: 'top', offset: [0, -16], opacity: 0.9 });
+        } else {
+          staleMarker.setLatLng([d.lat, d.lon]);
+        }
+      } else if (staleMarker) {
+        staleMarker.remove();
+        staleMarker = undefined;
+      }
+    });
+
     // Frame the loaded mission on a real load event (signal increments; ignore the initial emission).
     let frameSigInit = true;
     unsubFrameMission = frameMissionSignal.subscribe(() => {
@@ -2440,6 +2468,8 @@
     unsubAero?.();
     unsubAeroFocus?.();
     if (unsubTelemetry) unsubTelemetry();
+    unsubStale?.();
+    if (staleMarker) { staleMarker.remove(); staleMarker = undefined; }
     if (unsubSettings) unsubSettings();
     unsubCustomFocus?.();
     clearSearchPin();

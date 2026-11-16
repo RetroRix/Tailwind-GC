@@ -236,7 +236,27 @@ export function setFcVariant(variant: string) {
   telemetry.update((t) => ({ ...t, fcVariant: variant }));
 }
 
+/** Last live telemetry, captured when the link drops so the HUD can keep showing where the craft
+ *  was — greyed, under a NO LINK bar — instead of blanking every widget (rivals batch, 2026-11-16).
+ *  `lostAt` is the moment the last data arrived (the outgoing state's `lastUpdate`), so the
+ *  "time since last data" readout is honest. Cleared when a new link starts delivering. */
+export interface StaleSnapshot {
+  data: TelemetryData;
+  lostAt: number;
+}
+export const staleSnapshot = writable<StaleSnapshot | null>(null);
+
+// Fresh data on a (re)connect supersedes the snapshot — the HUD must never outlive real data.
+telemetry.subscribe((t) => {
+  if (t.lastUpdate > 0 && get(staleSnapshot)) staleSnapshot.set(null);
+});
+
 export function resetTelemetry() {
+  // Capture the outgoing live state before blanking it — only if it ever carried data.
+  const cur = get(telemetry);
+  if (cur.lastUpdate > 0) {
+    staleSnapshot.set({ data: { ...cur }, lostAt: cur.lastUpdate });
+  }
   telemetry.set({ ...defaultTelemetry });
   // Altitude reference defaults back to MSL (replay/idle treat altMsl as true MSL). The ground anchor
   // is intentionally NOT cleared — it persists across reconnects so a relative-only session (LTM) keeps
