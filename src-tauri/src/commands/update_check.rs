@@ -71,18 +71,58 @@ fn major_minor(version: &str) -> Option<(u64, u64)> {
     Some((major, minor))
 }
 
-/// Pick the release the channel wants out of GitHub's newest-first list. Pure — unit-tested.
+/// One chunk of a pre-release suffix: `rc10` is `[Text("rc"), Num(10)]`, so `b2` sorts below `b10`
+/// (and `tailwind.9` below `tailwind.14`). Adapted from upstream PR #282.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum PreChunk {
+    Num(u64),
+    Text(String),
+}
+
+/// Sort key of a release tag: numeric MAJOR.MINOR.PATCH, then a stable version above every
+/// pre-release of the same core, then the pre-release suffix compared naturally. A leading `v`
+/// is ignored; missing or unreadable numbers count as 0. Adapted from upstream PR #282.
+fn version_key(tag: &str) -> ([u64; 3], bool, Vec<PreChunk>) {
+    let s = tag.trim().trim_start_matches(['v', 'V']);
+    let (core, pre) = s.split_once('-').unwrap_or((s, ""));
+    let mut nums = [0u64; 3];
+    for (slot, part) in nums.iter_mut().zip(core.split('.')) {
+        *slot = part.parse().unwrap_or(0);
+    }
+    let mut chunks = Vec::new();
+    let mut rest = pre;
+    while let Some(first) = rest.chars().next() {
+        let digits = first.is_ascii_digit();
+        let end = rest.find(|c: char| c.is_ascii_digit() != digits).unwrap_or(rest.len());
+        let (chunk, tail) = rest.split_at(end);
+        chunks.push(if digits { PreChunk::Num(chunk.parse().unwrap_or(0)) } else { PreChunk::Text(chunk.to_string()) });
+        rest = tail;
+    }
+    (nums, pre.is_empty(), chunks)
+}
+
+/// Pick the release the channel wants: among the channel's candidates, the HIGHEST version —
+/// GitHub documents no order for the release list, so the first entry is not the one to compare
+/// against (upstream PR #282). Pure — unit-tested.
 fn pick<'a>(releases: &'a [Value], channel: UpdateChannel, current: &str) -> Option<&'a Value> {
     let running = major_minor(current);
-    releases.iter().filter(|r| !is_draft(r)).find(|r| match channel {
-        UpdateChannel::Prerelease => true,
-        UpdateChannel::Release => !is_prerelease(r),
-        UpdateChannel::Patch => {
-            !is_prerelease(r)
-                && r.get("tag_name").and_then(Value::as_str).and_then(major_minor) == running
-                && running.is_some()
-        }
-    })
+    releases
+        .iter()
+        .filter(|r| !is_draft(r))
+        .filter(|r| match channel {
+            UpdateChannel::Prerelease => true,
+            UpdateChannel::Release => !is_prerelease(r),
+            UpdateChannel::Patch => {
+                !is_prerelease(r)
+                    && r.get("tag_name").and_then(Value::as_str).and_then(major_minor) == running
+                    && running.is_some()
+            }
+        })
+        .max_by(|a, b| {
+            let ka = a.get("tag_name").and_then(Value::as_str).map(version_key);
+            let kb = b.get("tag_name").and_then(Value::as_str).map(version_key);
+            ka.cmp(&kb)
+        })
 }
 
 /// Fetch the release to compare against. Returns `Ok(None)` when there's nothing to compare (e.g. no
@@ -163,5 +203,19 @@ mod tests {
         assert_eq!(tag(pick(&list, UpdateChannel::Patch, "1.3.0")), None);
         assert_eq!(tag(pick(&list, UpdateChannel::Release, "1.0.0")), Some("v1.1.2".into()));
         assert_eq!(tag(pick(&list, UpdateChannel::Prerelease, "1.0.0")), Some("v1.2.0-rc1".into()));
+    }
+
+    #[test]
+    fn pick_takes_the_highest_version_not_the_first_entry() {
+        // A patch of an older line published after a beta of the next version stands in front
+        // of it in the list — the beta is still the one to compare against (upstream PR #282).
+        let list = vec![
+            release("v1.0.3", false, false),
+            release("v1.2.0-rc1", true, false),
+            release("v1.1.2", false, false),
+        ];
+        let tag = |r: Option<&Value>| r.and_then(|r| r["tag_name"].as_str()).map(str::to_string);
+        assert_eq!(tag(pick(&list, UpdateChannel::Prerelease, "1.0.0")), Some("v1.2.0-rc1".into()));
+        assert_eq!(tag(pick(&list, UpdateChannel::Patch, "1.1.0")), Some("v1.1.2".into()));
     }
 }
