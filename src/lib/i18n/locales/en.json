@@ -413,7 +413,9 @@
       "missionPause": "Pause",
       "missionResume": "Resume",
       "reposition": "Fly here"
-    }
+    },
+    "speed": "Speed",
+    "guidedTargetEdit": "Guided target — click to edit"
   },
   "update": {
     "title": "Update available",

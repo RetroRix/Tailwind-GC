@@ -4963,12 +4963,24 @@
     if (mapClickOwnedByEditor()) return;
     // Toggle off if the form is already open (taps inside the form never reach the canvas).
     if (guided3d) { closeGuided3d(); return; }
+    // Re-edit in place: a click on the standing target point reopens the form at the target
+    // (seeded with the current guided params) instead of moving it (rivals batch, 2026-11-16).
+    const tgt = get(guidedTarget);
+    if (tgt && guidedTargetEnt3d && viewer.scene.pick(pos)?.id === guidedTargetEnt3d) {
+      openGuided3dAt(tgt.lat, tgt.lon, Cesium.Cartesian3.fromDegrees(tgt.lon, tgt.lat));
+      return;
+    }
     const ground = pickGround3d(pos);
     if (!ground) return; // sky
     const carto = Cesium.Cartographic.fromCartesian(ground);
     if (!carto) return;
     const lat = Cesium.Math.toDegrees(carto.latitude);
     const lon = Cesium.Math.toDegrees(carto.longitude);
+    openGuided3dAt(lat, lon, ground);
+  }
+
+  function openGuided3dAt(lat: number, lon: number, ground: Cesium.Cartesian3) {
+    if (!viewer) return;
     guided3dAnchor = ground;
     guided3dMarker = viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(lon, lat),

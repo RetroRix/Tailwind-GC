@@ -25,6 +25,7 @@
   } = $props();
 
   let alt = $state($guidedParams.alt);
+  let speed = $state<number>($guidedParams.speed ?? NaN);
   let yaw = $state<number>($guidedParams.yaw ?? NaN);
   // Seed the radius from the FC's own default (WP_LOITER_RAD / NAV_LOITER_RAD, already read into
   // `fcLoiterRadius` for the loiter ring) when this session has no explicit value yet. The field used
@@ -46,7 +47,7 @@
     const untouched = seeded && radius === $fcLoiterRadius;
     const p: GuidedParams = {
       alt,
-      speed: $guidedParams.speed,
+      speed: Number.isNaN(speed) ? null : speed,
       yaw: multirotor ? (Number.isNaN(yaw) ? null : yaw) : $guidedParams.yaw,
       loiterRadius: multirotor
         ? $guidedParams.loiterRadius
@@ -61,6 +62,7 @@
   <div class="gtf-coords">{lat.toFixed(6)}, {lon.toFixed(6)}</div>
   <div class="gtf-fields">
     <NumberStepper bind:value={alt} min={1} max={1000} step={5} label={$t('control.alt')} unit="m" />
+    <NumberStepper bind:value={speed} min={0} max={100} step={1} label={$t('control.speed')} unit="m/s" allowEmpty placeholder="—" />
     {#if multirotor}
       <NumberStepper bind:value={yaw} min={0} max={359} step={5} label={$t('control.heading')} unit="°" allowEmpty placeholder="—" />
     {:else}

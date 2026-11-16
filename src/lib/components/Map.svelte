@@ -686,8 +686,17 @@
     }
     const ll: L.LatLngExpression = [tgt.lat, tgt.lon];
     if (!guidedTargetMarker) {
-      guidedTargetMarker = L.marker(ll, { icon: createGuidedTargetIcon(), interactive: false, zIndexOffset: 470 }).addTo(map);
-      guidedTargetMarker.bindTooltip(get(t)('control.guidedTarget'), { direction: 'top', offset: [0, -18], opacity: 0.9 });
+      guidedTargetMarker = L.marker(ll, { icon: createGuidedTargetIcon(), interactive: true, bubblingMouseEvents: false, zIndexOffset: 470 }).addTo(map);
+      guidedTargetMarker.bindTooltip(get(t)('control.guidedTargetEdit'), { direction: 'top', offset: [0, -18], opacity: 0.9 });
+      // Re-edit in place: clicking the active target reopens the form at the same point, seeded
+      // with the current guided params, so altitude/speed/heading/radius can be changed and
+      // re-sent without hunting for the exact spot again (rivals batch, 2026-11-16).
+      guidedTargetMarker.on('click', () => {
+        const cur = get(guidedTarget);
+        if (!cur || !guidedClickArmed() || mapClickOwnedByEditor()) return;
+        if (guidedPopup && guidedPopup.isOpen()) { closeGuidedPopup(); return; }
+        openGuidedPopup(cur.lat, cur.lon);
+      });
     } else {
       guidedTargetMarker.setLatLng(ll);
     }
@@ -1212,6 +1221,13 @@
       return;
     }
     const { lat, lng } = e.latlng;
+    openGuidedPopup(lat, lng);
+  }
+
+  /** Open the Fly Here form popup at a point — shared by the map click and by clicking the
+   *  active guided target marker (re-edit). */
+  function openGuidedPopup(lat: number, lng: number) {
+    if (!map) return;
     const multirotor = guidedTargetMultirotor();
 
     // Mount the Svelte form (NumberStepper fields) into the popup container.
@@ -1234,7 +1250,7 @@
     // NumberStepper is a fixed ~132 px (24 px button + 74 px input + padding + 24 px button), so the
     // pair plus their gap needs ~274 px and the second field's "+" was clipped by the popup edge.
     guidedPopup = L.popup({ maxWidth: 300, closeOnClick: false, className: "guided-popup-wrap" })
-      .setLatLng(e.latlng)
+      .setLatLng([lat, lng])
       .setContent(el)
       .openOn(map);
     // Stop clicks inside the popup from propagating to the map (the canonical Leaflet fix applied to
