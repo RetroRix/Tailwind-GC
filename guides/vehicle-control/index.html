@@ -16,7 +16,7 @@
         <link rel="prev" href="../missions/">
       
       
-        <link rel="next" href="../rc-control/">
+        <link rel="next" href="../parameters/">
       
       
         
@@ -780,6 +780,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../rc-control/" class="md-nav__link">
         
   
@@ -816,10 +844,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_7" >
         
           
-          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3_7" id="__nav_3_7_label" tabindex="0">
             
   
   
@@ -837,8 +865,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2079,9 +2107,10 @@ Auto</strong> pinned.</p>
 <li><strong>Takeoff</strong> (with a target altitude) is offered for <strong>multirotor, VTOL and PX4</strong> vehicles. A
   fixed-wing plane launches via an AUTO mission takeoff or by hand, so the command is hidden there. On
   ArduPilot, Tailwind switches to Guided first so the FC accepts the takeoff.</li>
-<li><strong>RTL</strong> returns to the launch/home point.</li>
+<li><strong>RTL</strong> returns to the launch/home point. Not on ArduSub, which has no such mode.</li>
 <li><strong>Land</strong> lands in place — hidden for plain ArduPlane fixed-wing (which lands via an AUTO sequence or
-  RTL); QuadPlane uses its vertical QLAND path.</li>
+  RTL) and for a rover or boat, which has nothing to land; QuadPlane uses its vertical QLAND path.</li>
+<li><strong>ArduSub</strong> — instead of RTL and Land there is <strong>Surface</strong>: the vehicle rises to the surface.</li>
 <li><strong>Abort Landing</strong> (go-around) is offered for <strong>fixed-wing</strong> to wave off an approach and climb out.</li>
 <li><strong>VTOL transition</strong> (QuadPlane / VTOL only) switches between <strong>hover</strong> and <strong>forward</strong> flight.</li>
 </ul>
@@ -2103,6 +2132,10 @@ the point, so it gets no circle. Both disappear when the FC leaves guided or the
 Fly Here form opens, anchored to the point you clicked. The sent target is drawn as a green point
 with a dashed line from the aircraft. Clicking your own aircraft or a radar contact never opens the
 form — those clicks keep their usual meaning.</p>
+<p><strong>Changing a target that is already set:</strong> click the target itself — the marker on the 2D map, the
+green point on the 3D map — and the form reopens at that spot with the current altitude, speed,
+heading and loiter radius filled in. Adjust what you need and press <strong>Fly Here</strong> again; the vehicle
+is re-commanded to the same point with the new values.</p>
 <div class="admonition note">
 <p class="admonition-title">Why there's no 'set heading' for planes</p>
 <p>Set Heading is offered for <strong>ArduCopter in Guided only</strong> (it simply yaws the nose). It is

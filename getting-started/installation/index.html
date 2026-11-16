@@ -747,6 +747,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guides/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guides/rc-control/" class="md-nav__link">
         
   
@@ -783,10 +811,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_7" >
         
           
-          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3_7" id="__nav_3_7_label" tabindex="0">
             
   
   
@@ -804,8 +832,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2158,16 +2186,18 @@ program, which Tailwind offers to <strong>download automatically the first time 
 </tr>
 <tr>
 <td><code>ffmpeg</code></td>
-<td><strong>Video</strong> (native capture + fallback decoding for some RTSP sources)</td>
+<td><strong>Video</strong> (native capture + fallback decoding for some RTSP sources on the classic path)</td>
 <td>auto-download on <strong>Windows &amp; Linux</strong>; <strong>bundled inside the app on macOS</strong></td>
 </tr>
 <tr>
 <td><code>mediamtx</code></td>
-<td><strong>Video</strong> (the RTSP → low-latency engine)</td>
+<td><strong>Video</strong> (the classic RTSP → low-latency engine, used with the <em>Native RTSP client</em> switched off)</td>
 <td>auto-download on <strong>Windows, Linux &amp; macOS</strong></td>
 </tr>
 </tbody>
 </table>
+<p>RTSP through Tailwind's own <strong>Native RTSP client</strong> needs neither helper — Android always uses it,
+the desktop by default unless it is switched off in the Video panel (see <strong><a href="../../guides/video/">Video</a></strong>).</p>
 <ul>
 <li>Downloaded helpers are stored in Tailwind's tools folder (<code>…\kite-gc\bin</code>, or <code>data\bin</code> in portable
   mode) — they don't touch your system.

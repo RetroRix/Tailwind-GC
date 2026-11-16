@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#whats-new-in-tailwind-v110-tailwind15" class="md-skip">
+        <a href="#whats-new-in-tailwind-v110-tailwind16" class="md-skip">
           Skip to content
         </a>
       
@@ -332,6 +332,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.16
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind15" class="md-nav__link">
@@ -832,6 +843,34 @@
   
   
     <li class="md-nav__item">
+      <a href="guides/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="guides/rc-control/" class="md-nav__link">
         
   
@@ -868,10 +907,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_7" >
         
           
-          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3_7" id="__nav_3_7_label" tabindex="0">
             
   
   
@@ -889,8 +928,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1882,6 +1921,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.16
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind15" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2112,6 +2162,42 @@ right next to the map.</p>
 <p>Tailwind Ground Control flying in 3D mode.</p>
 </figcaption>
 </figure>
+<h2 id="whats-new-in-tailwind-v110-tailwind16">What's new in Tailwind v1.1.0-tailwind.16<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind16" title="Permanent link">&para;</a></h2>
+<p>Six improvements ported from upstream Kite GC's development line, plus four additions of
+Tailwind's own:</p>
+<ul>
+<li><strong>Native RTSP is the default video path.</strong> The built-in RTSP client (no helper process)
+    is now the standard on desktop; existing installs switch over once, automatically, and
+    the classic MediaMTX/ffmpeg path stays available as a fallback.</li>
+<li><strong>The screen stays awake while armed.</strong> On phone, tablet and desktop alike, the display
+    no longer sleeps mid-flight while the vehicle is armed (and under the other awake rules:
+    a feed whose arming state is unknown, a continuous raw recording, or the new <em>Stay awake
+    without connection</em> setting).</li>
+<li><strong>Two GPS receivers, shown properly.</strong> With a dual-GPS ArduPilot setup the GPS widget
+    cycles between the fused EKF view and each receiver's own fix, sats and HDOP, the
+    Telemetry API reports both receivers, and the GPS sensor tile goes amber when either
+    receiver is below a 3D fix.</li>
+<li><strong>RC control is desktop-only now.</strong> The RC tool and its Settings switch no longer appear
+    on phones or tablets.</li>
+<li><strong>Rover, boat and sub quick actions fixed.</strong> No more Land button on a rover or boat;
+    ArduSub gets <strong>Surface</strong> instead of RTL/Land.</li>
+<li><strong>Android update notices follow the install source.</strong> A store installation is pointed at
+    its store; a hand-installed APK (the normal Tailwind case) gets the GitHub release page.</li>
+<li><strong>NO LINK no longer blanks the screen.</strong> When the link drops, the last known position,
+    heading and battery stay on screen, greyed, under a red <strong>NO LINK</strong> bar that counts the
+    time since the last data arrived — and the 2D map keeps a grey marker on the last known
+    position.</li>
+<li><strong>Re-edit a Fly Here target in place.</strong> Click the standing guided target (marker on the
+    2D map, green point on the 3D map) to reopen its form with the current values and change
+    altitude, speed, heading or loiter radius without re-picking the spot. The form now has
+    a speed field, too.</li>
+<li><strong>A Parameters panel.</strong> A new tab (MAVLink connections only) downloads the flight
+    controller's full parameter list and shows readable values — bitmask parameters name
+    their set bits, enums show their label next to the number.</li>
+<li><strong>QGroundControl <code>.params</code> files.</strong> The same panel saves the list as a <code>.params</code> file and
+    loads one back: differing values are listed and counted before anything is written,
+    parameters the FC doesn't know are skipped, and writing is refused while armed.</li>
+</ul>
 <h2 id="whats-new-in-tailwind-v110-tailwind15">What's new in Tailwind v1.1.0-tailwind.15<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind15" title="Permanent link">&para;</a></h2>
 <p>A maintenance batch ported from upstream Kite GC — the 1.0.2 fixes and the first
 2.0.0-beta fixes that apply to Tailwind's line. No new features; everything here is a

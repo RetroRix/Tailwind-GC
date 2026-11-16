@@ -632,6 +632,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#when-the-link-drops-the-no-link-display" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When the link drops: the NO LINK display
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#widgets-the-docks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -786,6 +797,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../rc-control/" class="md-nav__link">
         
   
@@ -822,10 +861,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_7" >
         
           
-          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3_7" id="__nav_3_7_label" tabindex="0">
             
   
   
@@ -843,8 +882,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1888,6 +1927,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#when-the-link-drops-the-no-link-display" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When the link drops: the NO LINK display
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#widgets-the-docks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2042,6 +2092,13 @@ the <strong>course over ground</strong> (where it's actually travelling — the 
 </ul>
 <p>The same arming state is repeated at the far right of the <strong>status bar</strong> (the thin strip along the very
 bottom), alongside the connection dot, firmware variant, version and port.</p>
+<h2 id="when-the-link-drops-the-no-link-display">When the link drops: the NO LINK display<a class="headerlink" href="#when-the-link-drops-the-no-link-display" title="Permanent link">&para;</a></h2>
+<p>Losing the link no longer blanks the screen. The moment the connection drops, a red <strong>NO LINK</strong>
+bar appears at the top of the map with the time since the last data arrived, and below it the
+last known position, heading, altitude, speed, satellites and battery — greyed, because they are
+history, not live readings. The 2D map also keeps a grey marker on the last known position, so
+you can see where the craft was when the data stopped. Everything clears by itself as soon as
+fresh telemetry flows again after a reconnect.</p>
 <h2 id="widgets-the-docks">Widgets &amp; the docks<a class="headerlink" href="#widgets-the-docks" title="Permanent link">&para;</a></h2>
 <p>Flight instruments live in two <strong>docks</strong>: the <strong>right dock</strong> down the side and the <strong>bottom dock</strong>
 along the bottom. Each widget is self-contained and updates live.</p>
@@ -2098,7 +2155,7 @@ along the bottom. Each widget is self-contained and updates live.</p>
 </tr>
 <tr>
 <td><strong>GPS</strong></td>
-<td>Latitude / longitude, satellite count, fix type (No fix / 2D / 3D / 3D DGPS) and HDOP.</td>
+<td>Latitude / longitude, satellite count, fix type (No fix / 2D / 3D / 3D DGPS) and HDOP. On a MAVLink link the position is the autopilot's fused estimate, and the fix type also reads <strong>RTK FLT</strong>, <strong>RTK FIX</strong> and <strong>NO GPS</strong> (a receiver that was detected has stopped reporting). When the autopilot reports <strong>two GPS receivers</strong> (ArduPilot), the fix type, satellite count and HDOP come from the better receiver — the higher fix, then more satellites — and the title becomes a button: <strong>EKF</strong> is this fused view, <strong>CYC</strong> alternates every three seconds between <strong>GPS1</strong> and <strong>GPS2</strong> with each receiver's own position and values. The autopilot does not report which receiver it is navigating on.</td>
 </tr>
 <tr>
 <td><strong>Home</strong></td>
