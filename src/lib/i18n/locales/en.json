@@ -173,7 +173,8 @@
     "control": "Control",
     "rc": "RC",
     "closePanel": "Close panel",
-    "openPanel": "Open panel"
+    "openPanel": "Open panel",
+    "parameters": "Parameters"
   },
   "rc": {
     "title": "RC Control",
@@ -2399,5 +2400,30 @@
     "altitude": "ALT",
     "battery": "BAT",
     "lastKnownPosition": "Last known position"
+  },
+  "params": {
+    "title": "Parameters",
+    "hint": "Download the flight controller’s parameter list to read it here, save it as a QGroundControl .params file, or load one back. Loading never writes on its own — differing values are listed first.",
+    "download": "Download from FC",
+    "downloading": "Downloading…",
+    "downloaded": "{count} parameters downloaded.",
+    "downloadedPartial": "{count} of {expected} parameters downloaded (the rest did not answer).",
+    "incomplete": "This list is incomplete — download again before relying on it.",
+    "save": "Save .params",
+    "saved": "Saved {count} parameters.",
+    "load": "Load .params…",
+    "loadEmpty": "No parameters could be read from that file.",
+    "loadNoChanges": "The file matches the FC — nothing to write ({count} parameters checked).",
+    "pendingSummary": "{count} values differ from the FC:",
+    "pendingSkipped": " ({count} skipped: unknown to this FC or unreadable)",
+    "armedBlock": "Disarm before writing parameters.",
+    "write": "Write to FC",
+    "writing": "Writing…",
+    "written": "{count} parameters written.",
+    "writeFailed": "Stopped after {count} writes: {message}",
+    "discard": "Discard",
+    "colName": "Parameter",
+    "colValue": "Value",
+    "notDownloaded": "Nothing downloaded yet. Connect over MAVLink and download to fill this list."
   }
 }
