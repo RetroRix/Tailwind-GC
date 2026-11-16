@@ -116,6 +116,11 @@ Fly Here form opens, anchored to the point you clicked. The sent target is drawn
 with a dashed line from the aircraft. Clicking your own aircraft or a radar contact never opens the
 form — those clicks keep their usual meaning.
 
+**Changing a target that is already set:** click the target itself — the marker on the 2D map, the
+green point on the 3D map — and the form reopens at that spot with the current altitude, speed,
+heading and loiter radius filled in. Adjust what you need and press **Fly Here** again; the vehicle
+is re-commanded to the same point with the new values.
+
 !!! note "Why there's no 'set heading' for planes"
     Set Heading is offered for **ArduCopter in Guided only** (it simply yaws the nose). It is
     **intentionally not exposed for fixed-wing / Cruise**: ArduPlane's guided heading change sets a

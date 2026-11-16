@@ -52,6 +52,12 @@ See **[Flight logbook](../guides/logbook.md)**.
 |---|---|---|
 | **RC / HID profile** | `Documents/KiteGC/HID-Profiles/<name>.json` | A controller mapping. Plain shareable JSON files — copy them between installs. See **[RC control](../guides/rc-control.md)**. |
 
+## Parameters
+
+| Format | Extension | R/W | Notes |
+|---|---|---|---|
+| **QGroundControl parameters** | `.params` | R / W | The FC's full parameter list in QGC's text format (one `vehicle component name value type` line per parameter, `#` comments). Interchangeable with QGroundControl and Mission Planner. See **[Parameters](../guides/parameters.md)**. |
+
 ## Where your data lives
 
 - **Flight database** — your logbook (flights, vehicles, batteries, saved missions) is one local SQLite

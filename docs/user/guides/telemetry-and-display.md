@@ -53,6 +53,15 @@ The centre of the top bar is a live health summary of the connected craft:
 The same arming state is repeated at the far right of the **status bar** (the thin strip along the very
 bottom), alongside the connection dot, firmware variant, version and port.
 
+## When the link drops: the NO LINK display
+
+Losing the link no longer blanks the screen. The moment the connection drops, a red **NO LINK**
+bar appears at the top of the map with the time since the last data arrived, and below it the
+last known position, heading, altitude, speed, satellites and battery — greyed, because they are
+history, not live readings. The 2D map also keeps a grey marker on the last known position, so
+you can see where the craft was when the data stopped. Everything clears by itself as soon as
+fresh telemetry flows again after a reconnect.
+
 ## Widgets & the docks
 
 Flight instruments live in two **docks**: the **right dock** down the side and the **bottom dock**

@@ -17,6 +17,43 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.16
+
+Six improvements ported from upstream Kite GC's development line, plus four additions of
+Tailwind's own:
+
+-   **Native RTSP is the default video path.** The built-in RTSP client (no helper process)
+    is now the standard on desktop; existing installs switch over once, automatically, and
+    the classic MediaMTX/ffmpeg path stays available as a fallback.
+-   **The screen stays awake while armed.** On phone, tablet and desktop alike, the display
+    no longer sleeps mid-flight while the vehicle is armed (and under the other awake rules:
+    a feed whose arming state is unknown, a continuous raw recording, or the new *Stay awake
+    without connection* setting).
+-   **Two GPS receivers, shown properly.** With a dual-GPS ArduPilot setup the GPS widget
+    cycles between the fused EKF view and each receiver's own fix, sats and HDOP, the
+    Telemetry API reports both receivers, and the GPS sensor tile goes amber when either
+    receiver is below a 3D fix.
+-   **RC control is desktop-only now.** The RC tool and its Settings switch no longer appear
+    on phones or tablets.
+-   **Rover, boat and sub quick actions fixed.** No more Land button on a rover or boat;
+    ArduSub gets **Surface** instead of RTL/Land.
+-   **Android update notices follow the install source.** A store installation is pointed at
+    its store; a hand-installed APK (the normal Tailwind case) gets the GitHub release page.
+-   **NO LINK no longer blanks the screen.** When the link drops, the last known position,
+    heading and battery stay on screen, greyed, under a red **NO LINK** bar that counts the
+    time since the last data arrived — and the 2D map keeps a grey marker on the last known
+    position.
+-   **Re-edit a Fly Here target in place.** Click the standing guided target (marker on the
+    2D map, green point on the 3D map) to reopen its form with the current values and change
+    altitude, speed, heading or loiter radius without re-picking the spot. The form now has
+    a speed field, too.
+-   **A Parameters panel.** A new tab (MAVLink connections only) downloads the flight
+    controller's full parameter list and shows readable values — bitmask parameters name
+    their set bits, enums show their label next to the number.
+-   **QGroundControl `.params` files.** The same panel saves the list as a `.params` file and
+    loads one back: differing values are listed and counted before anything is written,
+    parameters the FC doesn't know are skipped, and writing is refused while armed.
+
 ## What's new in Tailwind v1.1.0-tailwind.15
 
 A maintenance batch ported from upstream Kite GC — the 1.0.2 fixes and the first
