@@ -8,6 +8,7 @@ import type { FcInfo, PortInfo, BleDeviceInfo, TransportType, ProtocolType } fro
 import type { InavStats } from '$lib/stores/flightlogTypes';
 import { connection, connectionProtocol, fcLinkAlive, availablePorts, lastHotpluggedPort, bleDevices, detectedPlatformType } from '$lib/stores/connection';
 import { startTelemetryListeners, stopTelemetryListeners, resetTelemetry, setFcVariant } from '$lib/stores/telemetry';
+import { clearFcParams } from '$lib/stores/parameters';
 import { applyRelaysOnConnect, clearRelaysOnDisconnect } from '$lib/controllers/relayController';
 import { startFcModeListeners, clearFcModes } from '$lib/stores/fcModes';
 import { loadSafehomeConfig, clearSafehome } from '$lib/stores/safehome';
@@ -237,6 +238,7 @@ export async function disconnectFC(baudRate: number): Promise<void> {
   clearRally();
   stopTelemetryListeners();
   resetTelemetry();
+  clearFcParams();
   clearFcModes();
   connectionProtocol.set({ primary: '', secondary: null });
   fcLinkAlive.set(true);

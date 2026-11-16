@@ -240,6 +240,13 @@ pub fn mav_set_param(name: String, value: f32, state: State<'_, AppState>) -> Re
     control::set_param(&cmd_tx, fc_sysid, &name, value)
 }
 
+/// Download the FC's full parameter list for the Parameters panel (QGC `.params` save/load).
+#[tauri::command(async)]
+pub fn mav_download_params(state: State<'_, AppState>) -> Result<crate::mavlink_proto::params_rt::ParamDownload, String> {
+    let (cmd_tx, fc_sysid) = mav_handle(&state)?;
+    crate::mavlink_proto::params_rt::download_all_params(&cmd_tx, fc_sysid)
+}
+
 /// Read a single FC parameter by name (best-effort; `None` when the FC doesn't report it within the
 /// params_rt timeout). Used for the Guided loiter-radius ring (`WP_LOITER_RAD` / `NAV_LOITER_RAD`).
 #[tauri::command(async)]
