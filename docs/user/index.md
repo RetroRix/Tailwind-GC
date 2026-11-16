@@ -17,6 +17,33 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.15
+
+A maintenance batch ported from upstream Kite GC — the 1.0.2 fixes and the first
+2.0.0-beta fixes that apply to Tailwind's line. No new features; everything here is a
+correction:
+
+-   **GPS honesty.** A receiver reporting "no fix" is no longer shown as a 3D fix —
+    the GPS widget tells the truth about what the receiver actually has.
+-   **A lost link stays lost, quietly.** A dropped TCP connection is now recognised as
+    a lost link instead of flooding the diagnostics log with the same read error, and
+    a day's log file is capped at two files of 50 MB.
+-   **Update check picks the highest version.** The pre-release and patch channels no
+    longer compare against whichever release happens to be listed first.
+-   **Map and 3D fixes.** Following an aircraft on the 2D map redraws the model far
+    less often; with High-Resolution 3D off, coarser imagery is now used only on
+    standard-density screens (on HiDPI and phones it made the 3D map blurrier — that
+    correction to the .13 feature is in); the High-Resolution 3D switch shows its
+    stored state; on Linux, map tiles no longer show bright seams.
+-   **Phone and Android fixes.** Moving a widget in the phone's column now follows
+    your finger; hold-to-confirm buttons let a vertical swipe scroll the panel past
+    them; the survey confirmation is no longer clipped in Power Saving mode; and
+    radio telemetry over Bluetooth LE no longer needs a serial profile.
+-   **Location names keep to the limit.** Flight-log location lookups stay inside
+    Nominatim's one-request-per-second policy (the spacing itself arrived with the
+    .14 map search; this batch adds the weather timeout and the stale-selection
+    guard that complete it).
+
 ## What's new in Tailwind v1.1.0-tailwind.14
 
 Three improvements and a batch of fixes ported from upstream Kite GC's development line:
