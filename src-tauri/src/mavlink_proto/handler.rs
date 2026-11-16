@@ -18,7 +18,7 @@ use crate::flightlog::recorder::FlightRecorderHandle;
 use crate::scheduler::rc_tx::{self, RcTxHandle};
 use crate::scheduler::telemetry::{
     AttitudeData, GpsData, AltitudeData, AnalogData, StatusData,
-    SensorStatusData, AirspeedData, AoaData, WindData, Misc2Data, BatteryInstanceData,
+    SensorStatusData, AirspeedData, AoaData, WindData, Misc2Data, BatteryInstanceData, GpsReceiverData,
 };
 use crate::transport::ByteTransport;
 
@@ -627,18 +627,26 @@ impl AnalogState {
     }
 }
 
-/// Shared GPS cache that splits the two overlapping ArduPilot GPS messages into single owners.
-///
-/// Position: GLOBAL_POSITION_INT carries the **fused** EKF solution; GPS_RAW_INT carries the raw
-/// receiver position — noisier and lagging. Both carry lat/lon, so naively emitting both interleaves
-/// two offset streams and the track zig-zags (sawtooth). GLOBAL_POSITION_INT owns position; GPS_RAW_INT
-/// reuses the cached fused fix instead of its own raw lat/lon.
-///
-/// Fix type + sat count: only GPS_RAW_INT has them; GLOBAL_POSITION_INT does not. So GPS_RAW_INT owns
-/// `fix_type`/`num_sat` and GLOBAL_POSITION_INT reuses the cached values — otherwise the two messages
-/// would emit conflicting fix/sats (GLOBAL_POSITION_INT sending 0 sats) and the UI would flash.
+/// One receiver as GPS_RAW_INT / GPS2_RAW last reported it. Speed and course are kept only for a link
+/// that never sends GLOBAL_POSITION_INT.
+#[derive(Clone, Copy)]
+struct RawGps {
+    data: GpsReceiverData,
+    ground_speed: f64,
+    course: f64,
+    at: std::time::Instant,
+}
+
+/// A receiver whose message stopped coming counts as lost; its stream is requested at 1 Hz.
+const GPS_RECEIVER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Splits the overlapping ArduPilot GPS messages into single owners: GLOBAL_POSITION_INT (fused) owns the
+/// position — emitting a receiver's raw lat/lon too zig-zags the track — and the receivers own fix type
+/// and sats, which GLOBAL_POSITION_INT lacks (else the UI flashes 0 sats).
 #[derive(Default, Clone, Copy)]
 struct FusedPos {
+    /// Index = receiver id. A port is listed once it reported more than "no receiver" and then stays.
+    receivers: [Option<RawGps>; 2],
     valid: bool,
     lat: f64,
     lon: f64,
@@ -647,8 +655,90 @@ struct FusedPos {
     course: f64,
     fix_type: u8,
     num_sat: u8,
-    /// A GPS_RAW_INT arrived: its fix type stands from then on, "no fix" included.
+    /// A receiver reported (GPS_RAW_INT / GPS2_RAW): its fix type stands from then on, "no fix" included.
     raw_seen: bool,
+}
+
+fn unified_fix(raw: ::mavlink::ardupilotmega::GpsFixType) -> u8 {
+    use ::mavlink::ardupilotmega::GpsFixType::*;
+    match raw {
+        GPS_FIX_TYPE_NO_GPS | GPS_FIX_TYPE_NO_FIX => 0,
+        GPS_FIX_TYPE_2D_FIX => 1,
+        GPS_FIX_TYPE_3D_FIX => 2,
+        GPS_FIX_TYPE_DGPS | GPS_FIX_TYPE_RTK_FLOAT | GPS_FIX_TYPE_RTK_FIXED | GPS_FIX_TYPE_STATIC
+        | GPS_FIX_TYPE_PPP => 3,
+    }
+}
+
+/// One GPS_RAW_INT (id 0) or GPS2_RAW (id 1). The FC does not report which receiver it navigates on, so
+/// fix type, sat count and HDOP of `telemetry-gps` come from the better one: higher fix, then more sats.
+fn on_gps_receiver(rx: RawGps, fused: &mut FusedPos, app_handle: &AppHandle, recorder: &Option<FlightRecorderHandle>) {
+    if let Some(slot) = fused.receivers.get_mut(rx.data.id as usize) {
+        if slot.is_some() || rx.data.fix_raw > 0 {
+            *slot = Some(rx);
+        }
+    }
+    // A receiver that went silent would otherwise keep winning with its last fix.
+    for r in fused.receivers.iter_mut().flatten() {
+        if rx.at.duration_since(r.at) > GPS_RECEIVER_TIMEOUT {
+            r.data.fix_raw = 0;
+            r.data.fix_type = 0;
+            r.data.num_sat = 0;
+            r.data.hdop = None;
+        }
+    }
+    // STATIC (7) and PPP (8) sit above RTK fixed (6) in the enum but are not the better fix.
+    let rank = |raw: u8| if raw > 6 { 4 } else { raw };
+    let best = fused
+        .receivers
+        .iter()
+        .flatten()
+        .max_by_key(|r| (rank(r.data.fix_raw), r.data.num_sat, std::cmp::Reverse(r.data.id)))
+        .copied()
+        .unwrap_or(rx);
+    fused.fix_type = best.data.fix_type;
+    fused.num_sat = best.data.num_sat;
+    fused.raw_seen = true;
+
+    let list: Vec<GpsReceiverData> = fused.receivers.iter().flatten().map(|r| r.data).collect();
+    if !list.is_empty() {
+        let _ = app_handle.emit("telemetry-gps-receivers", &list);
+    }
+
+    // Position from the fused GLOBAL_POSITION_INT; until the first one arrives from ONE receiver, the
+    // first that has a fix — two raw streams taken in turn sawtooth the track.
+    let data = if fused.valid {
+        GpsData {
+            fix_type: fused.fix_type,
+            num_sat: fused.num_sat,
+            lat: fused.lat,
+            lon: fused.lon,
+            alt_msl: fused.alt_msl,
+            ground_speed: fused.ground_speed,
+            course: fused.course,
+        }
+    } else {
+        let src = fused.receivers.iter().flatten().find(|r| r.data.fix_type > 0).copied().unwrap_or(rx);
+        GpsData {
+            fix_type: fused.fix_type,
+            num_sat: fused.num_sat,
+            lat: src.data.lat,
+            lon: src.data.lon,
+            alt_msl: src.data.alt_msl,
+            ground_speed: src.ground_speed,
+            course: src.course,
+        }
+    };
+    let _ = app_handle.emit("telemetry-gps", &data);
+
+    // Same stats event INAV uses (MSP_GPSSTATISTICS), so the HDOP readout is one path for both protocols.
+    if let Some(hdop) = best.data.hdop {
+        let _ = app_handle.emit("telemetry-gps-stats", serde_json::json!({ "hdop": hdop }));
+    }
+
+    if let Some(ref rec) = recorder {
+        if let Ok(mut r) = rec.lock() { r.on_gps(&data); }
+    }
 }
 
 /// Dispatch a received MAVLink message to the same Tauri events as the MSP scheduler.
@@ -762,7 +852,7 @@ fn dispatch_message(header: &MavHeader, message: &MavMessage, fc_variant: &str, 
 
         // ── GLOBAL_POSITION_INT → telemetry-gps + telemetry-altitude
         MavMessage::GLOBAL_POSITION_INT(gpi) => {
-            // Update the shared cache's position (fix_type/num_sat are owned by GPS_RAW_INT — leave them).
+            // fix_type / num_sat belong to the receiver messages — leave them.
             fused.valid = true;
             fused.lat = gpi.lat as f64 / 1e7;
             fused.lon = gpi.lon as f64 / 1e7;
@@ -778,7 +868,7 @@ fn dispatch_message(header: &MavHeader, message: &MavMessage, fc_variant: &str, 
 
             let gps = GpsData {
                 // ArduPilot sends GLOBAL_POSITION_INT without a fix too (position 0/0), so only a real
-                // position on a link that never carried GPS_RAW_INT is taken as a 3D fix.
+                // position on a link that never carried a receiver message is taken as a 3D fix.
                 fix_type: if fused.raw_seen || (gpi.lat == 0 && gpi.lon == 0) { fused.fix_type } else { 2 },
                 num_sat: fused.num_sat,
                 lat: fused.lat,
@@ -804,59 +894,24 @@ fn dispatch_message(header: &MavHeader, message: &MavMessage, fc_variant: &str, 
             }
         }
 
-        // ── GPS_RAW_INT → telemetry-gps (fix, sats, hdop) ──────────
+        // ── GPS_RAW_INT / GPS2_RAW → telemetry-gps (fix, sats, hdop) + telemetry-gps-receivers ──
+        // `eph` is HDOP × 100 (u16::MAX = unknown). Sensor health stays with SYS_STATUS.
         MavMessage::GPS_RAW_INT(gps) => {
-            let fix_type = match gps.fix_type {
-                ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_NO_GPS
-                | ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_NO_FIX => 0,
-                ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_2D_FIX => 1,
-                ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_3D_FIX => 2,
-                ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_DGPS
-                | ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_RTK_FLOAT
-                | ::mavlink::ardupilotmega::GpsFixType::GPS_FIX_TYPE_RTK_FIXED => 3,
-                _ => 0,
-            };
-
-            // GPS_RAW_INT owns fix type + sat count — cache them so GLOBAL_POSITION_INT reuses the same
-            // values instead of emitting a conflicting fix/0-sats (which made the UI flash).
-            fused.fix_type = fix_type;
-            fused.num_sat = gps.satellites_visible;
-            fused.raw_seen = true;
-
-            // Position comes from the fused GLOBAL_POSITION_INT solution (cached in `fused`) — emitting
-            // GPS_RAW_INT's own raw lat/lon here would interleave two offset position streams and
-            // sawtooth the track. Before the first GLOBAL_POSITION_INT (no fused fix yet) fall back to
-            // the raw value.
-            let data = if fused.valid {
-                GpsData {
-                    fix_type,
+            on_gps_receiver(RawGps {
+                data: GpsReceiverData {
+                    id: 0,
+                    fix_type: unified_fix(gps.fix_type),
+                    fix_raw: gps.fix_type as u8,
                     num_sat: gps.satellites_visible,
-                    lat: fused.lat,
-                    lon: fused.lon,
-                    alt_msl: fused.alt_msl,
-                    ground_speed: fused.ground_speed,
-                    course: fused.course,
-                }
-            } else {
-                GpsData {
-                    fix_type,
-                    num_sat: gps.satellites_visible,
+                    hdop: (gps.eph != u16::MAX).then(|| gps.eph as f64 / 100.0),
                     lat: gps.lat as f64 / 1e7,
                     lon: gps.lon as f64 / 1e7,
                     alt_msl: gps.alt as f64 / 1000.0, // mm → m
-                    ground_speed: gps.vel as f64 / 100.0, // cm/s → m/s
-                    course: gps.cog as f64 / 100.0, // cdeg → deg
-                }
-            };
-            let _ = app_handle.emit("telemetry-gps", &data);
-
-            // HDOP — GPS_RAW_INT.eph is HDOP × 100 (u16::MAX = unknown). Reuse the same stats event INAV
-            // uses (MSP_GPSSTATISTICS), so the frontend HDOP readout works identically for both protocols.
-            if gps.eph != u16::MAX {
-                let _ = app_handle.emit("telemetry-gps-stats", serde_json::json!({
-                    "hdop": gps.eph as f64 / 100.0,
-                }));
-            }
+                },
+                ground_speed: gps.vel as f64 / 100.0, // cm/s → m/s
+                course: gps.cog as f64 / 100.0,       // cdeg → deg
+                at: std::time::Instant::now(),
+            }, fused, app_handle, recorder);
 
             // GPS jamming indicator — BLOCKED on the pinned dialect: current common.xml defines
             // GPS_RAW_INT.jamming_indicator (u8, 0–255), but mavlink 0.17.1's bundled common.xml
@@ -866,13 +921,23 @@ fn dispatch_message(header: &MavHeader, message: &MavMessage, fc_variant: &str, 
             // listener + GPS-widget indicator already exist with an honest no-data state; when a
             // crate bump exposes the field, emit it here as
             // `GpsJammingData { jamming_indicator: Some(gps.jamming_indicator) }`.
-
-            // Per-sensor hardware health is owned by SYS_STATUS (real present/health bitmasks); the
-            // GPS fix nuance (amber on <3D) is layered on top frontend-side from this message's fix.
-
-            if let Some(ref rec) = recorder {
-                if let Ok(mut r) = rec.lock() { r.on_gps(&data); }
-            }
+        }
+        MavMessage::GPS2_RAW(gps) => {
+            on_gps_receiver(RawGps {
+                data: GpsReceiverData {
+                    id: 1,
+                    fix_type: unified_fix(gps.fix_type),
+                    fix_raw: gps.fix_type as u8,
+                    num_sat: gps.satellites_visible,
+                    hdop: (gps.eph != u16::MAX).then(|| gps.eph as f64 / 100.0),
+                    lat: gps.lat as f64 / 1e7,
+                    lon: gps.lon as f64 / 1e7,
+                    alt_msl: gps.alt as f64 / 1000.0,
+                },
+                ground_speed: gps.vel as f64 / 100.0,
+                course: gps.cog as f64 / 100.0,
+                at: std::time::Instant::now(),
+            }, fused, app_handle, recorder);
         }
 
         // ── SYS_STATUS → telemetry-analog (battery) ────────────────

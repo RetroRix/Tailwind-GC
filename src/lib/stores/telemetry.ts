@@ -25,6 +25,21 @@ export interface BatteryInstance {
   temperature: number | null;
 }
 
+/** One physical GPS receiver (MAVLink GPS_RAW_INT / GPS2_RAW), raw values; live only, not recorded. */
+export interface GpsReceiver {
+  /** 0 = GPS1. */
+  id: number;
+  /** Unified fix scale, as `TelemetryData.fixType`. */
+  fixType: number;
+  /** MAVLink GPS_FIX_TYPE: 0 no receiver · 1 no fix · 2 2D · 3 3D · 4 DGPS · 5 RTK float · 6 RTK fixed. */
+  fixRaw: number;
+  numSat: number;
+  hdop: number | null;
+  lat: number;
+  lon: number;
+  altMsl: number;
+}
+
 /** Unified RC-link statistics (RC Link widget). Each field is null when the active protocol can't
  *  provide it — the widget shows present fields and hides the rest. `rssiPercent` is normalized at the
  *  backend source (which knows its own raw RSSI scale). */
@@ -88,6 +103,9 @@ export interface TelemetryData {
   // Per-instance batteries (ArduPilot/PX4 multi-monitor). Empty for single-battery; the battery widget
   // then falls back to the primary fields above. See docs/active/MULTI_BATTERY.md.
   batteries: BatteryInstance[];
+
+  // Physical GPS receivers (MAVLink). Empty on every other protocol and in replay.
+  gpsReceivers: GpsReceiver[];
 
   // RC link statistics (RSSI / LQ / SNR — protocol-dependent, see LinkStats)
   link: LinkStats;
@@ -162,6 +180,7 @@ const defaultTelemetry: TelemetryData = {
   voltage: 0, current: 0, mAhDrawn: 0, rssi: 0, power: 0, batteryPercentage: 0, cellCount: 0,
   throttle: 0,
   batteries: [],
+  gpsReceivers: [],
   link: { rssiPercent: null, rssiDbm: null, lq: null, snrDb: null },
   armingFlags: 0, statusSeen: false, cpuLoad: 0, sensorStatus: 0, flightModeFlags: 0, mspRcOverride: false,
   sensorGyro: 0, sensorAcc: 0, sensorMag: 0, sensorBaro: 0,
@@ -372,6 +391,25 @@ export async function startTelemetryListeners() {
         // Only throttle is consumed continuously today; uptime/flight_time ride along for a future
         // flight-time timer (seeded once, then counted locally).
         telemetry.update((t) => ({ ...t, throttle: event.payload.throttle_pct, lastUpdate: Date.now() }));
+      }
+    )
+  );
+
+  unlisteners.push(
+    await listen<{ id: number; fix_type: number; fix_raw: number; num_sat: number; hdop: number | null; lat: number; lon: number; alt_msl: number }[]>(
+      'telemetry-gps-receivers',
+      (event) => {
+        const gpsReceivers: GpsReceiver[] = event.payload.map((r) => ({
+          id: r.id,
+          fixType: r.fix_type,
+          fixRaw: r.fix_raw,
+          numSat: r.num_sat,
+          hdop: r.hdop,
+          lat: r.lat,
+          lon: r.lon,
+          altMsl: r.alt_msl,
+        }));
+        telemetry.update((t) => ({ ...t, gpsReceivers, lastUpdate: Date.now() }));
       }
     )
   );
