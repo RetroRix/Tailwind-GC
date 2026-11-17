@@ -329,8 +329,36 @@ telemetry.subscribe((t) => {
 
 let unlisteners: UnlistenFn[] = [];
 
+// The one-shot answers of the connect sequence can arrive before `connect` returns, and an event without a
+// listener is dropped: these listen from before the connect call until disconnect.
+let connectUnlisteners: UnlistenFn[] = [];
+
+export async function startConnectListeners() {
+  stopConnectListeners();
+  connectUnlisteners.push(
+    // AHRS_EKF_TYPE — no lastUpdate bump.
+    await listen<{ ekf_type: number }>('telemetry-ekf-type', (event) => {
+      telemetry.update((t) => ({ ...t, ekfType: event.payload.ekf_type }));
+    }),
+    // A QuadPlane may report MAV_TYPE_FIXED_WING; then only the Q_ENABLE answer tells it from a plane.
+    await listen<{ quadplane?: boolean; blackbox?: boolean }>('telemetry-vehicle', (event) => {
+      if (event.payload.quadplane) noteQuadplane();
+      // Logging-backend answer (ArduPilot LOG_BACKEND_TYPE / PX4 SDLOG_MODE) → FC info for the UAV Info
+      // panel's vehicle-library save.
+      const blackbox = event.payload.blackbox;
+      if (blackbox !== undefined) {
+        connection.update((c) => (c.fcInfo ? { ...c, fcInfo: { ...c.fcInfo, blackbox } } : c));
+      }
+    }),
+  );
+}
+
+export function stopConnectListeners() {
+  for (const u of connectUnlisteners) u();
+  connectUnlisteners = [];
+}
+
 export async function startTelemetryListeners() {
-  // Clean up any existing listeners
   stopTelemetryListeners();
 
   unlisteners.push(
@@ -520,26 +548,6 @@ export async function startTelemetryListeners() {
   unlisteners.push(
     await listen<{ status: number; max_variance: number; flags: number }>('telemetry-ekf-status', (event) => {
       telemetry.update((t) => ({ ...t, ekfStatus: event.payload.status, lastUpdate: Date.now() }));
-    })
-  );
-
-  // EKF core version (AHRS_EKF_TYPE) — one-shot reply on connect, so no lastUpdate bump.
-  unlisteners.push(
-    await listen<{ ekf_type: number }>('telemetry-ekf-type', (event) => {
-      telemetry.update((t) => ({ ...t, ekfType: event.payload.ekf_type }));
-    })
-  );
-
-  // A QuadPlane reports MAV_TYPE_FIXED_WING: only this one-shot Q_ENABLE answer tells it from a plane.
-  unlisteners.push(
-    await listen<{ quadplane?: boolean; blackbox?: boolean }>('telemetry-vehicle', (event) => {
-      if (event.payload.quadplane) noteQuadplane();
-      // Logging-backend answer (ArduPilot LOG_BACKEND_TYPE / PX4 SDLOG_MODE) → FC info for the UAV Info
-      // panel's vehicle-library save.
-      const blackbox = event.payload.blackbox;
-      if (blackbox !== undefined) {
-        connection.update((c) => (c.fcInfo ? { ...c, fcInfo: { ...c.fcInfo, blackbox } } : c));
-      }
     })
   );
 

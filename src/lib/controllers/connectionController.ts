@@ -7,7 +7,7 @@ import { get } from 'svelte/store';
 import type { FcInfo, PortInfo, BleDeviceInfo, TransportType, ProtocolType } from '$lib/stores/connection';
 import type { InavStats } from '$lib/stores/flightlogTypes';
 import { connection, connectionProtocol, fcLinkAlive, availablePorts, lastHotpluggedPort, bleDevices, detectedPlatformType } from '$lib/stores/connection';
-import { startTelemetryListeners, stopTelemetryListeners, resetTelemetry, setFcVariant } from '$lib/stores/telemetry';
+import { startTelemetryListeners, stopTelemetryListeners, startConnectListeners, stopConnectListeners, resetTelemetry, setFcVariant } from '$lib/stores/telemetry';
 import { clearFcParams } from '$lib/stores/parameters';
 import { applyRelaysOnConnect, clearRelaysOnDisconnect } from '$lib/controllers/relayController';
 import { startFcModeListeners, clearFcModes } from '$lib/stores/fcModes';
@@ -156,12 +156,10 @@ export interface ConnectParams {
   flightLogRawAlways: boolean;
 }
 
-/**
- * Connect to the flight controller via Tauri, update stores, start listeners.
- */
 export async function connectFC(params: ConnectParams): Promise<FcInfo> {
   // Mode-list listener first, so an `available-modes` emit during the connect burst is not missed.
   await startFcModeListeners();
+  await startConnectListeners();
   const info = await invoke<FcInfo>("connect", {
     protocol: params.protocolType,
     transportType: params.transportType,
@@ -181,9 +179,12 @@ export async function connectFC(params: ConnectParams): Promise<FcInfo> {
     flightLogRawPath: params.flightLogRawPath,
     flightLogRaw: params.flightLogRaw,
     flightLogRawAlways: params.flightLogRawAlways,
+  }).catch((e) => {
+    stopConnectListeners();
+    throw e;
   });
   // The Q_ENABLE answer may have arrived before this result, which still says "airplane".
-  if (info.platform_type === PLATFORM_AIRPLANE && isQuadplane()) info.platform_type = PLATFORM_VTOL;
+  if (params.protocolType === 'mavlink' && info.platform_type === PLATFORM_AIRPLANE && isQuadplane()) info.platform_type = PLATFORM_VTOL;
   // Re-apply the override chosen earlier this session for the same FC (see `platformOverrides`).
   detectedPlatformType.set(info.platform_type);
   const remembered = info.fc_uid ? platformOverrides.get(info.fc_uid) : undefined;
@@ -241,6 +242,7 @@ export async function disconnectFC(baudRate: number): Promise<void> {
   clearFence();
   clearRally();
   stopTelemetryListeners();
+  stopConnectListeners();
   resetTelemetry();
   clearFcParams();
   clearFcModes();
