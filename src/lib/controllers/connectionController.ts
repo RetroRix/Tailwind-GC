@@ -12,6 +12,8 @@ import { clearFcParams } from '$lib/stores/parameters';
 import { applyRelaysOnConnect, clearRelaysOnDisconnect } from '$lib/controllers/relayController';
 import { startFcModeListeners, clearFcModes } from '$lib/stores/fcModes';
 import { loadSafehomeConfig, clearSafehome } from '$lib/stores/safehome';
+import { isQuadplane } from '$lib/stores/missionArdupilot';
+import { PLATFORM_AIRPLANE, PLATFORM_VTOL } from '$lib/helpers/uavIcons';
 import { loadGeozoneConfig, clearGeozones } from '$lib/stores/geozone';
 import { loadFenceConfig, clearFence } from '$lib/stores/fence';
 import { loadRallyConfig, clearRally } from '$lib/stores/rally';
@@ -180,6 +182,8 @@ export async function connectFC(params: ConnectParams): Promise<FcInfo> {
     flightLogRaw: params.flightLogRaw,
     flightLogRawAlways: params.flightLogRawAlways,
   });
+  // The Q_ENABLE answer may have arrived before this result, which still says "airplane".
+  if (info.platform_type === PLATFORM_AIRPLANE && isQuadplane()) info.platform_type = PLATFORM_VTOL;
   // Re-apply the override chosen earlier this session for the same FC (see `platformOverrides`).
   detectedPlatformType.set(info.platform_type);
   const remembered = info.fc_uid ? platformOverrides.get(info.fc_uid) : undefined;

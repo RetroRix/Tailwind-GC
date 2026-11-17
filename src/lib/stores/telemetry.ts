@@ -9,7 +9,7 @@ import { writable, get } from 'svelte/store';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { connection, connectionProtocol, fcLinkAlive } from '$lib/stores/connection';
-import { arduVehicleClass } from '$lib/stores/missionArdupilot';
+import { noteQuadplane } from '$lib/stores/missionArdupilot';
 import type { FlightModeState } from '$lib/helpers/flightModeRegistry';
 
 /** One battery monitor instance (ArduPilot/PX4 multi-battery). Live: from the `telemetry-batteries`
@@ -530,11 +530,10 @@ export async function startTelemetryListeners() {
     })
   );
 
-  // QuadPlane detection (ArduPilot Q_ENABLE reply) — a QuadPlane reports MAV_TYPE_FIXED_WING, so the
-  // mission vehicle class can only be upgraded to quadplane from this one-shot param. Upgrade only.
+  // A QuadPlane reports MAV_TYPE_FIXED_WING: only this one-shot Q_ENABLE answer tells it from a plane.
   unlisteners.push(
     await listen<{ quadplane?: boolean; blackbox?: boolean }>('telemetry-vehicle', (event) => {
-      if (event.payload.quadplane) arduVehicleClass.set('quadplane');
+      if (event.payload.quadplane) noteQuadplane();
       // Logging-backend answer (ArduPilot LOG_BACKEND_TYPE / PX4 SDLOG_MODE) → FC info for the UAV Info
       // panel's vehicle-library save.
       const blackbox = event.payload.blackbox;
