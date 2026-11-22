@@ -91,10 +91,10 @@ function normalizeRadarLink<T extends Partial<RadarLinkFields>>(src: T): T & Pic
 /** Fixed, always-present ADS-B providers (URL defined in code, not editable/deletable). Only their
  *  on/off state is persisted (in `radar.adsb.builtins`). */
 export const BUILTIN_ADSB_PROVIDERS: { name: string; url: string }[] = [
-  { name: 'adsb.lol', url: 'https://api.adsb.lol/v2/point/{lat}/{lon}/{dist}' },
-  // adsb.fi open data (v2 point endpoint). OFF by default — see DEFAULT_RADAR. The Rust poller
+  // adsb.fi open data (v3 point endpoint). OFF by default — see DEFAULT_RADAR. The Rust poller
   // clamps the poll interval to ≥ 10 s whenever this provider is active (adsb.fi rate guidance).
-  { name: 'adsb.fi', url: 'https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{dist}' },
+  // adsb.lol is no longer a built-in (upstream #362): users can still add it as a custom provider.
+  { name: 'adsb.fi', url: 'https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{dist}' },
 ];
 
 /** Radar (foreign-vehicle tracking) settings: master switch + per-system enables + per-system
@@ -106,7 +106,7 @@ export interface RadarSettings {
     enabled: boolean;
     /** On/off state for the fixed built-in providers, keyed by name (URL lives in code). */
     builtins: Record<string, boolean>;
-    /** User-editable custom providers (e.g. adsb.fi example). Merged with the built-ins by ICAO. */
+    /** User-editable custom providers. Merged with the built-ins by ICAO. */
     online: AdsbOnlineProvider[];
     /** Local hardware receivers (MAVLink over serial / TCP / UDP). */
     local: AdsbLocalSource[];
@@ -173,17 +173,14 @@ export interface RadarMapSettings {
   visible: { adsb: boolean; formationFlight: boolean; radio: boolean };
 }
 
-/** Default radar settings — adsb.lol on; adsb.fi OFF by default (opt-in via Settings →
- *  "Internet traffic (adsb.fi)" or the Radar panel's Online sources); adsb.one as a custom
- *  (off — currently unreachable). */
+/** Default radar settings — adsb.fi OFF by default (opt-in via Settings → "Internet traffic
+ *  (adsb.fi)" or the Radar panel's Online sources); no other built-in online provider. */
 export const DEFAULT_RADAR: RadarSettings = {
   enabled: true,
   adsb: {
     enabled: true,
-    builtins: { 'adsb.lol': true, 'adsb.fi': false },
-    online: [
-      { name: 'adsb.one', url: 'https://api.adsb.one/v2/point/{lat}/{lon}/{dist}', enabled: false },
-    ],
+    builtins: { 'adsb.fi': false },
+    online: [],
     local: [],
     mspFromFc: false,
     radiusKm: 25,
@@ -630,9 +627,11 @@ function load(): AppSettings {
               ...dr.adsb,
               ...pa,
               builtins: { ...dr.adsb.builtins, ...(pa.builtins ?? {}) },
-              // Strip any built-in-named entries from the custom list (migration from the old flat
-              // `online` array, where adsb.lol/.one lived as custom rows).
-              online: (pa.online ?? dr.adsb.online).filter((p) => !builtinNames.has(p.name)),
+              // A built-in name cannot also be a custom row. The adsb.one row is the sample earlier defaults
+              // stored; that service is gone, so it goes unless the user had switched it on.
+              online: (pa.online ?? dr.adsb.online).filter(
+                (p) => !builtinNames.has(p.name) && !(p.name === 'adsb.one' && !p.enabled),
+              ),
               local: (pa.local ?? dr.adsb.local).map(normalizeRadarLink),
             },
             formationFlight: normalizeRadarLink({ ...dr.formationFlight, ...(pr.formationFlight ?? {}) }),
