@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="assets/branding/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#whats-new-in-tailwind-v110-tailwind16" class="md-skip">
+        <a href="#whats-new-in-tailwind-v110-tailwind17" class="md-skip">
           Skip to content
         </a>
       
@@ -332,6 +332,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.17
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind16" class="md-nav__link">
@@ -1921,6 +1932,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#whats-new-in-tailwind-v110-tailwind17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in Tailwind v1.1.0-tailwind.17
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#whats-new-in-tailwind-v110-tailwind16" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2162,6 +2184,34 @@ right next to the map.</p>
 <p>Tailwind Ground Control flying in 3D mode.</p>
 </figcaption>
 </figure>
+<h2 id="whats-new-in-tailwind-v110-tailwind17">What's new in Tailwind v1.1.0-tailwind.17<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind17" title="Permanent link">&para;</a></h2>
+<p>A maintenance batch ported from upstream Kite GC's 1.0.3 backports — fixes only, no new
+features:</p>
+<ul>
+<li><strong>QuadPlanes are recognised on every connect.</strong> An ArduPilot QuadPlane (which reports
+    itself as a plain fixed-wing) is now detected reliably and shown as the VTOL it is,
+    instead of depending on the timing of a one-off answer during connect. The same fix
+    means the EKF-type answer given at connect is no longer lost.</li>
+<li><strong>Mission editing is safer.</strong> Switching mission tabs keeps your flags and altitude
+    mode; fly-by-home is no longer treated as the end of a mission; <code>.plan</code> files keep
+    their firmware; upload messages count all tabs. An AGL waypoint whose terrain data is
+    missing is never silently sent as a relative altitude, switching the altitude mode
+    keeps the number when it can't convert, and INAV waypoints now move together with
+    their modifier waypoints.</li>
+<li><strong>Damaged <code>.tlog</code> files import better.</strong> Import cuts records by their real frame
+    length and resynchronises after damage instead of losing the rest of the log.</li>
+<li><strong>The 3D follow camera no longer spins</strong> a full turn when the heading crosses north.</li>
+<li><strong>RC control stops with its input device.</strong> If the gamepad or stick device behind an
+    RC session disappears, the session ends instead of holding the last inputs; engaging
+    without an input device is refused.</li>
+<li><strong>Passive telemetry (CRSF) altitude fixes.</strong> INAV's two CRSF altitude layouts are told
+    apart by the frame, an altitude that matches the terrain at arming is recorded as MSL,
+    and the altitude reference of a passive link survives a reconnect.</li>
+<li><strong>ADS-B: adsb.lol is no longer a built-in source.</strong> The built-in online feed is now
+    adsb.fi (still opt-in, on its current v3 endpoint); a provider that answers with a
+    rate limit and a wait time pauses the feed instead of being hammered. adsb.lol can
+    still be added as a custom provider.</li>
+</ul>
 <h2 id="whats-new-in-tailwind-v110-tailwind16">What's new in Tailwind v1.1.0-tailwind.16<a class="headerlink" href="#whats-new-in-tailwind-v110-tailwind16" title="Permanent link">&para;</a></h2>
 <p>Six improvements ported from upstream Kite GC's development line, plus four additions of
 Tailwind's own:</p>
