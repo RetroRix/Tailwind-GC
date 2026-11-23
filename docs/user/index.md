@@ -17,6 +17,35 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.17
+
+A maintenance batch ported from upstream Kite GC's 1.0.3 backports — fixes only, no new
+features:
+
+-   **QuadPlanes are recognised on every connect.** An ArduPilot QuadPlane (which reports
+    itself as a plain fixed-wing) is now detected reliably and shown as the VTOL it is,
+    instead of depending on the timing of a one-off answer during connect. The same fix
+    means the EKF-type answer given at connect is no longer lost.
+-   **Mission editing is safer.** Switching mission tabs keeps your flags and altitude
+    mode; fly-by-home is no longer treated as the end of a mission; `.plan` files keep
+    their firmware; upload messages count all tabs. An AGL waypoint whose terrain data is
+    missing is never silently sent as a relative altitude, switching the altitude mode
+    keeps the number when it can't convert, and INAV waypoints now move together with
+    their modifier waypoints.
+-   **Damaged `.tlog` files import better.** Import cuts records by their real frame
+    length and resynchronises after damage instead of losing the rest of the log.
+-   **The 3D follow camera no longer spins** a full turn when the heading crosses north.
+-   **RC control stops with its input device.** If the gamepad or stick device behind an
+    RC session disappears, the session ends instead of holding the last inputs; engaging
+    without an input device is refused.
+-   **Passive telemetry (CRSF) altitude fixes.** INAV's two CRSF altitude layouts are told
+    apart by the frame, an altitude that matches the terrain at arming is recorded as MSL,
+    and the altitude reference of a passive link survives a reconnect.
+-   **ADS-B: adsb.lol is no longer a built-in source.** The built-in online feed is now
+    adsb.fi (still opt-in, on its current v3 endpoint); a provider that answers with a
+    rate limit and a wait time pauses the feed instead of being hammered. adsb.lol can
+    still be added as a custom provider.
+
 ## What's new in Tailwind v1.1.0-tailwind.16
 
 Six improvements ported from upstream Kite GC's development line, plus four additions of
