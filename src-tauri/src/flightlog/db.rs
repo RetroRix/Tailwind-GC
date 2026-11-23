@@ -1702,7 +1702,7 @@ pub fn get_flight(conn: &Connection, flight_id: i64) -> SqlResult<Option<Flight>
 const MISSION_COLS: &str = "id, content_hash, name, format, waypoints_json, source_xml, \
     wp_count, total_distance_m, alt_diff_m, max_alt_m, min_alt_m, \
     bndbox_min_lat, bndbox_min_lon, bndbox_max_lat, bndbox_max_lon, location_name, \
-    created_at, notes, home_lat, home_lon";
+    created_at, notes, home_lat, home_lon, vehicle_class, extra_json";
 
 fn row_to_mission(row: &rusqlite::Row) -> SqlResult<Mission> {
     Ok(Mission {
@@ -1726,6 +1726,8 @@ fn row_to_mission(row: &rusqlite::Row) -> SqlResult<Mission> {
         notes: row.get(17)?,
         home_lat: row.get(18)?,
         home_lon: row.get(19)?,
+        vehicle_class: row.get(20)?,
+        extra_json: row.get(21)?,
     })
 }
 
@@ -1747,8 +1749,9 @@ pub fn upsert_mission(conn: &Connection, m: &MissionInput) -> SqlResult<i64> {
             content_hash, name, format, waypoints_json, source_xml, wp_count,
             total_distance_m, alt_diff_m, max_alt_m, min_alt_m,
             bndbox_min_lat, bndbox_min_lon, bndbox_max_lat, bndbox_max_lon, notes,
-            home_lat, home_lon
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+            home_lat, home_lon, vehicle_class, extra_json, location_name, created_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                  ?18, ?19, ?20, COALESCE(?21, datetime('now')))",
         params![
             m.content_hash,
             m.name,
@@ -1767,6 +1770,10 @@ pub fn upsert_mission(conn: &Connection, m: &MissionInput) -> SqlResult<i64> {
             m.notes,
             m.home_lat,
             m.home_lon,
+            m.vehicle_class,
+            m.extra_json,
+            m.location_name,
+            m.created_at,
         ],
     )?;
     Ok(conn.last_insert_rowid())
@@ -1800,17 +1807,18 @@ pub fn find_mission_by_hash(conn: &Connection, content_hash: &str) -> SqlResult<
     .optional()
 }
 
-/// Overwrite an existing library mission in place (OVERWRITE on save). Updates content + all
-/// computed metadata; `created_at` and `location_name` are preserved. The caller should
-/// pre-check `find_mission_by_hash` so it does not collide with a *different* existing row.
+/// Overwrite a library mission in place. `created_at`, `location_name` and — unless the input brings
+/// one — `extra_json` are kept. The caller pre-checks `find_mission_by_hash`: the new hash must not be
+/// another row's.
 pub fn update_mission(conn: &Connection, id: i64, m: &MissionInput) -> SqlResult<()> {
     conn.execute(
         "UPDATE missions SET
             content_hash = ?1, name = ?2, format = ?3, waypoints_json = ?4, source_xml = ?5,
             wp_count = ?6, total_distance_m = ?7, alt_diff_m = ?8, max_alt_m = ?9, min_alt_m = ?10,
             bndbox_min_lat = ?11, bndbox_min_lon = ?12, bndbox_max_lat = ?13, bndbox_max_lon = ?14,
-            notes = ?15, home_lat = ?16, home_lon = ?17
-         WHERE id = ?18",
+            notes = ?15, home_lat = ?16, home_lon = ?17, vehicle_class = ?18,
+            extra_json = COALESCE(?19, extra_json)
+         WHERE id = ?20",
         params![
             m.content_hash,
             m.name,
@@ -1829,9 +1837,17 @@ pub fn update_mission(conn: &Connection, id: i64, m: &MissionInput) -> SqlResult
             m.notes,
             m.home_lat,
             m.home_lon,
+            m.vehicle_class,
+            m.extra_json,
             id,
         ],
     )?;
+    Ok(())
+}
+
+/// Only for a `.kmission` import onto an existing row; every other writer leaves `extra_json` as it is.
+pub fn set_mission_extra(conn: &Connection, id: i64, extra_json: Option<&str>) -> SqlResult<()> {
+    conn.execute("UPDATE missions SET extra_json = ?1 WHERE id = ?2", params![extra_json, id])?;
     Ok(())
 }
 
@@ -3523,5 +3539,1433 @@ mod tests {
         assert!(!old_a.exists() && !old_b.exists(), "stragglers must be gone");
         assert!(dir.join("notes.txt").exists(), "only .ktmp files are touched");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Schema v20: group flights, flight events, per-row wall clock ─────────────────────────
+
+    /// Apply the real migration steps up to `version` (no self-heal pass) — a DB as that version left it.
+    fn migrate_to(conn: &Connection, version: u32) {
+        for (target, step) in MIGRATION_STEPS {
+            if target <= version {
+                let tx = write_tx(conn).unwrap();
+                step(&tx).unwrap();
+                tx.commit().unwrap();
+            }
+        }
+        assert_eq!(get_user_version(conn).unwrap(), version);
+    }
+
+    fn object_exists(conn: &Connection, kind: &str, name: &str) -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = ?1 AND name = ?2",
+            params![kind, name],
+            |r| r.get::<_, i64>(0),
+        )
+        .unwrap()
+            > 0
+    }
+
+    fn flight(craft: &str, group_id: Option<&str>) -> Flight {
+        Flight {
+            id: 0,
+            start_time: DateTime::parse_from_rfc3339("2026-09-30T10:00:00Z").unwrap().with_timezone(&Utc),
+            end_time: None,
+            duration_sec: Some(60),
+            source: "live".into(),
+            craft_name: craft.into(),
+            fc_variant: "ArduPlane".into(),
+            fc_version: "4.6.0".into(),
+            board_id: String::new(),
+            platform_type: 1,
+            fc_uid: None,
+            protocol: "MAVLink".into(),
+            start_lat: Some(48.1),
+            start_lon: Some(11.5),
+            location_name: None,
+            weather_temp_c: None,
+            weather_wind_ms: None,
+            weather_wind_deg: None,
+            weather_desc: None,
+            max_alt_m: None,
+            max_speed_ms: None,
+            max_distance_m: None,
+            total_distance_m: None,
+            battery_used_mah: None,
+            notes: None,
+            linked_flight_id: None,
+            pilot_name: None,
+            pilot_id: None,
+            battery_serial: None,
+            utc_offset_min: Some(120),
+            group_id: group_id.map(String::from),
+            vehicle_id: None,
+        }
+    }
+
+    fn telemetry(flight_id: i64, timestamp_ms: i64, wall_ms: Option<i64>) -> TelemetryRecord {
+        TelemetryRecord {
+            id: 0,
+            flight_id,
+            timestamp_ms,
+            lat: Some(48.1),
+            lon: Some(11.5),
+            alt_m: None,
+            speed_ms: None,
+            airspeed_ms: None,
+            throttle_pct: None,
+            heading: None,
+            vario_ms: None,
+            voltage: None,
+            current_a: None,
+            mah_drawn: None,
+            rssi: None,
+            battery_percentage: None,
+            roll: None,
+            pitch: None,
+            yaw: None,
+            fix_type: None,
+            num_sat: None,
+            cpu_load: None,
+            link_quality: None,
+            baro_alt_m: None,
+            gps_hdop: None,
+            gps_eph: None,
+            gps_epv: None,
+            active_wp_number: None,
+            active_flight_mode_flags: None,
+            state_flags: None,
+            nav_state: None,
+            nav_flags: None,
+            rx_signal_received: None,
+            hw_health_status: None,
+            baro_temperature: None,
+            wind_n_ms: None,
+            wind_e_ms: None,
+            wind_d_ms: None,
+            rc_data_json: None,
+            rc_command_json: None,
+            nav_lat: None,
+            nav_lon: None,
+            nav_alt_m: None,
+            mode_primary: Some("manual".into()),
+            mode_modifiers: None,
+            link_snr: None,
+            link_rssi_dbm: None,
+            wall_ms,
+        }
+    }
+
+    fn battery(flight_id: i64, timestamp_ms: i64) -> BatteryRecord {
+        BatteryRecord {
+            id: 0,
+            flight_id,
+            timestamp_ms,
+            instance: 0,
+            voltage: Some(16.0),
+            current_a: None,
+            mah_drawn: None,
+            battery_percentage: None,
+            cell_count: None,
+            temperature: None,
+        }
+    }
+
+    fn event(flight_id: i64, timestamp_ms: i64, kind: &str) -> FlightEvent {
+        FlightEvent {
+            id: 0,
+            flight_id,
+            timestamp_ms,
+            wall_ms: Some(1_790_000_000_000 + timestamp_ms),
+            kind: kind.into(),
+            code: None,
+            text: None,
+            source: Some("live".into()),
+        }
+    }
+
+    fn group(id: &str, notes: Option<&str>) -> FlightGroup {
+        FlightGroup {
+            id: id.into(),
+            start_time: DateTime::parse_from_rfc3339("2026-09-30T10:00:00Z").unwrap().with_timezone(&Utc),
+            end_time: Some(DateTime::parse_from_rfc3339("2026-09-30T10:20:00Z").unwrap().with_timezone(&Utc)),
+            utc_offset_min: Some(120),
+            start_lat: Some(48.1),
+            start_lon: Some(11.5),
+            start_alt_m: Some(512.0),
+            location_name: None,
+            weather_temp_c: None,
+            weather_wind_ms: None,
+            weather_wind_deg: None,
+            weather_desc: None,
+            notes: notes.map(String::from),
+            created_at: String::new(),
+        }
+    }
+
+    fn count(conn: &Connection, sql: &str, id: i64) -> i64 {
+        conn.query_row(sql, params![id], |r| r.get(0)).unwrap()
+    }
+
+    /// A real v19 database (built from the v1…v19 steps) gains the v20 objects, keeps its rows, and a
+    /// second pass is a clean no-op.
+    #[test]
+    fn v19_database_migrates_to_v20_and_is_reentrant() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate_to(&conn, 19);
+        assert!(!column_exists(&conn, "flights", "group_id").unwrap());
+        assert!(!column_exists(&conn, "telemetry_records", "wall_ms").unwrap());
+        conn.execute(
+            "INSERT INTO flights (start_time, craft_name) VALUES ('2026-09-01T10:00:00+00:00', 'Old')",
+            [],
+        )
+        .unwrap();
+        let old_id = conn.last_insert_rowid();
+        conn.execute("INSERT INTO telemetry_records (flight_id, timestamp_ms) VALUES (?1, 0)", params![old_id])
+            .unwrap();
+
+        migrate(&conn).unwrap();
+        assert_eq!(get_user_version(&conn).unwrap(), CURRENT_SCHEMA_VERSION);
+        assert!(object_exists(&conn, "table", "flight_groups"));
+        assert!(object_exists(&conn, "table", "flight_events"));
+        assert!(object_exists(&conn, "index", "idx_flights_group"));
+        assert!(object_exists(&conn, "index", "idx_events_flight"));
+        assert!(column_exists(&conn, "flights", "group_id").unwrap());
+        assert!(column_exists(&conn, "telemetry_records", "wall_ms").unwrap());
+        let old = get_flight(&conn, old_id).unwrap().unwrap();
+        assert_eq!(old.craft_name, "Old");
+        assert!(old.group_id.is_none());
+        let track = get_flight_track(&conn, old_id).unwrap();
+        assert_eq!(track.len(), 1);
+        assert!(track[0].wall_ms.is_none());
+
+        migrate(&conn).unwrap(); // re-entrant
+        assert_eq!(get_user_version(&conn).unwrap(), CURRENT_SCHEMA_VERSION);
+        // The v19 → v20 step itself is idempotent too (the backup test re-runs it on a v20 DB).
+        let tx = conn.unchecked_transaction().unwrap();
+        migrate_v19_to_v20(&tx).unwrap();
+        tx.commit().unwrap();
+    }
+
+    /// Opening a v19 database file snapshots it before the v20 step (the pre-migration backup).
+    #[test]
+    fn v19_database_file_is_backed_up_before_v20() {
+        let path = temp_db_path("v19-backup");
+        cleanup(&path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        {
+            let conn = Connection::open(&path).unwrap();
+            migrate_to(&conn, 19);
+        }
+        let conn = open_database(&path).unwrap();
+        assert_eq!(get_user_version(&conn).unwrap(), CURRENT_SCHEMA_VERSION);
+        let backup = backup_path_for(&path);
+        assert!(backup.exists(), "the v19 -> v20 step must take the pre-migration backup");
+        let bconn = Connection::open(&backup).unwrap();
+        assert_eq!(get_user_version(&bconn).unwrap(), 19);
+        drop((conn, bconn));
+        cleanup(&path);
+    }
+
+    #[test]
+    fn group_member_and_events_round_trip() {
+        let conn = test_db();
+        assert!(insert_flight_group(&conn, &group("0123456789abcdef", Some("first"))).unwrap());
+        // Idempotent: a later member commit into the same group keeps the stored header + notes.
+        assert!(!insert_flight_group(&conn, &group("0123456789abcdef", Some("second"))).unwrap());
+
+        let member = insert_flight(&conn, &flight("Wing", Some("0123456789abcdef"))).unwrap();
+        let single = insert_flight(&conn, &flight("Quad", None)).unwrap();
+        insert_flight_events(&conn, &[event(member, 5_000, "disarm"), event(member, 0, "arm"), event(member, 9_000, "arm")])
+            .unwrap();
+
+        let g = get_flight_group(&conn, "0123456789abcdef").unwrap().unwrap();
+        assert_eq!(g.notes.as_deref(), Some("first"));
+        assert_eq!(g.start_alt_m, Some(512.0));
+        assert_eq!(g.utc_offset_min, Some(120));
+        assert!(!g.created_at.is_empty());
+        assert_eq!(get_flight(&conn, member).unwrap().unwrap().group_id.as_deref(), Some("0123456789abcdef"));
+        assert!(get_flight(&conn, single).unwrap().unwrap().group_id.is_none());
+        let listed = list_flights(&conn).unwrap();
+        assert_eq!(listed.iter().find(|f| f.id == member).unwrap().group_id.as_deref(), Some("0123456789abcdef"));
+        assert_eq!(list_flight_group_member_ids(&conn, "0123456789abcdef").unwrap(), vec![member]);
+
+        let events = get_flight_events(&conn, member).unwrap();
+        let kinds: Vec<(&str, i64)> = events.iter().map(|e| (e.kind.as_str(), e.timestamp_ms)).collect();
+        assert_eq!(kinds, [("arm", 0), ("disarm", 5_000), ("arm", 9_000)]);
+        assert_eq!(events[1].wall_ms, Some(1_790_000_005_000));
+        assert_eq!(events[1].source.as_deref(), Some("live"));
+
+        update_flight_group_notes(&conn, "0123456789abcdef", "edited").unwrap();
+        assert_eq!(get_flight_group(&conn, "0123456789abcdef").unwrap().unwrap().notes.as_deref(), Some("edited"));
+        assert_eq!(list_flight_groups(&conn).unwrap().len(), 1);
+        // A member must point at an existing group (FK).
+        assert!(insert_flight(&conn, &flight("Ghost", Some("ffffffffffffffff"))).is_err());
+    }
+
+    #[test]
+    fn dissolving_a_group_keeps_its_members() {
+        let conn = test_db();
+        insert_flight_group(&conn, &group("aaaaaaaaaaaaaaaa", None)).unwrap();
+        let a = insert_flight(&conn, &flight("A", Some("aaaaaaaaaaaaaaaa"))).unwrap();
+        let b = insert_flight(&conn, &flight("B", Some("aaaaaaaaaaaaaaaa"))).unwrap();
+        insert_flight_events(&conn, &[event(a, 0, "arm")]).unwrap();
+
+        assert!(delete_flight_group(&conn, "aaaaaaaaaaaaaaaa", false).unwrap());
+        assert!(get_flight_group(&conn, "aaaaaaaaaaaaaaaa").unwrap().is_none());
+        for id in [a, b] {
+            let f = get_flight(&conn, id).unwrap().expect("member survives a dissolve");
+            assert!(f.group_id.is_none());
+        }
+        assert_eq!(get_flight_events(&conn, a).unwrap().len(), 1);
+        assert!(!delete_flight_group(&conn, "aaaaaaaaaaaaaaaa", false).unwrap());
+    }
+
+    #[test]
+    fn deleting_a_group_with_members_removes_all_their_data() {
+        let conn = test_db();
+        insert_flight_group(&conn, &group("bbbbbbbbbbbbbbbb", None)).unwrap();
+        let a = insert_flight(&conn, &flight("A", Some("bbbbbbbbbbbbbbbb"))).unwrap();
+        let b = insert_flight(&conn, &flight("B", Some("bbbbbbbbbbbbbbbb"))).unwrap();
+        let other = insert_flight(&conn, &flight("Other", None)).unwrap();
+        for id in [a, b, other] {
+            insert_telemetry_batch(&conn, &[telemetry(id, 0, None), telemetry(id, 100, None)]).unwrap();
+            insert_battery_records_batch(&conn, &[battery(id, 0), battery(id, 100)]).unwrap();
+            insert_flight_events(&conn, &[event(id, 0, "arm")]).unwrap();
+        }
+
+        assert!(delete_flight_group(&conn, "bbbbbbbbbbbbbbbb", true).unwrap());
+        assert!(get_flight_group(&conn, "bbbbbbbbbbbbbbbb").unwrap().is_none());
+        for id in [a, b] {
+            assert!(get_flight(&conn, id).unwrap().is_none());
+            assert_eq!(count(&conn, "SELECT COUNT(*) FROM telemetry_records WHERE flight_id = ?1", id), 0);
+            assert_eq!(count(&conn, "SELECT COUNT(*) FROM battery_records WHERE flight_id = ?1", id), 0);
+            assert_eq!(count(&conn, "SELECT COUNT(*) FROM flight_events WHERE flight_id = ?1", id), 0);
+        }
+        // A flight outside the group is untouched.
+        assert!(get_flight(&conn, other).unwrap().is_some());
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM telemetry_records WHERE flight_id = ?1", other), 2);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM battery_records WHERE flight_id = ?1", other), 2);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM flight_events WHERE flight_id = ?1", other), 1);
+    }
+
+    /// `battery_records` has no FK — `delete_flight` must remove them (and the events) explicitly.
+    #[test]
+    fn delete_flight_removes_battery_rows_and_events() {
+        let conn = test_db();
+        let id = insert_flight(&conn, &flight("Del", None)).unwrap();
+        insert_battery_records_batch(&conn, &[battery(id, 0)]).unwrap();
+        insert_flight_events(&conn, &[event(id, 0, "arm")]).unwrap();
+        assert!(delete_flight(&conn, id).unwrap());
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM battery_records WHERE flight_id = ?1", id), 0);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM flight_events WHERE flight_id = ?1", id), 0);
+    }
+
+    /// `wall_ms` round-trips through the main DB, and through a temp session commit — including a
+    /// `.ktmp` written before v20 (no `wall_ms` column), which `open_temp_session` back-fills.
+    #[test]
+    fn wall_ms_round_trips_through_main_and_temp_store() {
+        let conn = test_db();
+        let id = insert_flight(&conn, &flight("Wall", None)).unwrap();
+        insert_telemetry_batch(&conn, &[telemetry(id, 0, Some(1_790_000_000_123)), telemetry(id, 100, None)]).unwrap();
+        let track = get_flight_track(&conn, id).unwrap();
+        assert_eq!(track[0].wall_ms, Some(1_790_000_000_123));
+        assert_eq!(track[1].wall_ms, None);
+
+        // Temp store → commit.
+        let temp = temp_db_path("wall-ms-ktmp").with_file_name("active_test_L1-S1.ktmp");
+        remove_temp_session(&temp);
+        {
+            let t = open_temp_session(&temp).unwrap();
+            insert_telemetry_batch(&t, &[telemetry(0, 0, Some(1_790_000_000_500)), telemetry(0, 200, Some(1_790_000_000_700))])
+                .unwrap();
+        }
+        let committed = commit_session_to_main(&conn, &temp, &flight("Wall", None)).unwrap();
+        let track = get_flight_track(&conn, committed).unwrap();
+        assert_eq!(track.iter().map(|r| r.wall_ms).collect::<Vec<_>>(), [Some(1_790_000_000_500), Some(1_790_000_000_700)]);
+        remove_temp_session(&temp);
+
+        // A pre-v20 `.ktmp` (telemetry DDL without wall_ms) is back-filled on open and still commits.
+        {
+            let legacy = Connection::open(&temp).unwrap();
+            legacy
+                .execute_batch(&TELEMETRY_RECORDS_DDL_FULL.replace(", wall_ms INTEGER", ""))
+                .unwrap();
+            legacy.execute_batch(BATTERY_RECORDS_DDL_FULL).unwrap();
+            legacy.execute("INSERT INTO telemetry_records (flight_id, timestamp_ms) VALUES (0, 0)", []).unwrap();
+            assert!(!column_exists(&legacy, "telemetry_records", "wall_ms").unwrap());
+        }
+        drop(open_temp_session(&temp).unwrap());
+        let committed = commit_session_to_main(&conn, &temp, &flight("Legacy", None)).unwrap();
+        let track = get_flight_track(&conn, committed).unwrap();
+        assert_eq!(track.len(), 1);
+        assert!(track[0].wall_ms.is_none());
+        remove_temp_session(&temp);
+        cleanup(&temp);
+    }
+
+    // ── Schema v20: flight → library vehicle (`flights.vehicle_id`) ─────────────────────────
+
+    /// INAV SITL's MSP_UID as the MSP handshake renders it (see `msp::hardware_uid`).
+    const SITL_UID: &str = "000000000100000002000000";
+
+    /// A library vehicle with an explicit `created_at` (the "newest wins" order), by raw SQL so it
+    /// works on a v19 database too. Returns its id.
+    fn vehicle(conn: &Connection, name: &str, craft: Option<&str>, uid: Option<&str>, created_at: &str) -> i64 {
+        conn.execute(
+            "INSERT INTO vehicles (name, craft_name, fc_uid, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![name, craft, uid, created_at],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
+    fn flight_with(craft: &str, uid: Option<&str>) -> Flight {
+        Flight { fc_uid: uid.map(String::from), ..flight(craft, None) }
+    }
+
+    fn vehicle_of(conn: &Connection, flight_id: i64) -> Option<i64> {
+        get_flight(conn, flight_id).unwrap().unwrap().vehicle_id
+    }
+
+    /// The v19 → v20 step adds `flights.vehicle_id` and back-fills it: UID beats craft name, the newest
+    /// vehicle wins, synthetic ids never match. A later open never re-links a flight the user un-linked.
+    #[test]
+    fn v20_backfills_flight_vehicle_ids() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate_to(&conn, 19);
+        assert!(!column_exists(&conn, "flights", "vehicle_id").unwrap());
+
+        let by_uid = vehicle(&conn, "By UID", Some("Other"), Some(" uida "), "2026-01-01 10:00:00");
+        let wing_old = vehicle(&conn, "Wing old", Some("Wing"), None, "2026-01-01 10:00:00");
+        let wing_new = vehicle(&conn, "Wing new", Some(" wing"), None, "2026-01-03 10:00:00");
+        // Created later by id, but older by created_at — must lose against `wing_new`.
+        let _wing_stale = vehicle(&conn, "Wing stale", Some("WING"), None, "2026-01-02 10:00:00");
+        let sitl = vehicle(&conn, "SITL", None, Some(SITL_UID), "2026-01-05 10:00:00");
+
+        let raw = |craft: &str, uid: Option<&str>| {
+            conn.execute(
+                "INSERT INTO flights (start_time, craft_name, fc_uid) VALUES ('2026-09-01T10:00:00+00:00', ?1, ?2)",
+                params![craft, uid],
+            )
+            .unwrap();
+            conn.last_insert_rowid()
+        };
+        let uid_and_craft = raw("Wing", Some("UIDA"));
+        let craft_only = raw(" wing ", None);
+        let unmatched = raw("Nobody", None);
+        let synthetic = raw("", Some(SITL_UID));
+        let unknown_uid = raw("Wing", Some("UIDX"));
+
+        migrate(&conn).unwrap();
+        assert!(column_exists(&conn, "flights", "vehicle_id").unwrap());
+        assert!(object_exists(&conn, "index", "idx_flights_vehicle"));
+        let fk: (String, String) = conn
+            .query_row(
+                "SELECT \"table\", on_delete FROM pragma_foreign_key_list('flights') WHERE \"from\" = 'vehicle_id'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(fk, ("vehicles".to_string(), "SET NULL".to_string()));
+        assert_eq!(vehicle_of(&conn, uid_and_craft), Some(by_uid), "the FC id beats the craft name");
+        assert_eq!(vehicle_of(&conn, craft_only), Some(wing_new), "the newest vehicle with the craft name");
+        assert_eq!(vehicle_of(&conn, unmatched), None);
+        assert_eq!(vehicle_of(&conn, synthetic), None, "a synthetic id matches no vehicle (not even {sitl})");
+        assert_eq!(vehicle_of(&conn, unknown_uid), Some(wing_new), "unknown FC id → craft-name fallback");
+        assert_ne!(wing_old, wing_new);
+        // The flights keep what they were flown with.
+        let f = get_flight(&conn, uid_and_craft).unwrap().unwrap();
+        assert_eq!((f.craft_name.as_str(), f.fc_uid.as_deref()), ("Wing", Some("UIDA")));
+
+        // Re-entrant: a second back-fill changes nothing.
+        assert_eq!(backfill_flight_vehicle_ids(&conn).unwrap(), 0);
+        // A flight the user un-linked stays un-linked across a reopen.
+        set_flight_vehicle(&conn, craft_only, None).unwrap();
+        migrate(&conn).unwrap();
+        assert_eq!(vehicle_of(&conn, craft_only), None);
+        let tx = conn.unchecked_transaction().unwrap();
+        migrate_v19_to_v20(&tx).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(vehicle_of(&conn, craft_only), None);
+    }
+
+    /// A database already stamped v20 without the column (a dev build of the branch before
+    /// `flights.vehicle_id`) gets column, index and back-fill from the self-heal pass.
+    #[test]
+    fn v20_stamped_database_without_the_column_self_heals() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate_to(&conn, 19);
+        set_user_version(&conn, 20).unwrap();
+        let wing = vehicle(&conn, "Wing", Some("Wing"), None, "2026-01-01 10:00:00");
+        conn.execute(
+            "INSERT INTO flights (start_time, craft_name) VALUES ('2026-09-01T10:00:00+00:00', 'Wing')",
+            [],
+        )
+        .unwrap();
+        let id = conn.last_insert_rowid();
+        assert!(!column_exists(&conn, "flights", "vehicle_id").unwrap());
+
+        migrate(&conn).unwrap();
+        assert_eq!(get_user_version(&conn).unwrap(), CURRENT_SCHEMA_VERSION);
+        assert!(column_exists(&conn, "flights", "vehicle_id").unwrap());
+        assert!(object_exists(&conn, "index", "idx_flights_vehicle"));
+        assert_eq!(vehicle_of(&conn, id), Some(wing));
+    }
+
+    /// Deleting a vehicle un-links its flights — they stay, with their craft name and FC id.
+    #[test]
+    fn deleting_a_vehicle_unlinks_its_flights() {
+        let conn = test_db();
+        let v = vehicle(&conn, "Wing", Some("Wing"), Some("UID1"), "2026-01-01 10:00:00");
+        let keep = vehicle(&conn, "Quad", Some("Quad"), None, "2026-01-01 10:00:00");
+        let a = insert_flight(&conn, &flight_with("Wing", Some("UID1"))).unwrap();
+        let b = insert_flight(&conn, &flight_with("Quad", None)).unwrap();
+        assert_eq!(vehicle_of(&conn, a), Some(v));
+
+        delete_vehicle(&conn, v).unwrap();
+        let f = get_flight(&conn, a).unwrap().expect("the flight survives its vehicle");
+        assert_eq!((f.vehicle_id, f.craft_name.as_str(), f.fc_uid.as_deref()), (None, "Wing", Some("UID1")));
+        assert_eq!(vehicle_of(&conn, b), Some(keep));
+        assert!(list_flights_for_vehicle(&conn, v).unwrap().is_empty());
+        // The FK alone (ON DELETE SET NULL) un-links as well.
+        conn.execute("DELETE FROM vehicles WHERE id = ?1", params![keep]).unwrap();
+        assert_eq!(vehicle_of(&conn, b), None);
+        assert!(get_flight(&conn, b).unwrap().is_some());
+    }
+
+    #[test]
+    fn transfer_moves_every_flight_of_a_vehicle() {
+        let conn = test_db();
+        let old = vehicle(&conn, "Old", Some("Wing"), None, "2026-01-01 10:00:00");
+        let new = vehicle(&conn, "New", None, None, "2026-01-02 10:00:00");
+        let other = vehicle(&conn, "Other", Some("Quad"), None, "2026-01-01 10:00:00");
+        let a = insert_flight(&conn, &flight("Wing", None)).unwrap();
+        let b = insert_flight(&conn, &flight("Wing", None)).unwrap();
+        let c = insert_flight(&conn, &flight("Quad", None)).unwrap();
+
+        assert_eq!(transfer_vehicle_flights(&conn, old, old).unwrap(), 0);
+        assert_eq!(transfer_vehicle_flights(&conn, old, new).unwrap(), 2);
+        assert_eq!((vehicle_of(&conn, a), vehicle_of(&conn, b), vehicle_of(&conn, c)), (Some(new), Some(new), Some(other)));
+        assert_eq!(get_flight(&conn, a).unwrap().unwrap().craft_name, "Wing");
+        assert_eq!(vehicle_aggregate(&conn, new).unwrap().flight_count, 2);
+        assert_eq!(vehicle_aggregate(&conn, old).unwrap().flight_count, 0);
+        assert!(transfer_vehicle_flights(&conn, new, 9_999).is_err(), "unknown target (FK)");
+        assert_eq!(vehicle_of(&conn, a), Some(new));
+    }
+
+    /// Link-by-identity: craft name (trimmed, case-insensitive) and/or FC id; `only_unlinked` leaves
+    /// other vehicles' flights alone; the dry-run count matches what the link changes.
+    #[test]
+    fn link_flights_by_craft_name_and_uid() {
+        let conn = test_db();
+        // Flights stored before the target vehicle existed → unlinked.
+        let a = insert_flight(&conn, &flight("Wing", None)).unwrap();
+        let b = insert_flight(&conn, &flight("WING ", None)).unwrap();
+        let other = vehicle(&conn, "Other", None, None, "2026-01-01 10:00:00");
+        let c = insert_flight(&conn, &Flight { vehicle_id: Some(other), ..flight("Wing", None) }).unwrap();
+        let d = insert_flight(&conn, &flight("Quad", None)).unwrap();
+        let e = insert_flight(&conn, &flight_with("", Some("UIDZ"))).unwrap();
+        let s = insert_flight(&conn, &flight_with("", Some(SITL_UID))).unwrap();
+        let target = vehicle(&conn, "Target", None, None, "2026-01-02 10:00:00");
+
+        assert_eq!(count_linkable_flights(&conn, target, Some("wing"), None, true).unwrap(), 2);
+        assert_eq!(link_flights_to_vehicle(&conn, target, Some("wing"), None, true).unwrap(), 2);
+        assert_eq!((vehicle_of(&conn, a), vehicle_of(&conn, b), vehicle_of(&conn, c)), (Some(target), Some(target), Some(other)));
+        // Without only_unlinked the other vehicle's flight moves too; the already linked ones don't count.
+        assert_eq!(count_linkable_flights(&conn, target, Some("Wing"), None, false).unwrap(), 1);
+        assert_eq!(link_flights_to_vehicle(&conn, target, Some("Wing"), None, false).unwrap(), 1);
+        assert_eq!(vehicle_of(&conn, c), Some(target));
+        assert_eq!(vehicle_of(&conn, d), None);
+        // By FC id; nothing for no key, an empty key or a synthetic id.
+        assert_eq!(link_flights_to_vehicle(&conn, target, None, Some(" uidz "), true).unwrap(), 1);
+        assert_eq!(vehicle_of(&conn, e), Some(target));
+        assert_eq!(count_linkable_flights(&conn, target, None, None, false).unwrap(), 0);
+        assert_eq!(link_flights_to_vehicle(&conn, target, Some("  "), Some(""), false).unwrap(), 0);
+        assert_eq!(link_flights_to_vehicle(&conn, target, None, Some(SITL_UID), false).unwrap(), 0);
+        assert_eq!(vehicle_of(&conn, s), None);
+        // The flights keep their craft name.
+        assert_eq!(get_flight(&conn, b).unwrap().unwrap().craft_name, "WING ");
+        assert_eq!(list_flights_for_vehicle(&conn, target).unwrap().len(), 4);
+    }
+
+    #[test]
+    fn resolve_reports_how_it_matched_and_uid_conflicts() {
+        let conn = test_db();
+        let by_uid = vehicle(&conn, "U", Some("Wing"), Some("UID1"), "2026-01-01 10:00:00");
+        let quad = vehicle(&conn, "Q", Some("Quad"), Some("UID9"), "2026-01-01 10:00:00");
+        let plane = vehicle(&conn, "P", Some("Plane"), Some("  "), "2026-01-01 10:00:00");
+
+        let r = resolve_vehicle(&conn, Some("uid1"), "Quad").unwrap();
+        assert_eq!((r.vehicle.map(|v| v.id), r.matched_by.as_deref(), r.uid_conflict), (Some(by_uid), Some("uid"), false));
+        // Craft-name match, the vehicle stores another FC id → FC swapped or a second aircraft.
+        let r = resolve_vehicle(&conn, Some("UID2"), "quad").unwrap();
+        assert_eq!((r.vehicle.map(|v| v.id), r.matched_by.as_deref(), r.uid_conflict), (Some(quad), Some("craft"), true));
+        // No hardware id on the flight (passive, 1.0 data, a simulator) → no conflict to ask about.
+        let r = resolve_vehicle(&conn, None, "Quad").unwrap();
+        assert_eq!((r.vehicle.map(|v| v.id), r.uid_conflict), (Some(quad), false));
+        let r = resolve_vehicle(&conn, Some(SITL_UID), "Quad").unwrap();
+        assert_eq!((r.matched_by.as_deref(), r.uid_conflict), (Some("craft"), false));
+        // The vehicle stores no (only a blank) FC id → nothing to replace.
+        let r = resolve_vehicle(&conn, Some("UID2"), "Plane").unwrap();
+        assert_eq!((r.vehicle.map(|v| v.id), r.uid_conflict), (Some(plane), false));
+        let r = resolve_vehicle(&conn, Some("UID2"), "Nothing").unwrap();
+        assert_eq!((r.vehicle.is_none(), r.matched_by, r.uid_conflict), (true, None, false));
+        assert_eq!(resolve_vehicle_id(&conn, Some("UID2"), "Nothing").unwrap(), None);
+    }
+
+    /// When unsure, unlinked: a flight with a hardware FC id does not link by craft name to a vehicle that
+    /// stores a different one; the post-flight summary still reports it with `uid_conflict`.
+    #[test]
+    fn craft_name_fallback_never_crosses_a_different_fc_id() {
+        let conn = test_db();
+        let other_fc = vehicle(&conn, "Wing A", Some("Wing"), Some("UIDA"), "2026-01-01 10:00:00");
+        let quad = vehicle(&conn, "Quad", Some("Quad"), None, "2026-01-01 10:00:00");
+
+        assert_eq!(vehicle_of(&conn, insert_flight(&conn, &flight_with("Wing", Some("UIDB"))).unwrap()), None);
+        let r = resolve_vehicle(&conn, Some("UIDB"), "Wing").unwrap();
+        assert_eq!((r.vehicle.map(|v| v.id), r.uid_conflict), (Some(other_fc), true));
+        // No FC id on the flight / on the vehicle → the craft name links.
+        assert_eq!(vehicle_of(&conn, insert_flight(&conn, &flight_with("Wing", None)).unwrap()), Some(other_fc));
+        assert_eq!(vehicle_of(&conn, insert_flight(&conn, &flight_with("Quad", Some("UIDQ"))).unwrap()), Some(quad));
+        // A synthetic id on the flight is no hardware id → links by craft name.
+        assert_eq!(vehicle_of(&conn, insert_flight(&conn, &flight_with("Wing", Some(SITL_UID))).unwrap()), Some(other_fc));
+        // A synthetic id stored on the vehicle is no hardware id either → no conflict.
+        let sim = vehicle(&conn, "Sim", Some("Sim"), Some(SITL_UID), "2026-01-01 10:00:00");
+        assert_eq!(vehicle_of(&conn, insert_flight(&conn, &flight_with("Sim", Some("UIDS"))).unwrap()), Some(sim));
+    }
+
+    /// The v20 back-fill follows the same rule: a conflicting craft-name vehicle leaves the flight NULL.
+    #[test]
+    fn v20_backfill_leaves_fc_id_conflicts_unlinked() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate_to(&conn, 19);
+        let wing = vehicle(&conn, "Wing", Some("Wing"), Some("UIDA"), "2026-01-01 10:00:00");
+        let raw = |uid: Option<&str>| {
+            conn.execute(
+                "INSERT INTO flights (start_time, craft_name, fc_uid) VALUES ('2026-09-01T10:00:00+00:00', 'Wing', ?1)",
+                params![uid],
+            )
+            .unwrap();
+            conn.last_insert_rowid()
+        };
+        let conflicting = raw(Some("UIDB"));
+        let no_uid = raw(None);
+        migrate(&conn).unwrap();
+        assert_eq!(vehicle_of(&conn, conflicting), None);
+        assert_eq!(vehicle_of(&conn, no_uid), Some(wing));
+    }
+
+    /// Setting a vehicle's FC id takes it off every other vehicle: afterwards exactly one carries it.
+    #[test]
+    fn set_vehicle_fc_uid_moves_the_id() {
+        let conn = test_db();
+        let a = vehicle(&conn, "A", None, None, "2026-01-01 10:00:00");
+        let b = vehicle(&conn, "B", None, Some(" uid1 "), "2026-01-01 10:00:00");
+        let c = vehicle(&conn, "C", None, Some("UID1"), "2026-01-01 10:00:00");
+        let d = vehicle(&conn, "D", None, Some("UID2"), "2026-01-01 10:00:00");
+        let b_flight = insert_flight(&conn, &Flight { vehicle_id: Some(b), ..flight_with("", Some("UID1")) }).unwrap();
+        assert_eq!(set_vehicle_fc_uid(&conn, a, Some("UID1")).unwrap(), 2);
+        // The ID moves, the flights do not: B's flight stays B's.
+        assert_eq!(vehicle_of(&conn, b_flight), Some(b));
+        let carriers: i64 = conn
+            .query_row("SELECT COUNT(*) FROM vehicles WHERE TRIM(fc_uid) = 'UID1' COLLATE NOCASE", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(carriers, 1);
+        assert_eq!(get_vehicle(&conn, a).unwrap().unwrap().fc_uid.as_deref(), Some("UID1"));
+        assert_eq!(get_vehicle(&conn, b).unwrap().unwrap().fc_uid, None);
+        assert_eq!(get_vehicle(&conn, c).unwrap().unwrap().fc_uid, None);
+        assert_eq!(get_vehicle(&conn, d).unwrap().unwrap().fc_uid.as_deref(), Some("UID2"));
+        // An unknown vehicle fails and rolls the removal back: D keeps its id.
+        assert!(set_vehicle_fc_uid(&conn, 9_999, Some("UID2")).is_err());
+        assert_eq!(get_vehicle(&conn, d).unwrap().unwrap().fc_uid.as_deref(), Some("UID2"));
+        // Clearing touches nobody else.
+        assert_eq!(set_vehicle_fc_uid(&conn, a, Some("  ")).unwrap(), 0);
+        assert_eq!(get_vehicle(&conn, a).unwrap().unwrap().fc_uid, None);
+        assert_eq!(get_vehicle(&conn, d).unwrap().unwrap().fc_uid.as_deref(), Some("UID2"));
+    }
+
+    /// Two aircraft with the same craft name and different FC ids, all flights unlinked: the link offer
+    /// for UID1's vehicle (craft name + UID1) takes UID1's flights and the id-less ones (none, empty,
+    /// synthetic), never UID2's.
+    #[test]
+    fn link_by_craft_name_never_crosses_a_different_fc_id() {
+        let conn = test_db();
+        let ids: Vec<i64> = [Some("UID1"), Some("uid1 "), Some("UID2"), None, Some(""), Some(SITL_UID), Some("UID2")]
+            .iter()
+            .map(|u| insert_flight(&conn, &flight_with("Wing", *u)).unwrap())
+            .collect();
+        let v1 = vehicle(&conn, "Wing 1", Some("Wing"), Some("UID1"), "2026-01-01 10:00:00");
+        assert_eq!(count_linkable_flights(&conn, v1, Some("Wing"), Some("UID1"), true).unwrap(), 5);
+        assert_eq!(link_flights_to_vehicle(&conn, v1, Some("Wing"), Some("UID1"), true).unwrap(), 5);
+        let linked: Vec<Option<i64>> = ids.iter().map(|id| vehicle_of(&conn, *id)).collect();
+        assert_eq!(linked, [Some(v1), Some(v1), None, Some(v1), Some(v1), Some(v1), None]);
+        // Without an FC id key the craft name alone links the rest (the vehicle has no id to protect).
+        let v2 = vehicle(&conn, "Wing 2", Some("Wing"), None, "2026-01-02 10:00:00");
+        assert_eq!(link_flights_to_vehicle(&conn, v2, Some("Wing"), None, true).unwrap(), 2);
+    }
+
+    /// Every insert resolves the vehicle unless the caller names one: the plain insert (importers,
+    /// `.kflight` import) and the live / recovery commit; the unresolved variant writes what it gets.
+    #[test]
+    fn inserts_resolve_the_vehicle() {
+        let conn = test_db();
+        let wing = vehicle(&conn, "Wing", Some("Wing"), None, "2026-01-01 10:00:00");
+        let by_uid = vehicle(&conn, "U", Some("Other"), Some("UID1"), "2026-01-01 10:00:00");
+
+        assert_eq!(vehicle_of(&conn, insert_flight(&conn, &flight("wing", None)).unwrap()), Some(wing));
+        assert_eq!(vehicle_of(&conn, insert_flight(&conn, &flight_with("Wing", Some("UID1"))).unwrap()), Some(by_uid));
+        assert_eq!(vehicle_of(&conn, insert_flight(&conn, &flight("Nobody", None)).unwrap()), None);
+        let explicit = Flight { vehicle_id: Some(by_uid), ..flight("Wing", None) };
+        assert_eq!(vehicle_of(&conn, insert_flight(&conn, &explicit).unwrap()), Some(by_uid));
+        assert_eq!(vehicle_of(&conn, insert_flight_unresolved(&conn, &flight("Wing", None)).unwrap()), None);
+
+        let temp = temp_db_path("vehicle-commit").with_file_name("active_test_L1-S1.ktmp");
+        remove_temp_session(&temp);
+        {
+            let t = open_temp_session(&temp).unwrap();
+            insert_telemetry_batch(&t, &[telemetry(0, 0, None)]).unwrap();
+        }
+        let committed = commit_session_to_main(&conn, &temp, &flight_with("", Some("uid1"))).unwrap();
+        assert_eq!(vehicle_of(&conn, committed), Some(by_uid));
+        remove_temp_session(&temp);
+        cleanup(&temp);
+    }
+
+    #[test]
+    fn set_flight_vehicle_links_and_unlinks() {
+        let conn = test_db();
+        let v = vehicle(&conn, "V", None, None, "2026-01-01 10:00:00");
+        let id = insert_flight(&conn, &flight("Wing", None)).unwrap();
+        assert!(set_flight_vehicle(&conn, id, Some(v)).unwrap());
+        assert_eq!(vehicle_of(&conn, id), Some(v));
+        assert!(set_flight_vehicle(&conn, id, None).unwrap());
+        assert_eq!(vehicle_of(&conn, id), None);
+        assert!(set_flight_vehicle(&conn, id, Some(9_999)).is_err(), "unknown vehicle (FK)");
+        assert!(!set_flight_vehicle(&conn, 9_999, Some(v)).unwrap(), "unknown flight");
+    }
+
+    /// The logbook's craft-name edit corrects the name only — the vehicle link stays.
+    #[test]
+    fn craft_name_edit_keeps_the_vehicle_link() {
+        let conn = test_db();
+        let wing = vehicle(&conn, "Wing", Some("Wing"), None, "2026-01-01 10:00:00");
+        vehicle(&conn, "Quad", Some("Quad"), None, "2026-01-01 10:00:00");
+        let id = insert_flight(&conn, &flight("Wing", None)).unwrap();
+        assert_eq!(vehicle_of(&conn, id), Some(wing));
+        update_flight_craft_name(&conn, id, "quad").unwrap();
+        assert_eq!(vehicle_of(&conn, id), Some(wing));
+        assert_eq!(get_flight(&conn, id).unwrap().unwrap().craft_name, "quad");
+    }
+
+    // ── Schema v22 ────────────────────────────────────────────────────────────────────────
+
+    /// A v21 database with flights and a mission: the v22 step adds the tables and columns, back-fills
+    /// `alt_relative` from the protocol label, keeps the existing rows, and a second pass is a no-op.
+    #[test]
+    fn v21_database_migrates_to_v22() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate_to(&conn, 21);
+        assert!(!table_exists(&conn, "gps_records").unwrap());
+        let flight = |protocol: &str| {
+            conn.execute(
+                "INSERT INTO flights (start_time, craft_name, source, protocol) VALUES ('2026-09-01T10:00:00+00:00', 'W', 'live', ?1)",
+                params![protocol],
+            )
+            .unwrap();
+            conn.last_insert_rowid()
+        };
+        let msp = flight("MSP");
+        let crsf = flight("Telemetry (CRSF)");
+        let ltm = flight("Telemetry (LTM)");
+        let mavlink_passive = flight("Telemetry (MAVLink)");
+        conn.execute(
+            "INSERT INTO missions (content_hash, name, waypoints_json) VALUES ('h1', 'M', '[]')",
+            [],
+        )
+        .unwrap();
+
+        migrate(&conn).unwrap();
+        assert_eq!(get_user_version(&conn).unwrap(), 22);
+        for table in ["gps_records", "weather_records", "flight_videos"] {
+            assert!(table_exists(&conn, table).unwrap(), "{table}");
+        }
+        for (table, column) in [("missions", "extra_json"), ("missions", "vehicle_class"), ("flights", "alt_relative")] {
+            assert!(column_exists(&conn, table, column).unwrap(), "{table}.{column}");
+        }
+        let alt_relative = |id: i64| -> Option<i64> {
+            conn.query_row("SELECT alt_relative FROM flights WHERE id = ?1", params![id], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(alt_relative(msp), Some(0));
+        assert_eq!(alt_relative(crsf), Some(1));
+        assert_eq!(alt_relative(ltm), Some(1));
+        assert_eq!(alt_relative(mavlink_passive), Some(0));
+        let mission: (String, Option<String>, Option<String>) = conn
+            .query_row("SELECT name, extra_json, vehicle_class FROM missions WHERE content_hash = 'h1'", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })
+            .unwrap();
+        assert_eq!(mission, ("M".to_string(), None, None));
+
+        // Re-entrant: a value set after the migration survives the self-heal pass and the step itself.
+        conn.execute("UPDATE flights SET alt_relative = NULL WHERE id = ?1", params![crsf]).unwrap();
+        migrate(&conn).unwrap();
+        let tx = conn.unchecked_transaction().unwrap();
+        migrate_v21_to_v22(&tx).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(alt_relative(crsf), None);
+        assert_eq!(get_user_version(&conn).unwrap(), 22);
+    }
+
+    /// A mission row keeps `extra_json` through an overwrite that brings none, takes a new one when given,
+    /// and an insert stores the vehicle class and the creation time a `.kmission` import hands over.
+    #[test]
+    fn mission_extra_and_vehicle_class_round_trip() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let input = |hash: &str, extra: Option<&str>| MissionInput {
+            content_hash: hash.into(),
+            name: "M".into(),
+            format: "px4".into(),
+            waypoints_json: "[]".into(),
+            source_xml: None,
+            wp_count: 0,
+            total_distance_m: None,
+            alt_diff_m: None,
+            max_alt_m: None,
+            min_alt_m: None,
+            bndbox_min_lat: None,
+            bndbox_min_lon: None,
+            bndbox_max_lat: None,
+            bndbox_max_lon: None,
+            notes: None,
+            home_lat: None,
+            home_lon: None,
+            vehicle_class: Some("copter".into()),
+            extra_json: extra.map(Into::into),
+            created_at: Some("2026-01-02 03:04:05".into()),
+            location_name: Some("Somewhere".into()),
+        };
+        let id = upsert_mission(&conn, &input("h1", Some(r#"{"patterns":[1]}"#))).unwrap();
+        let m = get_mission(&conn, id).unwrap().unwrap();
+        assert_eq!(m.vehicle_class.as_deref(), Some("copter"));
+        assert_eq!(m.extra_json.as_deref(), Some(r#"{"patterns":[1]}"#));
+        assert_eq!(m.created_at, "2026-01-02 03:04:05");
+        assert_eq!(m.location_name.as_deref(), Some("Somewhere"));
+
+        update_mission(&conn, id, &input("h2", None)).unwrap();
+        let m = get_mission(&conn, id).unwrap().unwrap();
+        assert_eq!(m.content_hash, "h2");
+        assert_eq!(m.extra_json.as_deref(), Some(r#"{"patterns":[1]}"#), "an overwrite without extra keeps it");
+        assert_eq!(m.created_at, "2026-01-02 03:04:05");
+
+        update_mission(&conn, id, &input("h2", Some("{}"))).unwrap();
+        assert_eq!(get_mission(&conn, id).unwrap().unwrap().extra_json.as_deref(), Some("{}"));
+        set_mission_extra(&conn, id, None).unwrap();
+        assert_eq!(get_mission(&conn, id).unwrap().unwrap().extra_json, None);
+
+        // Without a creation time from a file the database stamps its own.
+        let mut plain = input("h3", None);
+        plain.created_at = None;
+        let id3 = upsert_mission(&conn, &plain).unwrap();
+        assert!(!get_mission(&conn, id3).unwrap().unwrap().created_at.is_empty());
+    }
+
+    /// The v22 child tables carry no FK: `delete_flight` removes their rows, other flights keep theirs.
+    #[test]
+    fn delete_flight_removes_v22_child_rows() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate(&conn).unwrap();
+        let flight = || {
+            conn.execute(
+                "INSERT INTO flights (start_time, craft_name, source) VALUES ('2026-09-01T10:00:00+00:00', 'W', 'live')",
+                [],
+            )
+            .unwrap();
+            conn.last_insert_rowid()
+        };
+        let (gone, kept) = (flight(), flight());
+        for id in [gone, kept] {
+            conn.execute("INSERT INTO gps_records (flight_id, timestamp_ms, instance) VALUES (?1, 0, 0)", params![id]).unwrap();
+            conn.execute("INSERT INTO weather_records (flight_id, timestamp_ms, data_json) VALUES (?1, 0, '{}')", params![id]).unwrap();
+            conn.execute("INSERT INTO flight_videos (flight_id, rel_path) VALUES (?1, 'a/b.mp4')", params![id]).unwrap();
+        }
+        delete_flight(&conn, gone).unwrap();
+        for table in ["gps_records", "weather_records", "flight_videos"] {
+            assert_eq!(count(&conn, &format!("SELECT COUNT(*) FROM {table} WHERE flight_id = ?1"), gone), 0, "{table}");
+            assert_eq!(count(&conn, &format!("SELECT COUNT(*) FROM {table} WHERE flight_id = ?1"), kept), 1, "{table}");
+        }
+    }
+
+    // ── Schema v21: no decoded Blackbox rows, `flights.source_before_link` ───────────────────
+
+    fn source_of(conn: &Connection, flight_id: i64) -> (String, Option<String>, Option<i64>) {
+        conn.query_row(
+            "SELECT source, source_before_link, linked_flight_id FROM flights WHERE id = ?1",
+            params![flight_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap()
+    }
+
+    fn linked(source_before_link: &str, partner: i64) -> (String, Option<String>, Option<i64>) {
+        ("both".into(), Some(source_before_link.into()), Some(partner))
+    }
+
+    fn unlinked(source: &str) -> (String, Option<String>, Option<i64>) {
+        (source.into(), None, None)
+    }
+
+    /// A v20 database (built from the real steps) with linked pairs and stored decoded rows: the v21
+    /// step derives `source_before_link` for the linked flights from the decoded rows OR an archived
+    /// log, leaves unlinked flights NULL, drops the table + index, and a second pass is a no-op.
+    #[test]
+    fn v20_database_migrates_to_v21() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate_to(&conn, 20);
+        assert!(table_exists(&conn, "blackbox_records").unwrap());
+        let raw = |source: &str| {
+            conn.execute(
+                "INSERT INTO flights (start_time, craft_name, source) VALUES ('2026-09-01T10:00:00+00:00', 'W', ?1)",
+                params![source],
+            )
+            .unwrap();
+            conn.last_insert_rowid()
+        };
+        let pair = |a: i64, b: i64| {
+            conn.execute("UPDATE flights SET linked_flight_id = ?1 WHERE id = ?2", params![b, a]).unwrap();
+            conn.execute("UPDATE flights SET linked_flight_id = ?1 WHERE id = ?2", params![a, b]).unwrap();
+        };
+        let records = |id: i64| {
+            conn.execute(
+                "INSERT INTO blackbox_records (flight_id, timestamp_us, csv_data) VALUES (?1, 0, '1,2,3')",
+                params![id],
+            )
+            .unwrap();
+        };
+        // Pair 1: the log flight has decoded rows but no archived original any more.
+        let live_1 = raw("both");
+        let log_1 = raw("both");
+        pair(live_1, log_1);
+        records(log_1);
+        // Pair 2: the log flight has only an archived original (an ArduPilot / PX4 import).
+        let live_2 = raw("both");
+        let log_2 = raw("both");
+        pair(live_2, log_2);
+        insert_blackbox_file(&conn, log_2, "00000042.BIN", 0, b"bin").unwrap();
+        // Pair 3: an ArduPilot import with neither decoded rows nor an archived original — only its
+        // protocol says it is a log flight.
+        let live_3 = raw("both");
+        let log_3 = raw("both");
+        conn.execute("UPDATE flights SET protocol = 'DATAFLASH' WHERE id = ?1", params![log_3]).unwrap();
+        pair(live_3, log_3);
+        // Unlinked flights stay NULL, whatever they hold.
+        let lone_log = raw("blackbox");
+        records(lone_log);
+        insert_blackbox_file(&conn, lone_log, "LOG00001.TXT", 0, b"txt").unwrap();
+        let lone_live = raw("live");
+
+        migrate(&conn).unwrap();
+        assert_eq!(get_user_version(&conn).unwrap(), CURRENT_SCHEMA_VERSION);
+        assert!(!table_exists(&conn, "blackbox_records").unwrap());
+        assert!(!object_exists(&conn, "index", "idx_blackbox_records_flight"));
+        assert_eq!(source_of(&conn, live_1), linked("live", log_1));
+        assert_eq!(source_of(&conn, log_1), linked("blackbox", live_1));
+        assert_eq!(source_of(&conn, live_2), linked("live", log_2));
+        assert_eq!(source_of(&conn, log_2), linked("blackbox", live_2));
+        assert_eq!(source_of(&conn, live_3), linked("live", log_3));
+        assert_eq!(source_of(&conn, log_3), linked("blackbox", live_3));
+        assert_eq!(source_of(&conn, lone_log), unlinked("blackbox"));
+        assert_eq!(source_of(&conn, lone_live), unlinked("live"));
+        // The archived originals stay.
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM blackbox_files WHERE flight_id = ?1", log_2), 1);
+
+        // Re-entrant: the self-heal pass and the step itself change nothing.
+        migrate(&conn).unwrap();
+        let tx = conn.unchecked_transaction().unwrap();
+        migrate_v20_to_v21(&tx).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(get_user_version(&conn).unwrap(), 21);
+        assert_eq!(source_of(&conn, log_1), linked("blackbox", live_1));
+        assert_eq!(source_of(&conn, lone_log), unlinked("blackbox"));
+        // The unlink restores what the back-fill derived — also for the log flight without a file.
+        unlink_flight(&conn, live_1).unwrap();
+        assert_eq!(source_of(&conn, live_1), unlinked("live"));
+        assert_eq!(source_of(&conn, log_1), unlinked("blackbox"));
+    }
+
+    /// The back-fill also runs on a database whose `blackbox_records` table is already gone.
+    #[test]
+    fn v21_backfill_without_the_records_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_to(&conn, 20);
+        conn.execute_batch("DROP TABLE blackbox_records;").unwrap();
+        conn.execute_batch(
+            "INSERT INTO flights (id, start_time, source, linked_flight_id) VALUES (1, 't', 'both', 2), (2, 't', 'both', 1);",
+        )
+        .unwrap();
+        insert_blackbox_file(&conn, 2, "LOG00001.TXT", 0, b"txt").unwrap();
+        migrate(&conn).unwrap();
+        assert_eq!(source_of(&conn, 1), linked("live", 2));
+        assert_eq!(source_of(&conn, 2), linked("blackbox", 1));
+    }
+
+    /// Link and unlink round-trip the sources of both flights — also for a log flight whose archived
+    /// original is gone. Deleting one flight of a pair restores the partner.
+    #[test]
+    fn link_unlink_and_delete_restore_the_sources() {
+        let conn = test_db();
+        let new = |source: &str| insert_flight(&conn, &Flight { source: source.into(), ..flight("Wing", None) }).unwrap();
+
+        let live = new("live");
+        let log = new("blackbox");
+        insert_blackbox_file(&conn, log, "LOG00001.TXT", 0, b"txt").unwrap();
+        link_flights(&conn, live, log).unwrap();
+        assert_eq!(source_of(&conn, live), linked("live", log));
+        assert_eq!(source_of(&conn, log), linked("blackbox", live));
+        // Linking again keeps the stored sources (the flights already read "both").
+        link_flights(&conn, log, live).unwrap();
+        assert_eq!(source_of(&conn, log), linked("blackbox", live));
+        unlink_flight(&conn, log).unwrap();
+        assert_eq!(source_of(&conn, live), unlinked("live"));
+        assert_eq!(source_of(&conn, log), unlinked("blackbox"));
+
+        // The original is deleted while the pair is linked (it may sit on either flight).
+        link_flights(&conn, live, log).unwrap();
+        assert_eq!(delete_blackbox_file(&conn, live).unwrap().as_deref(), Some("LOG00001.TXT"));
+        unlink_flight(&conn, live).unwrap();
+        assert_eq!(source_of(&conn, log), unlinked("blackbox"));
+        assert_eq!(source_of(&conn, live), unlinked("live"));
+
+        // Delete one flight of a pair → the partner gets its own source back.
+        let live_2 = new("live");
+        let log_2 = new("blackbox");
+        link_flights(&conn, live_2, log_2).unwrap();
+        assert!(delete_flight(&conn, live_2).unwrap());
+        assert_eq!(source_of(&conn, log_2), unlinked("blackbox"));
+        link_flights(&conn, live, log_2).unwrap();
+        assert!(delete_flight(&conn, log_2).unwrap());
+        assert_eq!(source_of(&conn, live), unlinked("live"));
+
+        // Without a stored value the fallback decides: an archived log, or a log importer's protocol
+        // (an ArduPilot flight with no file at all) mean "blackbox".
+        let live_3 = new("live");
+        let log_3 = new("blackbox");
+        insert_blackbox_file(&conn, log_3, "LOG00002.TXT", 0, b"txt").unwrap();
+        let live_4 = new("live");
+        let log_4 = insert_flight(
+            &conn,
+            &Flight { source: "blackbox".into(), protocol: "DATAFLASH".into(), ..flight("Wing", None) },
+        )
+        .unwrap();
+        link_flights(&conn, live_3, log_3).unwrap();
+        link_flights(&conn, live_4, log_4).unwrap();
+        conn.execute("UPDATE flights SET source_before_link = NULL", []).unwrap();
+        unlink_flight(&conn, live_3).unwrap();
+        assert_eq!(source_of(&conn, live_3), unlinked("live"));
+        assert_eq!(source_of(&conn, log_3), unlinked("blackbox"));
+        assert!(delete_flight(&conn, live_4).unwrap());
+        assert_eq!(source_of(&conn, log_4), unlinked("blackbox"));
+    }
+
+    /// `delete_flight` on a file database hands the freed pages back (in the background): the freelist
+    /// reaches 0. The old one-step `execute_batch("PRAGMA incremental_vacuum;")` freed one page only.
+    #[test]
+    fn delete_flight_reclaims_the_freed_pages() {
+        let path = temp_db_path("delete-reclaim");
+        cleanup(&path);
+        let conn = open_database(&path).unwrap();
+        let id = insert_flight(&conn, &Flight { source: "blackbox".into(), ..flight("Wing", None) }).unwrap();
+        insert_blackbox_file(&conn, id, "LOG00001.TXT", 0, &vec![0x5a; 4 * 1024 * 1024]).unwrap();
+        let file = conn.path().unwrap().to_string();
+        assert!(delete_flight(&conn, id).unwrap());
+        wait_freelist_empty(&conn, "the delete");
+        wait_for_reclaim(&file, std::time::Duration::from_secs(5));
+        drop(conn);
+        cleanup(&path);
+    }
+
+    /// Polls (bounded, 5 s) until the freelist is empty; panics naming `after` otherwise.
+    fn wait_freelist_empty(conn: &Connection, after: &str) {
+        let started = std::time::Instant::now();
+        while freelist_pages(conn).unwrap() > 0 {
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(5),
+                "freelist still {} pages after {after}",
+                freelist_pages(conn).unwrap()
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    /// Same for deleting only the archived original (`delete_blackbox_file`).
+    #[test]
+    fn delete_blackbox_file_reclaims_the_freed_pages() {
+        let path = temp_db_path("delete-file-reclaim");
+        cleanup(&path);
+        let conn = open_database(&path).unwrap();
+        let id = insert_flight(&conn, &Flight { source: "blackbox".into(), ..flight("Wing", None) }).unwrap();
+        insert_blackbox_file(&conn, id, "LOG00001.TXT", 0, &vec![0x5a; 4 * 1024 * 1024]).unwrap();
+        let file = conn.path().unwrap().to_string();
+        assert_eq!(delete_blackbox_file(&conn, id).unwrap().as_deref(), Some("LOG00001.TXT"));
+        wait_freelist_empty(&conn, "deleting the archived original");
+        wait_for_reclaim(&file, std::time::Duration::from_secs(5));
+        drop(conn);
+        cleanup(&path);
+    }
+
+    /// The scratch store ("open a log without importing it") is never reclaimed — neither after a
+    /// delete nor on open with a large freelist: it is thrown away whole, and on Windows its wipe
+    /// fails while a reclaim thread holds the file.
+    #[test]
+    fn scratch_store_is_not_reclaimed() {
+        let path = temp_db_path("scratch-no-reclaim");
+        cleanup(&path);
+        exclude_from_reclaim(path.parent().unwrap());
+        let conn = open_database(&path).unwrap();
+        let file = conn.path().unwrap().to_string();
+        let id = insert_flight(&conn, &Flight { source: "blackbox".into(), ..flight("Wing", None) }).unwrap();
+        let blob = vec![0x5a; ((RECLAIM_ON_OPEN_PAGES + 512) * 4096) as usize];
+        insert_blackbox_file(&conn, id, "LOG00001.TXT", 0, &blob).unwrap();
+        assert!(delete_flight(&conn, id).unwrap());
+        assert!(!reclaim_running(&file), "a delete in the scratch store must not start a reclaim");
+        drop(conn);
+        let conn = open_database(&path).unwrap();
+        assert!(!reclaim_running(&file), "opening the scratch store must not start a reclaim");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let free = freelist_pages(&conn).unwrap();
+        assert!(free > RECLAIM_ON_OPEN_PAGES, "the scratch freelist was touched: {free} pages left");
+        drop(conn);
+        cleanup(&path);
+    }
+
+    /// `write_tx` takes the write lock up front: while a second connection holds it, the transaction
+    /// waits (busy timeout) and then reads and writes normally.
+    #[test]
+    fn write_tx_waits_for_the_write_lock() {
+        let path = temp_db_path("write-tx-waits");
+        cleanup(&path);
+        let a = open_database(&path).unwrap();
+        let b = Connection::open(&path).unwrap();
+        b.execute_batch("BEGIN IMMEDIATE; INSERT INTO flights (start_time) VALUES ('2026-11-11T10:00:00Z');")
+            .unwrap();
+        let hold = std::time::Duration::from_millis(300);
+        let started = std::time::Instant::now();
+        let holder = std::thread::spawn(move || {
+            std::thread::sleep(hold);
+            b.execute_batch("COMMIT;").unwrap();
+        });
+        let tx = write_tx(&a).unwrap();
+        let seen: i64 = tx.query_row("SELECT COUNT(*) FROM flights", [], |r| r.get(0)).unwrap();
+        tx.execute("INSERT INTO flights (start_time) VALUES ('2026-11-11T10:05:00Z')", []).unwrap();
+        tx.commit().unwrap();
+        assert!(started.elapsed() >= hold - std::time::Duration::from_millis(50), "it must have waited");
+        assert_eq!(seen, 1, "the read after the wait sees the other connection's commit");
+        holder.join().unwrap();
+        drop(a);
+        cleanup(&path);
+    }
+
+    fn is_busy(e: &rusqlite::Error) -> bool {
+        matches!(e, rusqlite::Error::SqliteFailure(f, _) if f.code == rusqlite::ErrorCode::DatabaseBusy)
+    }
+
+    /// Why `write_tx` exists: a DEFERRED transaction that reads first cannot become a writer while
+    /// another connection writes — SQLite answers SQLITE_BUSY at once, without the busy timeout.
+    #[test]
+    fn deferred_read_then_write_fails_without_waiting() {
+        let path = temp_db_path("deferred-busy");
+        cleanup(&path);
+        let a = open_database(&path).unwrap();
+        let b = Connection::open(&path).unwrap();
+        let insert = "INSERT INTO flights (start_time) VALUES ('2026-11-11T10:00:00Z')";
+
+        // 1. Another connection committed after the read: the snapshot is stale.
+        let tx = a.unchecked_transaction().unwrap();
+        let _: i64 = tx.query_row("SELECT COUNT(*) FROM flights", [], |r| r.get(0)).unwrap();
+        b.execute(insert, []).unwrap();
+        let err = tx.execute(insert, []).unwrap_err();
+        assert!(is_busy(&err), "{err:?}");
+        drop(tx);
+
+        // 2. Another connection holds the write lock: no waiting either (busy timeout is 5 s).
+        let tx = a.unchecked_transaction().unwrap();
+        let _: i64 = tx.query_row("SELECT COUNT(*) FROM flights", [], |r| r.get(0)).unwrap();
+        b.execute_batch(&format!("BEGIN IMMEDIATE; {insert};")).unwrap();
+        let started = std::time::Instant::now();
+        let err = tx.execute(insert, []).unwrap_err();
+        assert!(is_busy(&err), "{err:?}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(1), "it failed without waiting");
+        drop(tx);
+        b.execute_batch("COMMIT;").unwrap();
+
+        // The same with `write_tx` works (nothing holds the lock now).
+        let tx = write_tx(&a).unwrap();
+        let _: i64 = tx.query_row("SELECT COUNT(*) FROM flights", [], |r| r.get(0)).unwrap();
+        tx.execute(insert, []).unwrap();
+        tx.commit().unwrap();
+        drop((a, b));
+        cleanup(&path);
+    }
+
+    /// The save path under load: flights are committed from temp sessions over and over while a real
+    /// chunked reclaim of a large freelist runs on another connection — every commit must succeed.
+    #[test]
+    fn session_commits_succeed_while_a_reclaim_runs() {
+        let path = db_with_freelist("commit-during-reclaim", 16_384);
+        let conn = open_database(&path).unwrap(); // starts the background reclaim (freelist > threshold)
+        let file = conn.path().unwrap().to_string();
+        assert!(reclaim_running(&file), "the reclaim must be running for this test to mean anything");
+        let mut during = 0;
+        for n in 0..400 {
+            let temp = path.with_file_name(format!("active_test_L1-S{n}.ktmp"));
+            remove_temp_session(&temp);
+            {
+                let t = open_temp_session(&temp).unwrap();
+                insert_telemetry_batch(&t, &[telemetry(0, 0, None), telemetry(0, 100, None)]).unwrap();
+            }
+            let running = reclaim_running(&file);
+            commit_session_to_main(&conn, &temp, &flight("Wing", None))
+                .unwrap_or_else(|e| panic!("commit {n} failed while the reclaim ran: {e}"));
+            remove_temp_session(&temp);
+            if running && reclaim_running(&file) {
+                during += 1;
+            } else if !reclaim_running(&file) {
+                break;
+            }
+        }
+        // One overlapping commit proves the point. Asking for three made the test depend on how fast the
+        // machine reclaims: a quick CI runner finished the reclaim after a single commit.
+        assert!(during >= 1, "no commit overlapped the reclaim");
+        wait_for_reclaim(&file, std::time::Duration::from_secs(30));
+        assert_eq!(freelist_pages(&conn).unwrap(), 0);
+        drop(conn);
+        cleanup(&path);
+    }
+
+    /// A file with `pages` pages on its freelist and nothing else changed (a dropped table).
+    fn db_with_freelist(name: &str, pages: i64) -> PathBuf {
+        let path = temp_db_path(name);
+        cleanup(&path);
+        let conn = open_database(&path).unwrap();
+        let page_size: i64 = conn.query_row("PRAGMA page_size", [], |r| r.get(0)).unwrap();
+        conn.execute_batch("CREATE TABLE junk (b BLOB);").unwrap();
+        conn.execute("INSERT INTO junk (b) VALUES (zeroblob(?1))", params![pages * page_size]).unwrap();
+        conn.execute_batch("DROP TABLE junk;").unwrap();
+        let free = freelist_pages(&conn).unwrap();
+        // A little more than `pages`: the table's own pages and the auto-vacuum pointer-map pages.
+        assert!((pages..pages + 16 + pages / 256).contains(&free), "expected ~{pages} free pages, got {free}");
+        path
+    }
+
+    /// Opening a database whose freelist is above `RECLAIM_ON_OPEN_PAGES` reclaims it — no delete
+    /// needed (an interrupted reclaim, a dropped table); one below the threshold is left alone.
+    #[test]
+    fn open_reclaims_a_large_freelist_only() {
+        let big = db_with_freelist("open-reclaim-big", RECLAIM_ON_OPEN_PAGES + 512);
+        let conn = open_database(&big).unwrap();
+        let file = conn.path().unwrap().to_string();
+        let started = std::time::Instant::now();
+        while freelist_pages(&conn).unwrap() > 0 {
+            assert!(started.elapsed() < std::time::Duration::from_secs(10), "large freelist not reclaimed on open");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        wait_for_reclaim(&file, std::time::Duration::from_secs(10));
+        drop(conn);
+        cleanup(&big);
+
+        let small = db_with_freelist("open-reclaim-small", RECLAIM_ON_OPEN_PAGES / 8);
+        let conn = open_database(&small).unwrap();
+        let file = conn.path().unwrap().to_string();
+        assert!(!reclaim_running(&file), "a small freelist must not start a reclaim");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let free = freelist_pages(&conn).unwrap();
+        assert!(free >= RECLAIM_ON_OPEN_PAGES / 8, "the small freelist was touched: {free} pages left");
+        drop(conn);
+        cleanup(&small);
+    }
+
+    /// `PRAGMA incremental_vacuum` has to be stepped to the end: one result row per freed page.
+    #[test]
+    fn reclaim_free_pages_empties_the_freelist() {
+        let path = temp_db_path("reclaim");
+        cleanup(&path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "PRAGMA auto_vacuum = INCREMENTAL;
+             CREATE TABLE filler (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+        )
+        .unwrap();
+        let tx = conn.unchecked_transaction().unwrap();
+        for i in 0..5_000 {
+            tx.execute("INSERT INTO filler (payload) VALUES (?1)", params![format!("{i:0>200}")]).unwrap();
+        }
+        tx.commit().unwrap();
+        conn.execute_batch("DELETE FROM filler;").unwrap();
+        let free = |c: &Connection| c.query_row("PRAGMA freelist_count", [], |r| r.get::<_, i64>(0)).unwrap();
+        let before = free(&conn);
+        assert!(before > 1, "the delete must leave more than one free page (got {before})");
+        // A chunk smaller than the freelist, so the loop has to go round several times.
+        let chunk = before / 4;
+        let stats = reclaim_free_pages(&conn, chunk, std::time::Duration::ZERO, &|| false).unwrap();
+        assert_eq!(free(&conn), 0);
+        assert_eq!(stats.pages, before);
+        assert!(stats.chunks >= 4, "{stats:?}");
+        drop(conn);
+        cleanup(&path);
+    }
+
+    fn compact_running_on(path: &str) -> bool {
+        compact_running(Path::new(path))
+    }
+
+    /// Compact is single flight per database file: a second one on the same file is refused with the
+    /// stable marker while the first runs (also through a second connection), another file is not
+    /// affected, and the slot is free again once the first is done.
+    #[test]
+    fn compact_is_single_flight_per_file() {
+        let a = temp_db_path("compact-single-a");
+        let b = temp_db_path("compact-single-b");
+        cleanup(&a);
+        cleanup(&b);
+        let conn_a = open_database(&a).unwrap();
+        let conn_a2 = open_database(&a).unwrap();
+        let conn_b = open_database(&b).unwrap();
+        let file_a = conn_a.path().unwrap().to_string();
+
+        let guard = begin_compact(&conn_a).unwrap();
+        assert!(compact_running_on(&file_a));
+        let err = compact_database(&conn_a2).unwrap_err();
+        assert_eq!(err, COMPACT_RUNNING_ERROR);
+        assert!(err.starts_with("compact-running:"), "the frontend matches this prefix");
+        assert!(compact_running_on(&file_a), "the refused second call must not release the first one's slot");
+        compact_database(&conn_b).expect("another file compacts meanwhile");
+
+        drop(guard);
+        assert!(!compact_running_on(&file_a));
+        compact_database(&conn_a2).expect("the slot is free again");
+        assert!(!compact_running_on(&file_a), "a finished compact releases its slot");
+        drop((conn_a, conn_a2, conn_b));
+        cleanup(&a);
+        cleanup(&b);
+    }
+
+    /// A compact stops a running background reclaim before the VACUUM (the reclaim ends before its next
+    /// chunk — no reclaim thread fights the VACUUM for the write lock), and while it runs no new reclaim
+    /// starts: neither from an open with a large freelist nor from an explicit trigger.
+    #[test]
+    fn compact_stops_a_running_reclaim_and_blocks_new_ones() {
+        let path = db_with_freelist("compact-vs-reclaim", 16_384);
+        let conn = open_database(&path).unwrap(); // starts the background reclaim (freelist > threshold)
+        let file = conn.path().unwrap().to_string();
+        assert!(reclaim_running(&file), "the reclaim must be running for this test to mean anything");
+
+        let guard = begin_compact(&conn).unwrap();
+        assert!(!reclaim_running(&file), "begin_compact returns only once the reclaim has stopped");
+        let left = freelist_pages(&conn).unwrap();
+        assert!(left > 0, "the reclaim was stopped early, not run to the end");
+
+        let second = open_database(&path).unwrap();
+        assert!(!reclaim_running(&file), "an open during the compact must not start a reclaim");
+        spawn_reclaim(&second);
+        assert!(!reclaim_running(&file), "a trigger during the compact must not start a reclaim");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert_eq!(freelist_pages(&conn).unwrap(), left, "nothing reclaimed while the compact holds the file");
+        drop(second);
+
+        drop(guard);
+        spawn_reclaim(&conn);
+        assert!(reclaim_running(&file), "after the compact the reclaim works again");
+        wait_for_reclaim(&file, std::time::Duration::from_secs(30));
+        drop(conn);
+        cleanup(&path);
+    }
+
+    /// The whole compact on a file whose own open started a reclaim (large freelist): it completes
+    /// instead of failing with SQLITE_BUSY, the freelist is empty and the file has shrunk.
+    #[test]
+    fn compact_completes_while_its_open_started_a_reclaim() {
+        let path = db_with_freelist("compact-completes", 16_384);
+        let conn = open_database(&path).unwrap();
+        let file = conn.path().unwrap().to_string();
+        assert!(reclaim_running(&file), "the reclaim must be running for this test to mean anything");
+        let page_size: i64 = conn.query_row("PRAGMA page_size", [], |r| r.get(0)).unwrap();
+        let stats = compact_database(&conn).expect("the compact completes");
+        assert_eq!(freelist_pages(&conn).unwrap(), 0);
+        let pages: i64 = conn.query_row("PRAGMA page_count", [], |r| r.get(0)).unwrap();
+        assert_eq!(stats.size_after, pages * page_size);
+        assert!(stats.size_before > stats.size_after, "the compact reports what it gave back: {stats:?}");
+        assert!(pages < 1024, "the dropped table's pages are gone ({pages} pages left)");
+        assert!(!reclaim_running(&file) && !compact_running_on(&file));
+        drop(conn);
+        cleanup(&path);
+    }
+
+    /// Compact timing on a COPY of a real flight database (see `migrates_the_real_database`): opens it
+    /// like the app (which may start a reclaim) and compacts right away.
+    /// `KITE_TEST_DB=<path> cargo test compacts_the_real_database -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn compacts_the_real_database() {
+        let Ok(src) = std::env::var("KITE_TEST_DB") else {
+            eprintln!("KITE_TEST_DB not set — skipping");
+            return;
+        };
+        let src = PathBuf::from(src);
+        let work = src.with_extension("compact-copy.db");
+        let _ = std::fs::remove_file(&work);
+        std::fs::copy(&src, &work).expect("copy fixture");
+        let mb = |p: &Path| std::fs::metadata(p).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
+        let wal = work.with_extension("db-wal");
+        let file_before = mb(&work);
+        let opened = std::time::Instant::now();
+        let conn = open_database(&work).expect("open the real DB");
+        let file = conn.path().unwrap().to_string();
+        let flights: i64 = conn.query_row("SELECT COUNT(*) FROM flights", [], |r| r.get(0)).unwrap();
+        let free_before = freelist_bytes(&conn).unwrap();
+        eprintln!(
+            "real DB: {file_before:.1} MB on disk, freelist {:.1} MB, reclaim on open: {}, open {} ms",
+            free_before as f64 / 1_048_576.0,
+            reclaim_running(&file),
+            opened.elapsed().as_millis()
+        );
+        let started = std::time::Instant::now();
+        let (size, conn) = std::thread::scope(|s| {
+            let compact = s.spawn(|| (compact_database(&conn), conn));
+            // A second compact while the first runs: the app opens the DB first (`open_db`), so that open
+            // must not block on the running VACUUM, and the compact is then refused.
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let second = std::time::Instant::now();
+            let other = open_database(&work).expect("open during the compact");
+            let refused = compact_database(&other);
+            eprintln!("second compact during the first: {:?} after {} ms", refused, second.elapsed().as_millis());
+            assert_eq!(refused.unwrap_err(), COMPACT_RUNNING_ERROR);
+            drop(other);
+            let (size, conn) = compact.join().unwrap();
+            (size.expect("compact the real DB"), conn)
+        });
+        eprintln!(
+            "compact: {} ms, logical size {:.1} MB; on disk now: db {:.1} MB, wal {:.1} MB",
+            started.elapsed().as_millis(),
+            size.size_after as f64 / 1_048_576.0,
+            mb(&work),
+            mb(&wal)
+        );
+        assert_eq!(freelist_pages(&conn).unwrap(), 0);
+        let flights_after: i64 = conn.query_row("SELECT COUNT(*) FROM flights", [], |r| r.get(0)).unwrap();
+        assert_eq!(flights_after, flights);
+        drop(conn);
+        eprintln!("after close: db {:.1} MB, wal {:.1} MB", mb(&work), mb(&wal));
+        let _ = std::fs::remove_file(&work);
+        let _ = std::fs::remove_file(&wal);
+        let _ = std::fs::remove_file(work.with_extension("db-shm"));
+        let _ = std::fs::remove_file(backup_path_for(&work));
     }
 }

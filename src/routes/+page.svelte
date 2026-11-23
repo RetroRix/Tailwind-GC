@@ -38,6 +38,8 @@
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import UpdateDialog from "$lib/components/UpdateDialog.svelte";
   import { runUpdateCheck, resolveUpdateKind } from "$lib/controllers/updateCheck";
+  import { importMissionFile } from "$lib/helpers/missionFile";
+  import type { LibraryMission } from "$lib/stores/flightlogTypes";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import BatchEditPopup from "$lib/components/mission/BatchEditPopup.svelte";
   import ArduBatchEditPopup from "$lib/components/mission/ArduBatchEditPopup.svelte";
@@ -84,11 +86,11 @@
   import { liveTrack, appendLivePoint, clearLiveTrack, backfillLivePoints } from '$lib/stores/liveTrack';
   import { toTelemetryData } from '$lib/adapters/telemetryAdapter';
   import { activeWpNumber, replayWpTotal } from '$lib/stores/navStatus';
-  import { missionManagerOpen, missionManagerSelectedId, requestOpenFlightId, requestOpenMissionId } from '$lib/stores/missionManager';
+  import { missionManagerOpen, missionManagerSelectedId, requestOpenFlightId, requestOpenMissionId, missionLibraryRevision } from '$lib/stores/missionManager';
   import { batteryManagerOpen, batteryManagerCreateSerial, normalizeSerial } from '$lib/stores/batteryManager';
   import { vehicleManagerOpen, vehicleManagerCreateCraft, vehicleManagerSelectedId } from '$lib/stores/vehicleManager';
   import type { BlackboxImportStatus } from '$lib/stores/flightlog';
-  import { missionDbForFlight, flightLoggedWpCount, missionDbSave, flightLinkMission, missionDbGeocode, flightSetBatterySerial, updateFlightNotes, getFlight, flightlogCommitPending, flightlogDiscardPending, flightlogContinuePending, scanOrphanSessions, recoverDiscard, recoverSaveIncomplete, recoverContinue, batteryDbFindBySerial, batteryDbAddUsage, vehicleDbFindByCraftName, blackboxLegacyMode, blackboxDecoderAvailable, downloadBlackboxDecode, hiresInfo, hiresParse, hiresSample, hiresDrop, hiresCleanup, scratchDir, scratchClear } from '$lib/stores/flightlog';
+  import { missionDbGet, missionDbForFlight, flightLoggedWpCount, missionDbSave, flightLinkMission, missionDbGeocode, flightSetBatterySerial, updateFlightNotes, getFlight, flightlogCommitPending, flightlogDiscardPending, flightlogContinuePending, scanOrphanSessions, recoverDiscard, recoverSaveIncomplete, recoverContinue, batteryDbFindBySerial, batteryDbAddUsage, vehicleDbFindByCraftName, blackboxLegacyMode, blackboxDecoderAvailable, downloadBlackboxDecode, hiresInfo, hiresParse, hiresSample, hiresDrop, hiresCleanup, scratchDir, scratchClear } from '$lib/stores/flightlog';
   import EndFlightDialog from "$lib/components/logbook/EndFlightDialog.svelte";
   import type { EndFlightStats } from "$lib/components/logbook/EndFlightDialog.svelte";
   import RecoveryPrompt from "$lib/components/logbook/RecoveryPrompt.svelte";
@@ -122,9 +124,9 @@
   import { initPulseBlink } from "$lib/stores/pulseBlink";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import TerrainAnalysisPanel from "$lib/components/terrain/TerrainAnalysisPanel.svelte";
-  import { editMode, replayActive, mission, missionFlags, missionDownload, missionUpload, missionFcInfo, markMissionSynced, loadedMissionId, missionLoadLibrary, missionImportXml, launchPoint, hasLocation, toDeg, type Waypoint } from "$lib/stores/mission";
+  import { editMode, replayActive, mission, missionFlags, missionDownload, missionUpload, missionFcInfo, markMissionSynced, loadedMissionId, missionLoadLibrary, missionImportXml, applyMissionLaunchDefault, getTotalWpCount, launchPoint, hasLocation, toDeg, type Waypoint } from "$lib/stores/mission";
   import { pendingSystemSwitch, autopilotSystem, autopilotLocked, setAutopilotSystem, confirmSystemSwitch } from "$lib/stores/autopilotContext";
-  import { arduEditMode, arduMission, arduSelectedWpIndex, arduLoadedMissionId, parseWaypoints, parsePlanFile, planFirmwareTarget, loadArduMissionFromFile, type ArduWaypoint } from "$lib/stores/missionArdupilot";
+  import { arduMission, arduSelectedWpIndex, arduLoadedMissionId, arduEditMode, parseWaypoints, parsePlanFile, planFirmwareTarget, planVehicleClass, loadArduMissionFromFile, arduVehicleClass, setArduVehicleClass, knownVehicleClass, arduClearUndoHistory, markArduMissionSynced, type ArduWaypoint } from "$lib/stores/missionArdupilot";
   import { frameMissionOnMap } from "$lib/stores/mapCamera";
   import { terrainAnalysis, patchTerrainAnalysis } from "$lib/stores/terrainAnalysis";
   import { DEFAULT_RADAR, DEFAULT_AIRSPACE, BUILTIN_ADSB_PROVIDERS } from "$lib/stores/settings";
@@ -2010,14 +2012,77 @@
     await importFiles(supported);
   }
 
-  /** Import a mission file dropped anywhere over the app (the docs' "drag a mission file onto the
-   *  map") — the ONLY working drop path is Tauri's native drag-drop event: with `dragDropEnabled`
-   *  the WebView never sees DOM drop events, so element-scoped drop zones cannot exist. Routed by
-   *  extension: .mission → INAV, .plan/.waypoints → the ArduPilot/PX4 stack. `.txt` stays with the
-   *  logbook (SD blackbox logs use it too). If the file belongs to the other mission family, the
-   *  editor switches — with 'keep': INAV and Ardu keep separate stores, so nothing is lost — unless
-   *  a connected FC locks the system, which reports instead of silently importing into a hidden
-   *  store. */
+  /** A dropped library mission goes onto the map only when the map is empty (both editors) and, with a
+   *  vehicle connected, only when it is that vehicle's system. Returns the system to show it in, or null. */
+  function mapSystemForDrop(m: LibraryMission): 'inav' | 'ardupilot' | 'px4' | null {
+    if (getTotalWpCount() > 0 || get(arduMission).length > 0) return null;
+    const target = m.format === 'ardupilot' || m.format === 'px4' ? m.format : 'inav';
+    if (get(autopilotSystem) === target) return target;
+    return get(autopilotLocked) ? null : target;
+  }
+
+  /** `.kmission` files dropped on the window: all go into the library; with `showOnMap` the first one
+   *  `mapSystemForDrop` admits is also shown on the map. */
+  async function importDroppedLibraryMissions(paths: string[], showOnMap: boolean): Promise<void> {
+    let added = 0;
+    let known = 0;
+    let shown = !showOnMap;
+    for (const path of paths) {
+      try {
+        const res = await importMissionFile(path, flightLogDbPath, showDialog, (key) => $t(key));
+        if (!res) continue;
+        if (res.added) {
+          added++;
+          void missionDbGeocode(res.id, $locale ?? 'en', flightLogDbPath)
+            .then(() => missionLibraryRevision.update((n) => n + 1))
+            .catch(() => {});
+        } else {
+          known++;
+        }
+        // Not a failed import when only the map step fails: the entry is in the library.
+        if (!shown) shown = await showLibraryMissionOnMap(res.id).catch(() => false);
+      } catch (e) {
+        errorMsg = $t('mission.importFailed', { values: { error: String(e) } });
+      }
+    }
+    if (added + known === 0 || (showOnMap && shown && paths.length === 1)) return;
+    await showInfo(
+      $t('missionMgr.title'),
+      $t('missionMgr.importedCount', { values: { added: String(added), known: String(known) } }),
+    );
+  }
+
+  async function showLibraryMissionOnMap(id: number): Promise<boolean> {
+    const m = await missionDbGet(id, flightLogDbPath);
+    const system = m ? mapSystemForDrop(m) : null;
+    if (!m || !system) return false;
+    if (get(autopilotSystem) !== system) setAutopilotSystem(system);
+    if (get(autopilotSystem) !== system) return false;
+    if (system === 'inav') {
+      const loaded = await missionLoadLibrary(JSON.parse(m.waypoints_json));
+      loadedMissionId.set(m.id);
+      applyMissionLaunchDefault(
+        loaded,
+        m.home_lat != null && m.home_lon != null ? { lat: m.home_lat, lng: m.home_lon } : undefined,
+        true,
+      );
+    } else {
+      const wps = JSON.parse(m.waypoints_json) as ArduWaypoint[];
+      const cls = knownVehicleClass(m.vehicle_class);
+      if (cls) setArduVehicleClass(cls);
+      arduMission.set(wps);
+      arduSelectedWpIndex.set(-1);
+      arduLoadedMissionId.set(m.id);
+      arduClearUndoHistory();
+      markArduMissionSynced('db', wps);
+    }
+    frameMissionOnMap();
+    return true;
+  }
+
+  /** Import a mission file dropped anywhere — only via Tauri's native drag-drop event (with dragDropEnabled
+   *  the WebView gets no DOM drop events). .mission → INAV, .plan/.waypoints → ArduPilot/PX4 (.txt is the
+   *  logbook's); switches the editor family ('keep') unless a connected FC locks it, which reports instead. */
   async function importDroppedMission(path: string): Promise<void> {
     console.log('[IMPORT] mission file dropped:', path);
     try {
@@ -2043,7 +2108,7 @@
           if (get(pendingSystemSwitch)) confirmSystemSwitch('keep');
           if (get(autopilotSystem) === 'inav') return;
         }
-        loadArduMissionFromFile(wps);
+        loadArduMissionFromFile(wps, isPlan ? planVehicleClass(content) : null);
       }
       frameMissionOnMap();
     } catch (e) {
@@ -3215,16 +3280,18 @@
     inavWps: Waypoint[];
     arduWps: ArduWaypoint[];
     fc: boolean;
+    /** Vehicle class of the ArduPilot / PX4 editor at capture: the prompt may be answered much later. */
+    cls: string | null;
   }
-  let endedMission: EndedMissionSnapshot = { system: 'inav', inavWps: [], arduWps: [], fc: false };
+  let endedMission: EndedMissionSnapshot = { system: 'inav', inavWps: [], arduWps: [], fc: false, cls: null };
 
   /** Snapshot the flown mission from the active autopilot system (at disarm / interrupt). */
   function captureEndedMission(): void {
     const sys = get(autopilotSystem);
     if (sys === 'inav') {
-      endedMission = { system: 'inav', inavWps: [...get(mission).waypoints], arduWps: [], fc: get(missionFlags).fc };
+      endedMission = { system: 'inav', inavWps: [...get(mission).waypoints], arduWps: [], fc: get(missionFlags).fc, cls: null };
     } else {
-      endedMission = { system: sys, inavWps: [], arduWps: [...get(arduMission)], fc: false };
+      endedMission = { system: sys, inavWps: [], arduWps: [...get(arduMission)], fc: false, cls: get(arduVehicleClass) };
     }
   }
 
@@ -3241,7 +3308,7 @@
       loadedMissionId.set(id);
     } else {
       const fmt = snap.system === 'px4' ? 'px4' : 'ardupilot';
-      id = await missionDbSave(await buildArduMissionInput(snap.arduWps, { format: fmt }), flightLogDbPath);
+      id = await missionDbSave(await buildArduMissionInput(snap.arduWps, { format: fmt, vehicleClass: snap.cls }), flightLogDbPath);
       arduLoadedMissionId.set(id);
     }
     await flightLinkMission(flightId, id, flightLogDbPath);
@@ -3257,10 +3324,9 @@
     catch (e) { console.warn('[end-flight] mission link failed', e); }
   }
 
-  // Fresh recording started — clear any stale captured-mission snapshot (defensive).
   function onRecordingStarted(): void {
     pendingEpoch++;
-    endedMission = { system: 'inav', inavWps: [], arduWps: [], fc: false };
+    endedMission = { system: 'inav', inavWps: [], arduWps: [], fc: false, cls: null };
   }
 
   /** Switch the active autopilot system for replay rendering (the mission layer switches on it),
@@ -3592,7 +3658,15 @@
       if (!paths.length) return;
       // Mission files import from anywhere (see importDroppedMission). `.txt` deliberately stays on
       // the logbook side (SD blackbox collision).
+      // `.kmission` = library entries: always imported, every one of a drop. A plain mission file in the
+      // same drop keeps the map for itself.
+      const libraryFiles = paths.filter((p) => /\.kmission$/i.test(p));
       const missionFile = paths.find((p) => /\.(mission|plan|waypoints)$/i.test(p));
+      if (libraryFiles.length > 0) {
+        void importDroppedLibraryMissions(libraryFiles, !missionFile)
+          .then(() => (missionFile ? importDroppedMission(missionFile) : undefined));
+        return;
+      }
       if (missionFile) {
         void importDroppedMission(missionFile);
         return;
