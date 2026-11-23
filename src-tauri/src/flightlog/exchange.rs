@@ -501,6 +501,8 @@ pub fn import_flights(
     if !kflight_path.exists() {
         return Err("File not found".into());
     }
+    with_kflight_copy(kflight_path, |src| import_from(target_conn, src, kflight_path))
+}
 
 /// `import_flights` on the open working copy `src` (`kflight_path` names the user's file in the log).
 fn import_from(
