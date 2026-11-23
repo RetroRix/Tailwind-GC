@@ -171,6 +171,20 @@ From the logbook toolbar you can open the two libraries that flights link to:
 - **[Vehicles](vehicles.md)** — your aircraft, with build sheets and per-craft flight history.
 - **[Batteries](batteries.md)** — your packs, with cycle / usage tracking and the per-flight links.
 
+## The flight database
+
+The database lives in a folder you choose in Settings. Changing the folder **moves the
+database with it** — or starts a new one there, or opens the database that folder already
+holds (an older format is upgraded only after you agree, and a backup is written first; a
+database from a newer Tailwind is refused, never downgraded). The Settings page also
+exports the whole database and imports one back, and exports all flights at once. When an
+upgrade is pending, Tailwind shows it — and asks about the backup — before anything else
+opens the database.
+
+During a flight, the weather at the start point and the raw GPS receivers are recorded
+with the log and shown again in the replay; DataFlash and ULog imports fill in the same
+receiver data.
+
 ## Where to go next
 
 - Set up what gets recorded: **[Settings](../reference/settings.md)**.

@@ -337,6 +337,19 @@ streams are shown directly. (On iOS, RTSP is not available yet.)
   and neither is a manually placed GCS marker. When Tailwind cannot tell which way the stream travels
   (some VPN setups), it pauses to be safe.
 
+## Recording the stream
+
+With the native RTSP client, Tailwind can record the stream exactly as it arrives — no
+re-encode — from arming to disarming. Turn it on in the Video widget (**Record the native
+RTSP stream**), and each flight gets a Matroska (`.mkv`) file in the recordings folder,
+sorted into one folder per flight. The file name carries the flight's id, so a recording
+that was renamed or moved into a subfolder is still found.
+
+In the logbook, a flight's replay plays its recording in step with the log. Exporting
+flights to a `.kflight` offers to take their recordings along; importing offers them back;
+deleting a flight offers to delete its recordings too. A recording left behind by a crash
+is attached to the flight recovered from that session.
+
 ## Where to go next
 
 - Put the Video widget in a dock: **[Telemetry & display](telemetry-and-display.md)**.

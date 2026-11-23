@@ -267,6 +267,26 @@ mission.
 If the aircraft has **geozones** (INAV) or a **geofence** (ArduPilot / PX4) set, Tailwind can check your
 plan against them and warn about waypoints that breach a no-fly area. See **[Safety](safety.md)**.
 
+## Survey from existing waypoints
+
+Already placed the corners of an area as waypoints? In the polygon survey, **From Mission
+Waypoints** takes the current mission's positioned waypoints, in order, as the survey
+polygon — no re-drawing. Fewer than three points, or an outline that crosses itself, is
+refused with a note. The grid angle defaults to the polygon's longest edge.
+
+## Altitude reference: Home / Sea / Terrain
+
+The waypoint editor sets each waypoint's altitude reference with a three-way switch —
+**Home** (relative to the launch point), **Sea** (above mean sea level) or **Terrain**
+(above ground). On INAV the altitude number is converted on a switch so the waypoint
+keeps its physical height; on ArduPilot/PX4 the switch sets the MAV frame and the number
+keeps the meaning of the frame it is now in.
+
+Mission files: QGroundControl `.plan` files that contain a Survey import as the generated
+mission, and Tailwind's own `.kmission` file carries a mission together with its vehicle
+class. An INAV multi-mission loads as a single library entry. On ArduPilot/PX4, a mission
+stored on the aircraft is offered for download once per connection.
+
 ## Where to go next
 
 - Watch the mission fly: **[Telemetry & display](telemetry-and-display.md)**.

@@ -17,6 +17,42 @@ right next to the map.
 Tailwind Ground Control flying in 3D mode.
 ///
 
+## What's new in Tailwind v1.1.0-tailwind.18
+
+The improvements batch: the full set from the November 23 upstream review, plus two
+ideas borrowed from a rival ground station and built natively.
+
+-   **Your video, recorded with the flight.** The native RTSP stream can now be recorded to a
+    Matroska file from arming to disarming, and the flight's replay plays the recording back in
+    step with the log. Recordings live in one folder per flight, travel with a `.kflight` export
+    (and come back on import), are offered for deletion with their flight, and a recording cut
+    off by a crash is re-attached to the recovered flight.
+-   **A Weather widget with wind at flight height.** The new widget shows the forecast wind at
+    the altitude you actually fly, not just at the ground. During a flight the weather at the
+    start point is recorded with the log, and the raw GPS receivers (position, fix, VDOP,
+    accuracy, speed, course, dual-antenna yaw) are recorded and shown in the replay — DataFlash
+    and ULog imports fill in the same receiver data.
+-   **The flight database is manageable.** Changing the database folder moves the database with
+    it (or starts a new one, or opens the one already there — with an upgrade prompt when its
+    format is older and a clear stop when it is newer). The database can be exported and
+    imported, and a pending format upgrade is shown — with its backup — before anything opens it.
+-   **Missions: more formats, fewer surprises.** QGroundControl `.plan` files containing a
+    Survey import as a generated mission; an INAV multi-mission loads as one library entry; the
+    new `.kmission` file carries the mission together with its vehicle class. ArduPilot and PX4
+    now offer the mission stored on the aircraft once per connection. Replay shows the guided
+    (Fly Here) target the FC was steering to.
+-   **Survey from your own waypoints.** One click in the polygon survey turns the current
+    mission's waypoints into the survey area — no re-drawing corners you already placed.
+-   **Altitude reference in one click.** The waypoint editor's altitude reference is now a
+    three-way switch — Home / Sea / Terrain — instead of a click-to-cycle toggle, for INAV
+    (with the physical-height conversion kept) and ArduPilot/PX4 frames alike.
+-   **FrSky radio over Bluetooth.** A FrSky radio in Bluetooth trainer mode works as an RC
+    input on the desktop, including PIN pairing for the older module; the session ends cleanly
+    when its device disappears. Android gains the RadioMaster AX12 profile (internal ELRS).
+-   **Faster, thriftier rendering.** The 2D map's direction lines, follow smoothing (20 fps in
+    Power Saving), the 3D view's idle behaviour and tile pool, and the radar reference all cost
+    less CPU and battery; map zoom buttons glide and repeat while held.
+
 ## What's new in Tailwind v1.1.0-tailwind.17
 
 A maintenance batch ported from upstream Kite GC's 1.0.3 backports — fixes only, no new

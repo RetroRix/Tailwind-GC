@@ -201,6 +201,15 @@ gives PX4 its own **manual-control editor** rather than the channel grid.
     The PX4 manual-control path is more recent and less field-tested than the INAV and ArduPilot paths.
     Verify behaviour carefully (bench first) before relying on it.
 
+## FrSky radio over Bluetooth
+
+A FrSky radio in Bluetooth trainer mode (X20-class internal module, or the older external
+module) can serve as the RC input device on the desktop: pair it like any Bluetooth
+device — the older module asks for its PIN — and pick it in the RC input list. The Debug
+panel's **BT Trainer** tab shows the link's frame rate and age while it runs. A radio
+remembered as a trainer is never used as a telemetry link, and the RC session ends when
+the radio's connection drops.
+
 ## Where to go next
 
 - Command modes, arm/disarm and guided flight: **[Vehicle control](vehicle-control.md)** (ArduPilot / PX4).
