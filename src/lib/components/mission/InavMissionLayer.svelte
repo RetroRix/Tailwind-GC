@@ -242,6 +242,15 @@
     return m === 2 ? 'AGL' : m === 1 ? $t('missionLayer.amsl') : $t('missionLayer.rel');
   }
 
+  /** Segmented altitude-reference switch (Home / Sea / Terrain) for the editor popup — one click sets
+   *  the reference directly (rival-inspired, clean-room; replaces the click-to-cycle toggle). */
+  function altRefSwitchHtml(wp: Waypoint, attr: string): string {
+    const cur = wp.alt_mode ?? ((wp.p3 & 1) ? 1 : 0);
+    const seg = (mode: number, key: string) =>
+      `<button ${attr}="${mode}" class="wpe-altref-btn${cur === mode ? ' wpe-altref-on' : ''}">${$t(key)}</button>`;
+    return `<span class="wpe-altref">${seg(0, 'missionLayer.altRefHome')}${seg(1, 'missionLayer.altRefSea')}${seg(2, 'missionLayer.altRefTerrain')}</span>`;
+  }
+
   function paramLabelHtml(wp: Waypoint, modifiers: { wp: Waypoint; idx: number }[]): string {
     const a = altDisp(wp.altitude / 100);
     const altType = altLabel(wp);
@@ -317,14 +326,13 @@
     modifiers: { wp: Waypoint; idx: number }[], fbhChild: { wp: Waypoint; idx: number; num: number } | null = null): string {
     const altC = altDisp(wp.altitude / 100);
     const altVal = Math.round(altC.value);
-    const altType = altLabel(wp);
     const geoTypes: WpAction[] = [WpAction.Waypoint, WpAction.PosholdUnlim, WpAction.PosholdTime, WpAction.SetPoi, WpAction.Land];
     const typeOptions = geoTypes.map(v => `<option value="${v}" ${v === wp.action ? 'selected' : ''}>${$t(WP_ACTION_KEYS[v])}</option>`).join('');
 
     let html = `<div class="wp-editor-popup">`;
     html += `<div class="wpe-header">${$t('missionLayer.wpHeader', { values: { number: displayNum } })} <span class="wpe-type-name">${$t(WP_ACTION_KEYS[wp.action])}</span></div>`;
     html += `<div class="wpe-row"><label>${$t('missionLayer.type')}</label><select data-field="action">${typeOptions}</select></div>`;
-    html += `<div class="wpe-row"><label>${$t('missionLayer.alt')}</label>${numInputHtml('altitude', altVal, 1)}<span class="wpe-unit">${altC.unit}</span><button data-field="altToggle" class="wpe-toggle">${altType}</button></div>`;
+    html += `<div class="wpe-row"><label>${$t('missionLayer.alt')}</label>${numInputHtml('altitude', altVal, 1)}<span class="wpe-unit">${altC.unit}</span>${altRefSwitchHtml(wp, 'data-altref')}</div>`;
 
     const latDeg = toDeg(wp.lat).toFixed(7);
     const lonDeg = toDeg(wp.lon).toFixed(7);
@@ -374,13 +382,12 @@
       const f = fbhChild.wp;
       const fAltC = altDisp(f.altitude / 100);
       const fAltVal = Math.round(fAltC.value);
-      const fAltType = altLabel(f);
       const fbhTypes: WpAction[] = [WpAction.Waypoint, WpAction.PosholdTime, WpAction.Land];
       const fbhTypeOptions = fbhTypes.map(v => `<option value="${v}" ${v === f.action ? 'selected' : ''}>${$t(WP_ACTION_KEYS[v])}</option>`).join('');
       html += `<div class="wpe-mod-section wpe-fbh-section">`;
       html += `<div class="wpe-mod-header">${$t('mission.flagFbh')} (${$t('missionLayer.wpHeader', { values: { number: fbhChild.num } })})<button data-action="removeFbh" class="wpe-mod-remove" title="${$t('missionLayer.removeWp')}">✕</button></div>`;
       html += `<div class="wpe-row"><label>${$t('missionLayer.type')}</label><select data-field="fbh-action">${fbhTypeOptions}</select></div>`;
-      html += `<div class="wpe-row"><label>${$t('missionLayer.alt')}</label>${numInputHtml('fbh-altitude', fAltVal, 1)}<span class="wpe-unit">${fAltC.unit}</span><button data-field="fbh-altToggle" class="wpe-toggle">${fAltType}</button></div>`;
+      html += `<div class="wpe-row"><label>${$t('missionLayer.alt')}</label>${numInputHtml('fbh-altitude', fAltVal, 1)}<span class="wpe-unit">${fAltC.unit}</span>${altRefSwitchHtml(f, 'data-faltref')}</div>`;
       if (f.action === WpAction.Waypoint || f.action === WpAction.Land) {
         const fSpd = spdDisp(f.p1);
         html += `<div class="wpe-row"><label>${$t('missionLayer.speed')}</label>${numInputHtml('fbh-p1', Math.round(fSpd.value * 10) / 10, 1, 0)}<span class="wpe-unit">${fSpd.unit}</span></div>`;
@@ -441,15 +448,17 @@
       missionUpdateWp(idx, { ...wp, altitude: altFromM(m) });
     });
 
-    const altToggle = el.querySelector('button[data-field="altToggle"]') as HTMLButtonElement | null;
-    altToggle?.addEventListener('click', async () => {
-      // Cycle REL → AMSL → AGL → REL, converting the altitude so the waypoint
-      // stays at the same physical height (terrain + launch point as references).
-      const cur = wp.alt_mode ?? ((wp.p3 & 1) ? 1 : 0);
-      const next = (cur + 1) % 3;
-      // Without a ground reference the number is kept: the conversion is a convenience, the operator sets the value.
-      const newAlt = (await convertAltCm(wp, cur, next)) ?? wp.altitude;
-      missionUpdateWp(idx, { ...wp, alt_mode: next, altitude: newAlt });
+    // Altitude reference switch: set REL / AMSL / AGL directly, converting the altitude so the
+    // waypoint stays at the same physical height (terrain + launch point as references). Without a
+    // ground reference the number is kept: the conversion is a convenience, the operator sets the value.
+    el.querySelectorAll<HTMLButtonElement>('button[data-altref]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const cur = wp.alt_mode ?? ((wp.p3 & 1) ? 1 : 0);
+        const next = Number(btn.dataset.altref);
+        if (next === cur) return;
+        const newAlt = (await convertAltCm(wp, cur, next)) ?? wp.altitude;
+        missionUpdateWp(idx, { ...wp, alt_mode: next, altitude: newAlt });
+      });
     });
 
     const p1Input = el.querySelector('input[data-field="p1"]') as HTMLInputElement | null;
@@ -512,12 +521,14 @@
         const m = toAltitudeM(Number(fAltInput.value), iface().altitudeUnit);
         missionUpdateWp(fi, { ...fwp, altitude: altFromM(m) });
       });
-      const fAltToggle = el.querySelector('button[data-field="fbh-altToggle"]') as HTMLButtonElement | null;
-      fAltToggle?.addEventListener('click', async () => {
-        const cur = fwp.alt_mode ?? ((fwp.p3 & 1) ? 1 : 0);
-        const next = (cur + 1) % 3;
-        const newAlt = (await convertAltCm(fwp, cur, next)) ?? fwp.altitude;
-        missionUpdateWp(fi, { ...fwp, alt_mode: next, altitude: newAlt });
+      el.querySelectorAll<HTMLButtonElement>('button[data-faltref]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const cur = fwp.alt_mode ?? ((fwp.p3 & 1) ? 1 : 0);
+          const next = Number(btn.dataset.faltref);
+          if (next === cur) return;
+          const newAlt = (await convertAltCm(fwp, cur, next)) ?? fwp.altitude;
+          missionUpdateWp(fi, { ...fwp, alt_mode: next, altitude: newAlt });
+        });
       });
       const fP1Input = el.querySelector('input[data-field="fbh-p1"]') as HTMLInputElement | null;
       fP1Input?.addEventListener('change', () => {
@@ -1017,6 +1028,11 @@
   :global(.wpe-num-btn:active) { background: #2980b9; }
   :global(.wpe-row select) { background: #2a2a2a; color: #ccc; border: 1px solid #555; border-radius: 3px; padding: 3px 4px; font-size: 13px; flex: 1; }
   :global(.wpe-toggle) { background: #2a2a2a; color: #ccc; border: 1px solid #555; border-radius: 3px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+  :global(.wpe-altref) { display: inline-flex; border: 1px solid #555; border-radius: 3px; overflow: hidden; }
+  :global(.wpe-altref-btn) { background: #2a2a2a; color: #ccc; border: none; border-right: 1px solid #555; padding: 3px 6px; font-size: 11px; cursor: pointer; }
+  :global(.wpe-altref-btn:last-child) { border-right: none; }
+  :global(.wpe-altref-btn:hover) { background: #3a3a3a; }
+  :global(.wpe-altref-on) { background: #2563eb; color: #fff; }
   :global(.wpe-toggle:hover) { background: #3a3a3a; }
   :global(.wpe-unit) { color: #888; font-size: 12px; white-space: nowrap; }
   :global(.wpe-ua-row) { gap: 4px; }
