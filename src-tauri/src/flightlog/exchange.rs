@@ -223,7 +223,7 @@ fn create_export_db(path: &Path) -> Result<Connection, String> {
             battery_serial  TEXT,
             utc_offset_min  INTEGER,
             fc_uid          TEXT,
-            mission_id      INTEGER REFERENCES missions(id),
+            mission_id      INTEGER,
             logged_wp_count INTEGER,
             alt_relative    INTEGER
         );
