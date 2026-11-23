@@ -1346,6 +1346,7 @@
     "flightMode": "Flight Mode",
     "liveAgl": "Live AGL",
     "terrainRadar": "Terrain Radar",
+    "weather": "Weather",
     "video": "Video",
     "bottom": "Bottom",
     "right": "Right",
@@ -1373,6 +1374,9 @@
     "thr": "THR",
     "acc": "ACC",
     "auto": "AUTO",
+    "gust": "G {value}",
+    "inMin": "+{n} min",
+    "offline": "OFFLINE",
     "na": "N/A"
   },
   "compass": {

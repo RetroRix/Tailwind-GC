@@ -266,6 +266,7 @@
       y: e.clientY - grabDy,
       w,
       h,
+      small: (pl?.w ?? 1) === 1,
     };
     console.log('[phoneGrid] drag start', id, Math.round(e.clientX), Math.round(e.clientY));
     updateDrag(e.clientX, e.clientY);
@@ -444,6 +445,7 @@
               sizePx={pl.h * slot}
               wPx={pl.w * slot}
               hPx={pl.h * slot}
+              small={pl.w === 1}
               {editing}
             />
             {#if editing}

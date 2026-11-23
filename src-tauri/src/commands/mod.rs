@@ -30,3 +30,4 @@ pub mod tiles;
 pub mod update_check;
 pub mod updater;
 pub mod video;
+pub mod weather;
