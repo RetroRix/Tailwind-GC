@@ -11,7 +11,8 @@
   import { connection, availablePorts, bleDevices, defaultNetPort, netHostOrLocal, lastHotpluggedPort } from "$lib/stores/connection";
   import type { FcInfo, PortInfo, BleDeviceInfo, TransportType, ProtocolType } from "$lib/stores/connection";
   import { settings } from "$lib/stores/settings";
-  import { isAndroid, isMobile, isTablet, isPhone as isPhoneDevice, hasSerialPorts, hasRcControl, logPlayerWidth } from "$lib/platform";
+  import { tickSnapshot } from "$lib/helpers/telemetryTick.svelte";
+  import { isAndroid, isMobile, isTablet, isPhone as isPhoneDevice, hasSerialPorts, hasVideo, hasRcControl, logPlayerWidth } from "$lib/platform";
   import { isDebugMode } from "$lib/stores/debug";
   import { telemetry } from "$lib/stores/telemetry";
   import { startRadarListeners, configureRadar, setRadarCenter, setRadarNode } from "$lib/stores/radarTracking";
@@ -20,6 +21,7 @@
   import { startBreachMonitor } from "$lib/controllers/breachMonitor";
   import { startAlertAudio } from "$lib/controllers/alertAudio";
   import { get } from "svelte/store";
+  import { phoneEdit } from "$lib/stores/phoneEdit.svelte";
   import { t, locale } from 'svelte-i18n';
   import Map from "$lib/components/Map.svelte";
   import Map3D from "$lib/components/Map3D.svelte";
@@ -110,7 +112,7 @@
   import StaleDataHud from "$lib/components/StaleDataHud.svelte";
   import PhoneBottomBar from "$lib/components/phone/PhoneBottomBar.svelte";
   import PhoneDragGhost from "$lib/components/phone/PhoneDragGhost.svelte";
-  import { setNativeRightBound } from "$lib/controllers/nativeVideo";
+  import { setNativeRightBound, MAX_SURFACES as NATIVE_SURFACE_CAP } from "$lib/controllers/nativeVideo";
   import { doubleTap, mouseDoubleClick } from "$lib/helpers/doubleTap";
   import { startFloatMove, startFloatResize } from "$lib/helpers/floatWindowGestures";
   import { initVideo, videoState, videoStream, bindVideoEl, setMapLocation, reportMjpegError, setVideoWidgetActive, floatFrameRect, togglePhoneDockCompact, PHONE_DOCK_COMPACT, FLOAT_BEZEL_PX, FLOAT_MARGIN_PX, FLOAT_BTN_PX, FLOAT_BTN_GAP_PX } from "$lib/stores/video";
@@ -2922,14 +2924,29 @@
     8 + PHONE_CTL_STEP_PX * ($videoState.status === 'live' && !phoneCtrl.isPhoneWidgetActive(phoneWidgets, 'videoFeed') ? 3 : 2),
   );
 
-  // The video store learns whether a Video widget is on screen (dock or phone grid): Start then
-  // leaves the floating window parked — the widget is the picture.
+  // The video store needs it: Start then leaves the floating window parked — the tile is the picture.
+  const videoTileOnScreen = $derived(
+    phoneUi
+      ? phoneCtrl.isPhoneWidgetActive(phoneWidgets, 'videoFeed')
+      : (panels.bottom.includes('videoFeed') && $layout.bottomDock.visible) ||
+          (panels.right.includes('videoFeed') && $layout.sideDock.visible),
+  );
   $effect(() => {
-    setVideoWidgetActive(
-      phoneUi
-        ? phoneCtrl.isPhoneWidgetActive(phoneWidgets, 'videoFeed')
-        : panels.bottom.includes('videoFeed') || panels.right.includes('videoFeed'),
-    );
+    setVideoWidgetActive(videoTileOnScreen);
+  });
+  // A map in the floating window moves into the video tile once that window is gone: put away, or — phone —
+  // replaced by the tile (the grid's video widget takes the dock's place). Not while the phone's edit mode
+  // parks the window for the moment; checked a task later, when the dock has reacted to the same change.
+  $effect(() => {
+    const windowGone = phoneUi || !$videoState.floating;
+    if ($videoState.mapLocation !== 'floating' || !videoTileOnScreen || !windowGone || phoneEdit.editing) return;
+    const id = setTimeout(() => {
+      const v = get(videoState);
+      if (v.mapLocation === 'floating' && v.status === 'live' && (phoneUi || !v.floating) && !phoneEdit.editing) {
+        setMapLocation('widget');
+      }
+    }, 0);
+    return () => clearTimeout(id);
   });
 
   function toggleWidget(widgetId: string) {
@@ -3053,6 +3070,20 @@
       ? toTelemetryData(hiresActive && hiresSamplePoint ? hiresSamplePoint : playbackPoint, replayFcVariant)
       : liveTelem,
   );
+
+  // Widgets on phones and tablets: one telemetry snapshot per tick (the rate rows are stored at). The
+  // desktop keeps every sample — high-resolution replay exceeds it.
+  const WIDGET_TICK_MS = 100;
+  const tickedTelem = isMobile ? tickSnapshot(() => telem, WIDGET_TICK_MS) : null;
+  const widgetTelem = $derived(tickedTelem ? tickedTelem() : telem);
+  // The video tile takes no dock space while it has nothing to show — no stream, or (a native sink with
+  // one output) the floating window holds the picture; edit mode shows it for placing.
+  const videoTileBehindWindow = $derived(NATIVE_SURFACE_CAP === 1 && $videoState.nativeSink && $videoState.floating);
+  const idleWidgetIds = $derived($videoState.status === 'off' || videoTileBehindWindow ? ['videoFeed'] : []);
+  // Docks only (the phone grid keeps its tile): a map inside the tile moves on before the tile hides.
+  $effect(() => {
+    if (!phoneUi && videoTileBehindWindow && $videoState.mapLocation === 'widget') setMapLocation('floating');
+  });
 
   // ── Active-WP highlight trust gating (see MISSION_TRACKING_AND_PROVENANCE.md) ──
   // The highlight only shows when the loaded mission is trusted for the active context:
@@ -3820,7 +3851,7 @@
   <div class="zone-phone-widgets">
     <PhoneWidgetPanel
       config={phoneWidgets}
-      {telem}
+      telem={widgetTelem}
       {interfaceSettings}
       onresize={(id) => patchPhoneWidgets(phoneCtrl.cyclePhoneWidgetSize(phoneWidgets, id))}
       onmove={phoneMoveToColumn}
@@ -3832,7 +3863,7 @@
        in the stacking order; the drag ghost shared with the column sits over everything. -->
   <PhoneBottomBar
     config={phoneWidgets}
-    {telem}
+    telem={widgetTelem}
     {interfaceSettings}
     frameShift={phoneShift}
     leftReserve={navPanelOpen ? NAV_RAIL_RIGHT_PX : 0}
@@ -3841,7 +3872,7 @@
     ontogglewide={() => patchPhoneWidgets(phoneCtrl.togglePhoneBottomWide(phoneWidgets))}
     bind:barH={phoneBarH}
   />
-  <PhoneDragGhost {telem} {interfaceSettings} />
+  <PhoneDragGhost telem={widgetTelem} {interfaceSettings} />
   <div class="phone-bottom-chips">
     <PhoneBottomChips {telem} />
   </div>
@@ -4041,8 +4072,9 @@
         pxPerVmin={bottomPxPerUnit}
         smallBoost={isPhonePortrait ? 1.5 : isTablet ? 1.4 : 1}
         sizes={panels.sizes ?? {}}
+        idleIds={idleWidgetIds}
         bind:crossPx={bottomPanelCrossPx}
-        {telem}
+        telem={widgetTelem}
         bind:editing={widgetEditMode}
         {interfaceSettings}
         onreorder={handleReorder}
@@ -4065,8 +4097,9 @@
       pxPerVmin={sidePxPerUnit}
       smallBoost={isTablet ? 1.4 : 1}
       sizes={panels.sizes ?? {}}
+      idleIds={idleWidgetIds}
       bind:crossPx={sidePanelCrossPx}
-      {telem}
+      telem={widgetTelem}
       bind:editing={widgetEditMode}
       {interfaceSettings}
       onreorder={handleReorder}

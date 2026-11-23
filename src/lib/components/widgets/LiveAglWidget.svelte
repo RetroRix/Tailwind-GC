@@ -42,6 +42,7 @@
   interface HistPoint { lat: number; lon: number; alt_m: number; timestamp_ms: number }
 
   const SCALE_STEPS = [300, 900, 1800, 3600]; // total render distance (m)
+  const HIST_SHARE = 0.15; // of the render distance, behind the UAV
   const SPACING = 30; // forward terrain sampling resolution (m)
   const SPEED_FILTER = 2; // m/s — below this use compass yaw, above use GPS heading
   const HIST_MIN_DIST = 5; // m between accumulated history points (matches map trail)
@@ -135,7 +136,7 @@
 
   // ── State ──────────────────────────────────────────────────────────
   const profiler = new LiveTrackProfiler();
-  // Safety bound (the HUD shows ≤1200 m of history): let it accumulate to 5 km, then trim back
+  // Safety bound (the HUD shows far less history): let it accumulate to 5 km, then trim back
   // to the most recent 1500 m. The wide gap means the trim runs only once every few minutes, so
   // the per-tick fold cost stays flat and the widget never holds unbounded data on long replays.
   profiler.setWindow(1500, 5000);
@@ -155,6 +156,8 @@
   let sYMax = $state<number | null>(null);
 
   let sampling = false;
+  const FIT_SHRINK_TAU_S = 2;
+  let fitTs = 0;
   let lastFwd: { lat: number; lon: number; heading: number; step: number; time: number } | null = null;
 
   /** Append the current fix to the internal history, resetting on scrub-back/new flight. */
@@ -194,8 +197,8 @@
       const vario = t.vario || 0;
 
       step = nextStep(speed, step);
-      const fwdDistM = (step * 2) / 3;
-      const histDistM = step / 3;
+      const fwdDistM = step * (1 - HIST_SHARE);
+      const histDistM = step * HIST_SHARE;
 
       // Forward terrain along the heading (one sampled segment UAV → ahead).
       // Re-sample only on meaningful change to avoid hammering the backend on
@@ -253,32 +256,47 @@
           sYMin = tMin;
           sYMax = tMax;
         } else {
-          sYMin = tMin < sYMin ? tMin : sYMin + (tMin - sYMin) * 0.06;
-          sYMax = tMax > sYMax ? tMax : sYMax + (tMax - sYMax) * 0.06;
+          // Shrinks over time, not per update, so the pace does not depend on the redraw rate.
+          const k = 1 - Math.exp(-Math.min(5, Math.max(0, (t.lastUpdate - fitTs) / 1000)) / FIT_SHRINK_TAU_S);
+          sYMin = tMin < sYMin ? tMin : sYMin + (tMin - sYMin) * k;
+          sYMax = tMax > sYMax ? tMax : sYMax + (tMax - sYMax) * k;
         }
+        fitTs = t.lastUpdate;
         hasData = true;
       }
     } catch (e) {
       console.error('[liveAgl] update failed', e);
     } finally {
       sampling = false;
+      // A change that arrived while the backend was busy was dropped by the effect: catch up.
+      const n = telem;
+      // Object.is: a NaN field would differ from itself forever and spin this.
+      if (drawn && !(Object.is(n.lat, drawn.lat) && Object.is(n.lon, drawn.lon) && Object.is(n.altMsl, drawn.alt))) redraw();
     }
   }
 
-  // Re-run on every telemetry frame (self-throttled by `sampling`)
+  // A redraw repaints the whole widget dock, so only a new 3D position or a turn asks for one, not every
+  // telemetry message; once a second anyway, for what changes without them (terrain still loading, the MSL anchor).
+  const YAW_REDRAW_DEG = 5;
+  const IDLE_REDRAW_MS = 1000;
+  let drawn: { lat: number; lon: number; alt: number; yaw: number } | null = null;
+  let drawnAt = 0;
+  function redraw(): void {
+    drawn = { lat: telem.lat, lon: telem.lon, alt: telem.altMsl, yaw: telem.yaw };
+    drawnAt = performance.now();
+    void runUpdate();
+  }
   $effect(() => {
-    // Track only telemetry changes — these reads register the dependencies.
-    void telem.lat;
-    void telem.lon;
-    void telem.yaw;
-    void telem.groundSpeed;
-    void telem.altMsl;
+    const { lat, lon, altMsl, yaw } = telem;
     void telem.lastUpdate;
-    // runUpdate writes state it also reads (e.g. `step = nextStep(speed, step)`).
-    // Run it untracked so those self-reads don't become effect dependencies —
-    // otherwise the read+write loop trips Svelte's effect_update_depth_exceeded
-    // guard and hard-freezes the main thread.
-    untrack(() => void runUpdate());
+    // runUpdate writes state it also reads (e.g. `step = nextStep(speed, step)`): untracked, or the read+write loop
+    // trips effect_update_depth_exceeded and hard-freezes the main thread.
+    untrack(() => {
+      if (sampling) return;
+      const moved = !drawn || lat !== drawn.lat || lon !== drawn.lon || altMsl !== drawn.alt;
+      const turned = !!drawn && angleDiff(yaw, drawn.yaw) > YAW_REDRAW_DEG;
+      if (moved || turned || performance.now() - drawnAt > IDLE_REDRAW_MS) redraw();
+    });
   });
 
   // ── Render geometry ────────────────────────────────────────────────
@@ -301,11 +319,10 @@
   });
   const plotW = $derived(Math.max(10, width - PAD.l - PAD.r));
   const plotH = $derived(Math.max(10, height - PAD.t - PAD.b));
-  const histDist = $derived(step / 3);
-  const fwdDist = $derived((step * 2) / 3);
+  const histDist = $derived(step * HIST_SHARE);
+  const fwdDist = $derived(step * (1 - HIST_SHARE));
   const baselineY = $derived(PAD.t + plotH);
 
-  // x: relative distance from UAV (−histDist … +fwdDist); UAV (rel 0) sits at 1/3
   function xS(rel: number): number {
     return PAD.l + ((rel + histDist) / (histDist + fwdDist)) * plotW;
   }
