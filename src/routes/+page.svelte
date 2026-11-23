@@ -19,6 +19,8 @@
   import { effectiveLink } from "$lib/helpers/radarPorts";
   import { startRadarAlerts } from "$lib/controllers/radarAlerts";
   import { startBreachMonitor } from "$lib/controllers/breachMonitor";
+  import { startVideoRecording } from "$lib/controllers/videoRecording";
+  import { syncVideoReplay } from "$lib/controllers/videoReplay";
   import { startAlertAudio } from "$lib/controllers/alertAudio";
   import { get } from "svelte/store";
   import { phoneEdit } from "$lib/stores/phoneEdit.svelte";
@@ -1237,6 +1239,7 @@
     startAlertAudio();
     void startStatusText();
     startBreachMonitor();
+      startVideoRecording();
     pushRadarConfig();
     // Query centre follows the map view: 2D pans update settings.map.center (broad subscribe, gated by
     // the ~100 m key); 3D camera moves come via Map3D's onCamFocus; the mode flip via the effect below.
@@ -3219,6 +3222,22 @@
       : 0,
   );
   const logbookHasFlightOnMap = $derived(activeTab === 'logbook' && selectedFlight != null && !isPrimaryConnected);
+  // The replayed flight's recording follows the replay (controllers/videoReplay.ts). Only for the flight's
+  // own track: a linked partner's track runs on another clock.
+  $effect(() => {
+    const onMap = selectedFlight != null && !isPrimaryConnected && activeReplayTrack === selectedFlightTrack && selectedFlightTrack.length > 1;
+    // The continuous clock still holds the old time for a frame after a jump or a scrub: only trust it
+    // near the 10 Hz step, or the video would go back there once.
+    const stepMs = playbackPoint?.timestamp_ms ?? 0;
+    const ms = playbackPlaying && hiresVirtualMs != null && Math.abs(hiresVirtualMs - stepMs) < 500 ? hiresVirtualMs : stepMs;
+    syncVideoReplay({
+      flightId: onMap ? selectedFlightId : null,
+      dbPath: activeDbPath,
+      flightMs: ms,
+      playing: playbackPlaying,
+      rate: playbackSpeed,
+    });
+  });
 
   // Platform type for the UAV map symbol. Live and replay are mutually exclusive on the map
   // (mapTrack/playbackPoint gate on !isPrimaryConnected), so: connected → live FC type;

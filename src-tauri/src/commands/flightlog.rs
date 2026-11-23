@@ -14,7 +14,7 @@ use crate::flightlog::types::{
 };
 
 /// Whether the app runs in portable mode (`.portable` marker next to the executable).
-fn portable_mode() -> bool {
+pub(crate) fn portable_mode() -> bool {
     std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.join(".portable").exists()))
@@ -1992,6 +1992,20 @@ pub async fn flightlog_open(
     .map_err(|e| format!("Log viewer task failed: {}", e))?
 }
 
+/// The videos attached to a flight, for the flight details. A file that was renamed or moved below the
+/// video folder is found by its id and linked again.
+#[tauri::command(async)]
+pub fn flightlog_flight_videos(
+    flight_id: i64,
+    db_path: Option<String>,
+    video_dir: Option<String>,
+) -> Result<Vec<crate::flightlog::video_link::FlightVideo>, String> {
+    let conn = open_db(&db_path.unwrap_or_default())?;
+    let root = crate::commands::video::record_dir(video_dir.as_deref());
+    crate::flightlog::video_link::list_for_flight(&conn, flight_id, &root).map_err(|e| format!("Database error: {e}"))
+}
+
+#[cfg(test)]
 // Windows exclusion: these are the first tests that link the whole AppState graph into the
 // lib test binary, and on the windows-latest CI image (Server 2022) that binary then fails
 // to load at all (0xc0000139, STATUS_ENTRYPOINT_NOT_FOUND — a DLL entry-point gap in the
