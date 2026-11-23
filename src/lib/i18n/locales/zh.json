@@ -1983,6 +1983,9 @@
   "missionLayer": {
     "amsl": "AMSL",
     "rel": "REL",
+    "altRefHome": "家",
+    "altRefSea": "海面",
+    "altRefTerrain": "地形",
     "holdTime": "悬停 {seconds}秒",
     "holdUnlimited": "悬停 ∞",
     "rthLand": "⮐ RTH 降落",

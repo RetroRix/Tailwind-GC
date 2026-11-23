@@ -1992,6 +1992,9 @@
   "missionLayer": {
     "amsl": "AMSL",
     "rel": "REL",
+    "altRefHome": "Base",
+    "altRefSea": "Mer",
+    "altRefTerrain": "Terrain",
     "holdTime": "Attente {seconds}s",
     "holdUnlimited": "Attente ∞",
     "rthLand": "⮐ RTH Atterr.",

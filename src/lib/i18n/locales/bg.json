@@ -1983,6 +1983,9 @@
   "missionLayer": {
     "amsl": "AMSL",
     "rel": "REL",
+    "altRefHome": "Дом",
+    "altRefSea": "Море",
+    "altRefTerrain": "Терен",
     "holdTime": "Задържане {seconds}s",
     "holdUnlimited": "Задържане ∞",
     "rthLand": "⮐ RTH Land",
