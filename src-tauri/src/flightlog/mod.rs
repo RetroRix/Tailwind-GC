@@ -11,6 +11,7 @@ pub mod blackbox;
 pub mod decoder;
 pub mod exchange;
 pub mod geocode;
+mod gps_rows;
 pub mod hires;
 mod inav;
 pub mod msp_raw_logger;
