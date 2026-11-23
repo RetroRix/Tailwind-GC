@@ -118,3 +118,6 @@ export async function askAboutPreviousDb(
     await show({ title: tr('settings.dbMove.oldTitle'), message: tr('settings.dbMove.oldFailed', { error: String(e) }) });
   }
 }
+
+/** The folder state's flight count as dialog text ('?' while unreadable). */
+export const flightCount = (s: DbFolderState) => (s.flights == null ? '?' : String(s.flights));

@@ -488,6 +488,8 @@ pub struct ImportResult {
     pub errors: Vec<String>,
     /// The file was written by a newer Kite: what this version knows was imported, the rest was left out.
     pub newer_format: bool,
+    /// The new flights' ids in this database.
+    pub imported_ids: Vec<i64>,
 }
 
 /// Import flights from a .kflight file into the main database.
@@ -550,6 +552,7 @@ fn import_from(
         skipped: 0,
         errors: Vec::new(),
         newer_format,
+        imported_ids: Vec::new(),
     };
 
     for summary in &src_flights {

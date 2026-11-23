@@ -47,6 +47,8 @@ mod weather;
 use commands::connection::{connect, disconnect, set_platform_type, inav_set_craft_name, inav_read_stats, scan_ble_devices, ble_scan_start, ble_scan_stop};
 use commands::connection::list_serial_ports;
 use commands::flightlog::{flightlog_flight_videos,
+    flightlog_export_videos_info, flightlog_export_videos, flightlog_import_videos_info, flightlog_import_videos,
+    flightlog_delete_videos_info, flightlog_orphan_videos_info, flightlog_orphan_videos_delete,
     flightlog_list, flightlog_get, flightlog_get_track, flightlog_get_battery_records, flightlog_delete,
     flightlog_update_notes, flightlog_update_craft_name, flightlog_update_platform_type, flightlog_update_pilot, flightlog_update_weather, flightlog_geocode, flightlog_fetch_weather,
     flightlog_default_db_path, flightlog_default_raw_log_path, flightlog_import_blackbox,
@@ -481,6 +483,7 @@ pub fn run() {
 
     builder
         .setup(|_app| {
+            flightlog::video_link::note_startup();
             // Android: record where app data actually landed, and flag any disagreement with Tauri's
             // own idea of it (see `android::log_resolved_dirs`).
             #[cfg(target_os = "android")]
@@ -870,6 +873,13 @@ pub fn run() {
             video_replay_open,
             video_replay_sync,
             flightlog_flight_videos,
+            flightlog_export_videos_info,
+            flightlog_export_videos,
+            flightlog_import_videos_info,
+            flightlog_import_videos,
+            flightlog_delete_videos_info,
+            flightlog_orphan_videos_info,
+            flightlog_orphan_videos_delete,
             video_native_mjpeg_stop,
             video_detached_open,
             video_detached_close,

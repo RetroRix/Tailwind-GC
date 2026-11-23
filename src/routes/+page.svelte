@@ -42,9 +42,12 @@
   import { runUpdateCheck, resolveUpdateKind } from "$lib/controllers/updateCheck";
   import { checkDbBackupPrompt, runPendingDbUpgrade, probeDbSchema, formatBackupSize, type DbSchemaState, type DbUpgradeOutcome } from "$lib/controllers/dbBackupPrompt";
   import { planDbFolderSwitch, askAboutPreviousDb, type DbFolderPlan } from "$lib/controllers/dbFolderSwitch";
+  import { exportDatabase, importDatabase, exportAllFlights, removeOriginalLogs, withExportProgress, type DbTransferUi } from "$lib/controllers/dbTransfer";
+  import { offerVideoExport, offerVideoImport, offerVideoDelete } from "$lib/controllers/flightVideoTransfer";
+  import { exportFile, sharesExports, flightFileStem, clearExportCache, setExportErrorReporter } from "$lib/helpers/exportFile";
+  import type { LibraryMission } from "$lib/stores/flightlogTypes";
   import DbUpgradeNotice from "$lib/components/DbUpgradeNotice.svelte";
   import { importMissionFile } from "$lib/helpers/missionFile";
-  import type { LibraryMission } from "$lib/stores/flightlogTypes";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import BatchEditPopup from "$lib/components/mission/BatchEditPopup.svelte";
   import ArduBatchEditPopup from "$lib/components/mission/ArduBatchEditPopup.svelte";
@@ -1474,6 +1477,12 @@
   }
 
   let dbMoveBusy = $state<'move' | 'backup' | null>(null);
+  let dbTransferNotice = $state<{ title: string; message: string } | null>(null);
+  const dbTransferUi: DbTransferUi = {
+    show: (opts) => showDialog(opts),
+    tr: (key, values) => $t(key, { values }),
+    notice: (n) => { dbTransferNotice = n; },
+  };
 
   async function switchFlightLogPath(next: string) {
     if (get(connection).status !== 'disconnected') return; // the buttons are disabled then
@@ -1996,6 +2005,8 @@
     });
     if (result.newer_format) msg += '\n\n' + $t('logbook.importKflightNewer');
     if (result.errors.length > 0) msg += '\n' + result.errors.join('\n');
+    const videos = await offerVideoImport(dbTransferUi, filePath, result.imported_ids, flightLogDbPath);
+    if (videos) msg += '\n' + videos;
     await showInfo($t('logbook.importKflightTitle'), msg);
   }
 
@@ -2241,13 +2252,24 @@
       }
       const exportIds = [...allIds];
 
-      const outputPath = await save({
+      // One flight (with its linked partner): named after it; several: after their number.
+      const named = flightSummaries.find((f) => f.id === flightIds[0]);
+      const stem = flightIds.length === 1 && named ? flightFileStem(named) : `Flights_${exportIds.length}`;
+      let count = 0;
+      const outputPath = await exportFile({
+        name: `${stem}.kflight`,
         filters: [{ name: $t('logbook.kflightFileFilter'), extensions: ['kflight'] }],
-        defaultPath: exportIds.length === 1 ? `flight_${exportIds[0]}.kflight` : `flights_export.kflight`,
+        write: async (path) => {
+          count = await withExportProgress(dbTransferUi, $t('logbook.exportBusyTitle'), exportIds.length, () =>
+            logbookCtrl.exportSelectedFlights(exportIds, path, flightLogDbPath));
+        },
       });
       if (!outputPath) return;
-      const count = await logbookCtrl.exportSelectedFlights(exportIds, outputPath, flightLogDbPath);
-      await showInfo($t('logbook.exportTitle'), $t('logbook.exportSuccess', { values: { count } }));
+      // The share sheet is the confirmation on mobile; a dialog under it would only be in the way.
+      if (sharesExports) return;
+      const videos = await offerVideoExport(dbTransferUi, exportIds, outputPath, flightLogDbPath);
+      const done = $t('logbook.exportSuccess', { values: { count } });
+      await showInfo($t('logbook.exportTitle'), videos ? `${done}\n${videos}` : done);
     } catch (e) {
       errorMsg = String(e);
     }
@@ -2779,10 +2801,70 @@
       }
     }
 
+    // Not when only the live half of a pair goes: the flight stays, as its blackbox half.
+    const removeVideos = value === 'live' ? null : await offerVideoDelete(dbTransferUi, idsToDelete, flightLogDbPath);
     for (const id of idsToDelete) {
       await logbookCtrl.removeFlight(id, flightLogDbPath);
     }
+    await removeVideos?.();
 
+    forgetSelectedFlight();
+    await loadLogbook();
+  }
+
+  /** Add a flight's battery usage to its pack's lifetime totals — done before the flight is deleted. */
+  async function consolidateBatteryUsage(flightId: number) {
+    const f = await getFlight(flightId, flightLogDbPath).catch(() => null);
+    if (!f?.battery_serial) return;
+    const mah = f.battery_used_mah ?? 0;
+    // A flight on several packs lists their serials comma-separated; each pack gets the whole flight,
+    // as the packs' own totals count it.
+    for (const serial of f.battery_serial.split(',').map((s) => s.trim()).filter(Boolean)) {
+      const pack = await batteryDbFindBySerial(serial, flightLogDbPath).catch(() => null);
+      if (!pack) continue;
+      const cycles = pack.capacity_mah ? mah / pack.capacity_mah : 0;
+      await batteryDbAddUsage(pack.id, f.duration_sec ?? 0, mah, cycles, 0, flightLogDbPath);
+    }
+  }
+
+  /** Delete exactly the ticked flights; a linked partner that is not ticked stays. */
+  async function removeFlights(ids: number[]) {
+    if (ids.length === 0) return;
+    const count = String(ids.length);
+    const value = await showDialog({
+      title: $t('logbook.deleteManyTitle'),
+      message: $t('logbook.deleteManyWarning', { values: { count } }),
+      buttons: [{ label: $t('logbook.deleteManyConfirm', { values: { count } }), value: 'delete', danger: true }],
+      checkbox: { label: $t('logbook.deleteManyConsolidate') },
+    });
+    if (value !== 'delete') return;
+    const consolidateBattery = confirmDialog.checkboxResult();
+    const removeVideos = await offerVideoDelete(dbTransferUi, ids, flightLogDbPath);
+    const progress = (done: number) => {
+      dbTransferNotice = {
+        title: $t('logbook.deleteManyBusyTitle'),
+        message: $t('settings.dbTransfer.flightsBusyMsg', { values: { done: String(done), total: count } }),
+      };
+    };
+    try {
+      // The open flight goes when it is deleted — or its partner, whose track and link it still shows.
+      const partner = selectedFlight?.linked_flight_id ?? null;
+      if (selectedFlightId != null && (ids.includes(selectedFlightId) || (partner != null && ids.includes(partner)))) forgetSelectedFlight();
+      for (const [i, id] of ids.entries()) {
+        progress(i);
+        if (consolidateBattery) await consolidateBatteryUsage(id);
+        await logbookCtrl.removeFlight(id, flightLogDbPath);
+      }
+    } catch (e) {
+      errorMsg = String(e);
+    } finally {
+      dbTransferNotice = null;
+      await loadLogbook();
+    }
+    await removeVideos();
+  }
+
+  function forgetSelectedFlight() {
     resetPlayback();
     selectedFlight = null;
     selectedFlightTrack = [];
@@ -2795,7 +2877,6 @@
     weatherWindDir = '';
     weatherDesc = '';
     weatherEditing = false;
-    await loadLogbook();
   }
 
   async function loadInfo() {
@@ -4539,7 +4620,7 @@
             <AirspaceManagerPanel reference={radarReference} distanceUnit={interfaceSettings.distanceUnit} />
           {/key}
         {:else if activeTab === 'video'}
-          <VideoPanel />
+          <VideoPanel dbPath={flightLogDbPath} transferUi={dbTransferUi} />
         {:else if DEV_MODE && activeTab === 'dev-playground'}
           <PanelPlayground initial="compact" label="DEV Playground" />
         {/if}
@@ -4563,6 +4644,8 @@
       <DbUpgradeNotice title={$t('settings.dbUpgradeTitle')} message={$t('settings.dbUpgradeMsg', { values: { size: formatBackupSize(dbUpgrade.size_bytes) } })} />
     {:else if dbMoveBusy}
       <DbUpgradeNotice title={$t(`settings.dbMove.${dbMoveBusy}BusyTitle`)} message={$t('settings.dbMove.busyMsg')} />
+    {:else if dbTransferNotice}
+      <DbUpgradeNotice title={dbTransferNotice.title} message={dbTransferNotice.message} />
     {/if}
     <UpdateDialog />
     <CesiumKeyPrompt bind:open={cesiumKeyPromptOpen} onSave={cesiumKeySave} onRemindLater={cesiumKeyRemindLater} onIgnore={cesiumKeyIgnore} />
