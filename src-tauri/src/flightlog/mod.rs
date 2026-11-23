@@ -6,6 +6,7 @@
 // Supports optional raw text logging, reverse geocoding, and weather metadata.
 
 pub mod db;
+pub mod db_move;
 pub mod ardupilot;
 pub mod blackbox;
 pub mod decoder;

@@ -198,6 +198,23 @@ pub(crate) const FLIGHT_VIDEOS_DDL_FULL: &str = "CREATE TABLE IF NOT EXISTS flig
     created_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );";
 
+static UPGRADE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// The schema version of an EXISTING database that has upgrade steps pending.
+fn upgrade_pending_on(conn: &Connection) -> SqlResult<Option<u32>> {
+    let version = get_user_version(conn)?;
+    Ok((version > 0 && version < CURRENT_SCHEMA_VERSION).then_some(version))
+}
+
+/// `(found, current)` schema versions of an existing database that is not at this build's: lower = an
+/// open would upgrade it, higher = written by a newer Kite. Read-only — nothing is created, migrated or
+/// backed up; a missing, fresh or unreadable file is `None`.
+pub fn schema_mismatch(path: &Path) -> Option<(u32, u32)> {
+    let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+    let found = get_user_version(&conn).ok()?;
+    (found > 0 && found != CURRENT_SCHEMA_VERSION).then_some((found, CURRENT_SCHEMA_VERSION))
+}
+
 static NO_RECLAIM_DIRS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
 
 /// Never reclaim a database inside `dir` (see `NO_RECLAIM_DIRS`).
@@ -642,10 +659,15 @@ pub fn resolve_db_path(custom_path: &str, portable: bool) -> PathBuf {
     PathBuf::from("flights.db")
 }
 
-/// Resolve the **raw-log base directory** (where `raw_logs/` with .tlog / raw MSP files live). This is
-/// intentionally **separate from the database folder**: the DB defaults to AppData, but raw logs default
-/// to the user's Documents (`Documents/KiteGC`) where they are easy to find / hand to Mission Planner.
-/// `custom_path` (empty = use default) overrides it; both are configurable independently in Settings.
+/// Where the temp sessions of a recording live: always the app's own data folder, never a database
+/// folder the user chose — they are written all through a flight and must not sit on a removable or
+/// network drive.
+pub fn sessions_dir(portable: bool) -> PathBuf {
+    resolve_db_path("", portable).parent().unwrap_or(Path::new(".")).join("sessions")
+}
+
+/// The raw-log base directory — deliberately NOT the DB folder: raw logs default to `Documents/KiteGC`,
+/// easy to find and hand to Mission Planner. `custom_path` (empty = default) overrides it.
 pub fn resolve_raw_log_dir(custom_path: &str, portable: bool) -> PathBuf {
     // Android: same as resolve_db_path — a SAF tree URI cannot be written through std::fs, so the
     // writers stay in the app-private staging dir below and the mirror copies finished files out.
@@ -3360,6 +3382,30 @@ mod tests {
         let bconn = Connection::open(&backup).unwrap();
         assert_eq!(get_user_version(&bconn).unwrap(), CURRENT_SCHEMA_VERSION - 1);
         drop((conn, bconn));
+        cleanup(&path);
+    }
+
+    /// `schema_mismatch` reports an older and a newer existing database, and neither a missing, a fresh
+    /// nor a current one — without creating or changing the file.
+    #[test]
+    fn schema_mismatch_is_read_only_and_exact() {
+        let path = temp_db_path("schema-mismatch");
+        cleanup(&path);
+        assert_eq!(schema_mismatch(&path), None);
+        assert!(!path.exists(), "the probe must not create the database");
+        drop(open_database(&path).unwrap());
+        assert_eq!(schema_mismatch(&path), None);
+        let stamp = |version: u32| {
+            let conn = Connection::open(&path).unwrap();
+            set_user_version(&conn, version).unwrap();
+        };
+        stamp(CURRENT_SCHEMA_VERSION + 1);
+        assert_eq!(schema_mismatch(&path), Some((CURRENT_SCHEMA_VERSION + 1, CURRENT_SCHEMA_VERSION)));
+        stamp(CURRENT_SCHEMA_VERSION - 1);
+        assert_eq!(schema_mismatch(&path), Some((CURRENT_SCHEMA_VERSION - 1, CURRENT_SCHEMA_VERSION)));
+        assert!(!backup_path_for(&path).exists(), "the probe must not start the upgrade");
+        drop(open_database(&path).unwrap());
+        assert_eq!(schema_mismatch(&path), None);
         cleanup(&path);
     }
 

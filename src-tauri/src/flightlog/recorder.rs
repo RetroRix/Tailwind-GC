@@ -315,8 +315,11 @@ async fn enrich_flight_async(flight_id: i64, lat: f64, lon: f64, db_path: String
     let weather = super::weather::fetch_weather(lat, lon).await;
     let location = super::geocode::flight_location(lat, lon, "en").await;
 
-    // Open a fresh connection for the update (recorder's conn is on another thread)
-    let conn = match db::open_database(std::path::Path::new(&db_path)) {
+    // No CREATE: a database moved away meanwhile must not come back as an empty file.
+    let conn = match rusqlite::Connection::open_with_flags(
+        std::path::Path::new(&db_path),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
+    ) {
         Ok(c) => c,
         Err(e) => {
             log::warn!("Enrichment: failed to open DB: {}", e);
@@ -446,6 +449,7 @@ pub struct FlightRecorder {
     /// MAVLink link, which reports MSL.
     alt_relative: Option<bool>,
     db_file_path: std::path::PathBuf,
+    sessions_dir: PathBuf,
     /// Base dir for raw logs (raw_logs/*.tlog | *.rawmsp) — separate from the DB folder.
     raw_log_dir: std::path::PathBuf,
     /// Shared MSP raw-log sink (ADR-049): the transport writes the raw serial bytes into it; the
@@ -520,6 +524,7 @@ impl FlightRecorder {
             fc_info,
             protocol: protocol.to_string(),
             alt_relative: None,
+            sessions_dir,
             db_file_path: db_path,
             raw_log_dir,
             msp_raw_sink,
@@ -817,7 +822,9 @@ impl FlightRecorder {
     /// Move a finalized session into the shared pending slot and tell the frontend to show the
     /// End-Flight summary (Save/Discard). Used by `on_disarm` and the continue-on-reconnect
     /// disarmed-on-first-poll path.
-    fn stash_pending_and_emit_ended(&self, session: PendingSession) {
+    fn stash_pending_and_emit_ended(&self, mut session: PendingSession) {
+        // A session queued before the database folder changed is saved where the database is now.
+        session.db_path = self.db_file_path.clone();
         let ev = RecordingEndedEvent {
             duration_sec: session.flight.duration_sec.unwrap_or(0),
             max_alt_m: session.flight.max_alt_m.unwrap_or(0.0),
@@ -932,7 +939,6 @@ impl FlightRecorder {
 
         let now = Utc::now();
 
-        // Open the per-session temp store (DB recording only).
         let (temp_db, temp_path) = if self.settings.db_enabled {
             let sessions_dir = self
                 .db_file_path
