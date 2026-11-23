@@ -9,7 +9,7 @@ import { writable, get } from 'svelte/store';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { connection, connectionProtocol, fcLinkAlive } from '$lib/stores/connection';
-import { arduVehicleClass } from '$lib/stores/missionArdupilot';
+import { noteQuadplane } from '$lib/stores/missionArdupilot';
 import type { FlightModeState } from '$lib/helpers/flightModeRegistry';
 
 /** One battery monitor instance (ArduPilot/PX4 multi-battery). Live: from the `telemetry-batteries`
@@ -276,8 +276,7 @@ export function resetTelemetry() {
 // anchor persists across reconnects until a real-MSL protocol supersedes it. With no anchor (late
 // connect, or armed in the air) the true MSL is unknown → AGL is shown as N/A.
 
-/** Whether the active protocol delivers true MSL GPS altitude. Default true; the backend's
- *  `telemetry-alt-ref` sets it false for relative-only protocols (LTM/CRSF). */
+/** True MSL from the active link; `telemetry-alt-ref` sets it per protocol and for a CRSF stream that shows MSL. */
 export const altReference = writable<{ msl: boolean }>({ msl: true });
 /** Ground MSL (m) captured at the arming edge for relative-only protocols, or null if unknown. */
 export const groundAnchor = writable<number | null>(null);
@@ -285,6 +284,10 @@ export const groundAnchor = writable<number | null>(null);
 /** |relative altitude| (m) at the arm edge must be below this to trust it as the ground reference —
  *  this also excludes "armed in the air" (HITL / mid-air arm), where no ground ref is recoverable. */
 const GROUND_ARM_MAX_REL = 5;
+/** An altitude this close (m) to the terrain at the arm edge, standing still, is MSL after all (PX4 over
+ *  CRSF, INAV without a barometer): no frame tells that. A late connect in flight is no arm edge. */
+const ARM_MSL_MAX_DIFF = 20;
+const ARM_MAX_GROUND_SPEED = 2;
 
 /** Resolve true MSL from a (possibly relative) altitude + the altitude reference + the ground anchor.
  *  Returns null when the protocol is relative-only and no ground anchor is known (→ AGL/3D show N/A). */
@@ -303,13 +306,20 @@ async function captureGroundAnchor(t: TelemetryData): Promise<void> {
   if (get(altReference).msl) return; // protocol already in MSL → no anchor needed
   const validCoord = (t.lat !== 0 || t.lon !== 0) && Math.abs(t.lat) <= 90 && Math.abs(t.lon) <= 180;
   if (t.fixType < 1 || !validCoord) return; // need a GPS fix (2D or better)
-  if (Math.abs(t.altMsl) > GROUND_ARM_MAX_REL) return; // armed in the air → no valid ground reference
+  const onGround = Math.abs(t.altMsl) <= GROUND_ARM_MAX_REL;
+  if (!onGround && t.groundSpeed > ARM_MAX_GROUND_SPEED) return; // armed in the air → no valid ground reference
   anchorBusy = true;
   try {
     const g = await invoke<number | null>('terrain_elevation', { lat: t.lat, lon: t.lon });
-    if (g != null) {
+    // A CRSF stream can turn out to be MSL while the lookup runs: nothing to do then.
+    if (g == null || get(altReference).msl) return;
+    if (onGround) {
       groundAnchor.set(g);
       console.log(`[altAnchor] ground MSL anchor = ${g.toFixed(1)} m (captured at arm, rel ${t.altMsl.toFixed(1)} m)`);
+    } else if (Math.abs(t.altMsl - g) <= ARM_MSL_MAX_DIFF) {
+      altReference.set({ msl: true });
+      groundAnchor.set(null);
+      console.log(`[altAnchor] altitude is MSL (${t.altMsl.toFixed(1)} m at arm, terrain ${g.toFixed(1)} m)`);
     }
   } catch (e) {
     console.warn('[altAnchor] terrain lookup failed', e);
@@ -329,8 +339,45 @@ telemetry.subscribe((t) => {
 
 let unlisteners: UnlistenFn[] = [];
 
+// The one-shot answers of the connect sequence can arrive before `connect` returns, and an event without a
+// listener is dropped: these listen from before the connect call until disconnect.
+let connectUnlisteners: UnlistenFn[] = [];
+
+export async function startConnectListeners() {
+  stopConnectListeners();
+  // Collected locally: a second call during the awaits replaces `connectUnlisteners`.
+  const fresh = [
+    // A parameter answer, not a live sample: must not bump lastUpdate.
+    await listen<{ ekf_type: number }>('telemetry-ekf-type', (event) => {
+      telemetry.update((t) => ({ ...t, ekfType: event.payload.ekf_type }));
+    }),
+    // A QuadPlane may report MAV_TYPE_FIXED_WING; then only the Q_ENABLE answer tells it from a plane.
+    await listen<{ quadplane?: boolean; blackbox?: boolean }>('telemetry-vehicle', (event) => {
+      if (event.payload.quadplane) noteQuadplane();
+      // Logging-backend answer (ArduPilot LOG_BACKEND_TYPE / PX4 SDLOG_MODE) → FC info for the UAV Info
+      // panel's vehicle-library save.
+      const blackbox = event.payload.blackbox;
+      if (blackbox !== undefined) {
+        connection.update((c) => (c.fcInfo ? { ...c, fcInfo: { ...c.fcInfo, blackbox } } : c));
+      }
+    }),
+    // Passive telemetry: true MSL, or only arming-relative altitude? Sent at the protocol lock, and again
+    // when a CRSF stream turns out to carry MSL.
+    await listen<{ msl: boolean }>('telemetry-alt-ref', (event) => {
+      altReference.set({ msl: event.payload.msl });
+      // A real-MSL protocol supersedes any relative ground anchor.
+      if (event.payload.msl) groundAnchor.set(null);
+    }),
+  ];
+  connectUnlisteners.push(...fresh);
+}
+
+export function stopConnectListeners() {
+  for (const u of connectUnlisteners) u();
+  connectUnlisteners = [];
+}
+
 export async function startTelemetryListeners() {
-  // Clean up any existing listeners
   stopTelemetryListeners();
 
   unlisteners.push(
@@ -523,27 +570,6 @@ export async function startTelemetryListeners() {
     })
   );
 
-  // EKF core version (AHRS_EKF_TYPE) — one-shot reply on connect, so no lastUpdate bump.
-  unlisteners.push(
-    await listen<{ ekf_type: number }>('telemetry-ekf-type', (event) => {
-      telemetry.update((t) => ({ ...t, ekfType: event.payload.ekf_type }));
-    })
-  );
-
-  // QuadPlane detection (ArduPilot Q_ENABLE reply) — a QuadPlane reports MAV_TYPE_FIXED_WING, so the
-  // mission vehicle class can only be upgraded to quadplane from this one-shot param. Upgrade only.
-  unlisteners.push(
-    await listen<{ quadplane?: boolean; blackbox?: boolean }>('telemetry-vehicle', (event) => {
-      if (event.payload.quadplane) arduVehicleClass.set('quadplane');
-      // Logging-backend answer (ArduPilot LOG_BACKEND_TYPE / PX4 SDLOG_MODE) → FC info for the UAV Info
-      // panel's vehicle-library save.
-      const blackbox = event.payload.blackbox;
-      if (blackbox !== undefined) {
-        connection.update((c) => (c.fcInfo ? { ...c, fcInfo: { ...c.fcInfo, blackbox } } : c));
-      }
-    })
-  );
-
   unlisteners.push(
     await listen<{ active_wp_number: number; nav_state: number }>('telemetry-nav-status', (event) => {
       telemetry.update((t) => ({
@@ -597,15 +623,6 @@ export async function startTelemetryListeners() {
         windSpeedMs: event.payload.speed_ms,
         lastUpdate: Date.now(),
       }));
-    })
-  );
-
-  // Altitude reference: does this protocol deliver true MSL, or only arming-relative altitude?
-  unlisteners.push(
-    await listen<{ msl: boolean }>('telemetry-alt-ref', (event) => {
-      altReference.set({ msl: event.payload.msl });
-      // A real-MSL protocol supersedes any relative ground anchor.
-      if (event.payload.msl) groundAnchor.set(null);
     })
   );
 

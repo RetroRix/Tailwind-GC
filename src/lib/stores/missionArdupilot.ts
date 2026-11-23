@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { connection } from './connection';
 import { settings } from './settings';
 import { CMD, cmdDef, cmdHasLocation, type VehicleClass } from '$lib/helpers/arduCommandCatalog';
+import { PLATFORM_AIRPLANE, PLATFORM_VTOL } from '$lib/helpers/uavIcons';
 
 // ── MAV_CMD constants ─────────────────────────────────────────────────
 export const MAV_CMD_NAV_WAYPOINT        = 16;
@@ -202,8 +203,7 @@ export const arduMissionModified = derived(
 export const arduMissionFcSynced = derived(arduMissionFlags, (f) => f.fc);
 
 // ── Vehicle class (drives the command catalog filter) ─────────────────
-// Online: derived from the FC's variant and locked. Offline: the operator picks it (QuadPlane can't be
-// auto-detected — it reports as ArduPlane — so it is an offline-only choice for now).
+// Online: derived from the FC (variant, MAV_TYPE, Q_ENABLE) and locked. Offline: the operator picks it.
 
 const VEHICLE_CLASSES: VehicleClass[] = ['plane', 'copter', 'quadplane', 'rover', 'boat', 'sub'];
 
@@ -250,14 +250,30 @@ function detectVehicleClass(variant: string, mavType: number | null | undefined)
   return null;
 }
 
+// The FC answered Q_ENABLE = 1 on this link. The answer comes once and may arrive before connect returns:
+// kept until disconnect, so the class and platform type of the connect result ("plane") do not replace it.
+let _quadplane = false;
+
+export function isQuadplane(): boolean {
+  return _quadplane;
+}
+
+export function noteQuadplane(): void {
+  _quadplane = true;
+  arduVehicleClass.set('quadplane');
+  if (get(connection).fcInfo?.platform_type !== PLATFORM_AIRPLANE) return;
+  connection.update((c) => (c.fcInfo ? { ...c, fcInfo: { ...c.fcInfo, platform_type: PLATFORM_VTOL } } : c));
+}
+
 let _lastVariantForClass = '';
 connection.subscribe((c) => {
+  if (c.status === 'disconnected' || c.status === 'error') _quadplane = false;
   if (c.status !== 'connected' || !c.fcInfo) { _lastVariantForClass = ''; return; }
   const key = `${c.fcInfo.fc_variant}/${c.fcInfo.mav_type ?? ''}`;
   if (key === _lastVariantForClass) return;
   _lastVariantForClass = key;
   const cls = detectVehicleClass(c.fcInfo.fc_variant, c.fcInfo.mav_type);
-  if (cls) arduVehicleClass.set(cls);
+  if (cls) arduVehicleClass.set(cls === 'plane' && _quadplane ? 'quadplane' : cls);
 });
 
 // Drop the FC provenance flag on any disconnect — the on-FC mission is then unknown (mirrors INAV).

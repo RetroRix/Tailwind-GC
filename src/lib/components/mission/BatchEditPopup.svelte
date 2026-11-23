@@ -124,7 +124,8 @@
       const target = ((altModeCommon ?? ALT_MODE_REL) + 1) % 3;
       for (const { i, wp } of altWps) {
         const from = wpMode(wp);
-        const altitude = from === target ? wp.altitude : await convertAltCm(wp, from, target);
+        // Without a ground reference the number is kept: the operator sets the value.
+        const altitude = from === target ? wp.altitude : (await convertAltCm(wp, from, target)) ?? wp.altitude;
         await missionUpdateWp(i, { ...wp, alt_mode: target, altitude });
       }
       load();
