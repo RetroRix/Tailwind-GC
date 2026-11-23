@@ -279,9 +279,12 @@ pub async fn mission_upload(
     Ok(store.snapshot())
 }
 
-/// One INAV multi-mission list, numbered through. INAV ends a mission on 0xA5 only: a stray one inside is
-/// cleared, fly-by-home (0x48) stays inside. On the last WP that byte is taken, so fly-by-home goes as
-/// lat/lon 0, INAV's other home marker. Resolve AGL before this: (0,0) has no terrain.
+/// One INAV multi-mission list, numbered through. INAV ends a mission on 0xA5 only: every mission's last
+/// WP gets it, a stray one inside is cleared. Fly-by-home (0x48) is kept inside a mission; on the last WP
+/// the flag byte is taken, so it goes as lat/lon 0, which INAV also reads as home. Empty missions are skipped.
+/// One INAV multi-mission list, numbered through. INAV ends a mission on 0xA5 only: every mission's last
+/// WP gets it, a stray one inside is cleared. Fly-by-home (0x48) is kept inside a mission; on the last WP
+/// the flag byte is taken, so it goes as lat/lon 0, which INAV also reads as home. Empty missions are skipped.
 fn assemble_multi_mission(missions: &[Vec<Waypoint>]) -> Vec<Waypoint> {
     let mut out: Vec<Waypoint> = Vec::new();
     for seg in missions {
