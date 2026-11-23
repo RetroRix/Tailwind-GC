@@ -239,13 +239,12 @@
     } catch (e) {
       console.warn('[settings] revealItemInDir failed', e);
     }
-    // Second try: open the containing folder itself, which some file managers handle when "reveal"
-    // isn't wired up.
+    // Second try: the folder itself, which a file manager opens also where "reveal" isn't wired up.
     try {
-      await openPath(p.replace(/[\/][^\/]*$/, ''));
+      await invoke('system_open_folder', { path: p });
       return;
     } catch (e) {
-      console.warn('[settings] openPath failed', e);
+      console.warn('[settings] system_open_folder failed', e);
       logOpenError = e instanceof Error ? e.message : String(e);
     }
   }

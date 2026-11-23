@@ -1,4 +1,7 @@
 {
+  "export": {
+    "saveToDevice": "Auf Gerät speichern"
+  },
   "app": {
     "brand": "KiteGC",
     "version": "v{version}"
@@ -1126,6 +1129,8 @@
   "logbook": {
     "video": "Video",
     "videoMissing": "Datei nicht gefunden: {path}",
+    "videoFolder": "Ordner anzeigen",
+    "videoFolderTip": "Die Aufnahmen dieses Flugs im Dateimanager anzeigen",
     "title": "Flug-Logbuch",
     "disabled": "Flugaufzeichnung ist deaktiviert. In den Einstellungen aktivieren und neu verbinden.",
     "dbNewer": "Diese Flug-Datenbank stammt aus einer neueren Kite-Version. Das Logbuch bleibt deaktiviert, bis eine passende oder neuere Kite-Version installiert ist — die Datenbank wird nicht verändert.",
@@ -1238,6 +1243,7 @@
     "deleteBlackboxConfirm": "Originaldatei löschen",
     "deleteBlackboxSuccess": "Original-Blackbox-Datei gelöscht ({filename}). Der Flug bleibt für das Replay verfügbar.",
     "exportTrack": "Track",
+    "exportTrackFormat": "Welches Format?",
     "exportTrackTitle": "Track-Export abgeschlossen",
     "exportTrackSuccess": "Flugtrack erfolgreich exportiert.",
     "importKflight": ".kflight importieren",

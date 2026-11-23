@@ -13,8 +13,9 @@
 <script lang="ts">
   import { t } from 'svelte-i18n';
   import { anyCase } from '$lib/helpers/fileFilters';
+  import { exportFile } from '$lib/helpers/exportFile';
   import { get } from 'svelte/store';
-  import { save, open as openFileDialog } from '@tauri-apps/plugin-dialog';
+  import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
   import { settings } from '$lib/stores/settings';
   import { convertAltitude, convertDistance, formatConverted } from '$lib/utils/units';
   import {
@@ -395,13 +396,13 @@
       base_total_energy: v.base_total_energy,
     };
     try {
-      const path = await save({
+      const path = await exportFile({
         title: $t('vehicleMgr.exportTitle'),
-        defaultPath: `vehicle_${sanitize(v.name)}.kvehicle`,
+        name: `vehicle_${sanitize(v.name)}.kvehicle`,
         filters: [{ name: 'Vehicle', extensions: ['kvehicle'] }],
+        write: (p) => vehicleFileWrite(p, file),
       });
       if (!path) return;
-      await vehicleFileWrite(path, file);
       statusMessage = $t('vehicleMgr.exported');
     } catch (e) {
       statusMessage = $t('vehicleMgr.exportFailed', { values: { error: String(e) } });

@@ -1,4 +1,7 @@
 {
+  "export": {
+    "saveToDevice": "Save to device"
+  },
   "app": {
     "brand": "TailwindGC",
     "version": "v{version}"
@@ -1133,6 +1136,8 @@
   "logbook": {
     "video": "Video",
     "videoMissing": "File not found: {path}",
+    "videoFolder": "Show folder",
+    "videoFolderTip": "Show this flight's recordings in the file manager",
     "title": "Flight Logbook",
     "disabled": "Flight logging is disabled. Enable it in Settings and reconnect.",
     "dbNewer": "This flight database comes from a newer Tailwind version. The logbook stays disabled until a matching or newer Tailwind is installed — the database is not modified.",
@@ -1245,6 +1250,7 @@
     "deleteBlackboxConfirm": "Delete Original File",
     "deleteBlackboxSuccess": "Original blackbox file deleted ({filename}). The flight stays available for replay.",
     "exportTrack": "Track",
+    "exportTrackFormat": "Which format?",
     "exportTrackTitle": "Track Export Complete",
     "exportTrackSuccess": "Flight track exported successfully.",
     "importKflight": "Import .kflight",

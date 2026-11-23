@@ -2244,7 +2244,6 @@
   async function exportFlightsToKflight(flightIds: number[]) {
     if (flightIds.length === 0) return;
     try {
-      // Auto-include linked partner flights
       const allIds = new Set(flightIds);
       for (const id of flightIds) {
         const summary = flightSummaries.find((f) => f.id === id);
@@ -2286,16 +2285,14 @@
       const orig = blackboxFileInfo?.filename ?? '';
       const dot = orig.lastIndexOf('.');
       const ext = (dot > 0 ? orig.slice(dot + 1) : 'log').toLowerCase();
-      const craft = (selectedFlight.craft_name || 'flight')
-        .trim().replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'flight';
-      const date = (selectedFlight.start_time ?? '').slice(0, 10); // YYYY-MM-DD
-      const base = date ? `${craft}_${date}_${selectedFlightId}` : `${craft}_${selectedFlightId}`;
-      const outputPath = await save({
+      const base = flightFileStem(selectedFlight);
+      const flightId = selectedFlightId;
+      const outputPath = await exportFile({
+        name: `${base}.${ext}`,
         filters: [{ name: $t('logbook.blackboxFileFilter'), extensions: [ext] }],
-        defaultPath: `${base}.${ext}`,
+        write: (path) => logbookCtrl.exportBlackbox(flightId, path, activeDbPath),
       });
-      if (!outputPath) return;
-      await logbookCtrl.exportBlackbox(selectedFlightId, outputPath, activeDbPath);
+      if (!outputPath || sharesExports) return;
       const savedName = outputPath.split(/[\\/]/).pop() ?? `${base}.${ext}`;
       await showInfo($t('logbook.exportBlackboxTitle'), $t('logbook.exportBlackboxSuccess', { values: { filename: savedName } }));
     } catch (e) {
@@ -2372,23 +2369,35 @@
     );
   }
 
+  const TRACK_FORMATS = [
+    { name: 'KMZ (Google Earth)', extensions: ['kmz'] },
+    { name: 'KML (Google Earth)', extensions: ['kml'] },
+    { name: 'GPX (GPS Exchange)', extensions: ['gpx'] },
+    { name: 'CSV (Spreadsheet)', extensions: ['csv'] },
+  ];
+
   async function exportTrack() {
     if (!selectedFlightId || !selectedFlight) return;
     try {
-      const craft = selectedFlight.craft_name || 'flight';
-      const date = selectedFlight.start_time ? new Date(selectedFlight.start_time).toISOString().slice(0, 10) : '';
-      const defaultName = `${craft}_${date}`.replace(/\s+/g, '_');
-      const outputPath = await save({
-        filters: [
-          { name: 'KMZ (Google Earth)', extensions: ['kmz'] },
-          { name: 'KML (Google Earth)', extensions: ['kml'] },
-          { name: 'GPX (GPS Exchange)', extensions: ['gpx'] },
-          { name: 'CSV (Spreadsheet)', extensions: ['csv'] },
-        ],
-        defaultPath: `${defaultName}.kmz`,
+      // The backend tells the format from the extension. Desktop picks it in the save dialog; with the
+      // share sheet there is no such dialog, so it is asked for here.
+      let filters = TRACK_FORMATS;
+      if (sharesExports) {
+        const ext = await showDialog({
+          title: $t('logbook.exportTrack'),
+          message: $t('logbook.exportTrackFormat'),
+          buttons: TRACK_FORMATS.map((f) => ({ label: f.extensions[0].toUpperCase(), value: f.extensions[0] })),
+        });
+        if (ext == null) return;
+        filters = TRACK_FORMATS.filter((f) => f.extensions[0] === ext);
+      }
+      const flightId = selectedFlightId;
+      const outputPath = await exportFile({
+        name: `${flightFileStem(selectedFlight)}.${filters[0].extensions[0]}`,
+        filters,
+        write: (path) => logbookCtrl.exportTrack(flightId, path, activeDbPath),
       });
-      if (!outputPath) return;
-      await logbookCtrl.exportTrack(selectedFlightId, outputPath, activeDbPath);
+      if (!outputPath || sharesExports) return;
       await showInfo($t('logbook.exportTrackTitle'), $t('logbook.exportTrackSuccess'));
     } catch (e) {
       errorMsg = String(e);
@@ -3772,6 +3781,10 @@
   // class that CSS gates the expensive widget-bar transitions off (see stores/lowPower.ts). It is a
   // readable store, so it only runs while something subscribes — this is that subscription.
   onMount(() => lowPowerActive.subscribe(() => {}));
+  onMount(() => {
+    clearExportCache();
+    setExportErrorReporter((message) => { errorMsg = message; });
+  });
 
   // Hard-blink indicator mode on WebKitGTK and Android — see stores/pulseBlink.ts for why a looping
   // CSS animation costs a large fraction of a core there (per-frame fixed cost, not per pixel).
