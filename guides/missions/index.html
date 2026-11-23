@@ -848,6 +848,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#survey-from-existing-waypoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Survey from existing waypoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#altitude-reference-home-sea-terrain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Altitude reference: Home / Sea / Terrain
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#where-to-go-next" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2220,6 +2242,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#survey-from-existing-waypoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Survey from existing waypoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#altitude-reference-home-sea-terrain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Altitude reference: Home / Sea / Terrain
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#where-to-go-next" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2574,6 +2618,21 @@ mission.</p>
 <h2 id="staying-clear-of-airspace">Staying clear of airspace<a class="headerlink" href="#staying-clear-of-airspace" title="Permanent link">&para;</a></h2>
 <p>If the aircraft has <strong>geozones</strong> (INAV) or a <strong>geofence</strong> (ArduPilot / PX4) set, Tailwind can check your
 plan against them and warn about waypoints that breach a no-fly area. See <strong><a href="../safety/">Safety</a></strong>.</p>
+<h2 id="survey-from-existing-waypoints">Survey from existing waypoints<a class="headerlink" href="#survey-from-existing-waypoints" title="Permanent link">&para;</a></h2>
+<p>Already placed the corners of an area as waypoints? In the polygon survey, <strong>From Mission
+Waypoints</strong> takes the current mission's positioned waypoints, in order, as the survey
+polygon — no re-drawing. Fewer than three points, or an outline that crosses itself, is
+refused with a note. The grid angle defaults to the polygon's longest edge.</p>
+<h2 id="altitude-reference-home-sea-terrain">Altitude reference: Home / Sea / Terrain<a class="headerlink" href="#altitude-reference-home-sea-terrain" title="Permanent link">&para;</a></h2>
+<p>The waypoint editor sets each waypoint's altitude reference with a three-way switch —
+<strong>Home</strong> (relative to the launch point), <strong>Sea</strong> (above mean sea level) or <strong>Terrain</strong>
+(above ground). On INAV the altitude number is converted on a switch so the waypoint
+keeps its physical height; on ArduPilot/PX4 the switch sets the MAV frame and the number
+keeps the meaning of the frame it is now in.</p>
+<p>Mission files: QGroundControl <code>.plan</code> files that contain a Survey import as the generated
+mission, and Tailwind's own <code>.kmission</code> file carries a mission together with its vehicle
+class. An INAV multi-mission loads as a single library entry. On ArduPilot/PX4, a mission
+stored on the aircraft is offered for download once per connection.</p>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Watch the mission fly: <strong><a href="../telemetry-and-display/">Telemetry &amp; display</a></strong>.</li>
