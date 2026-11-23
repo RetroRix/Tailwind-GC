@@ -222,7 +222,10 @@ fn create_export_db(path: &Path) -> Result<Connection, String> {
             pilot_id        TEXT,
             battery_serial  TEXT,
             utc_offset_min  INTEGER,
-            fc_uid          TEXT
+            fc_uid          TEXT,
+            mission_id      INTEGER REFERENCES missions(id),
+            logged_wp_count INTEGER,
+            alt_relative    INTEGER
         );
 
         CREATE TABLE IF NOT EXISTS telemetry_records (
@@ -318,6 +321,42 @@ fn create_export_db(path: &Path) -> Result<Connection, String> {
             ON blackbox_files(flight_id);",
     )
     .map_err(|e| format!("Schema creation error: {}", e))?;
+
+    // The v22 travelling set: the linked mission and the per-flight child tables
+    // (gps_records / weather_records / flight_videos, copied by copy_flight's extras).
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS missions (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_hash     TEXT NOT NULL UNIQUE,
+            name             TEXT NOT NULL DEFAULT '',
+            format           TEXT NOT NULL DEFAULT 'inav',
+            waypoints_json   TEXT NOT NULL,
+            source_xml       TEXT,
+            wp_count         INTEGER NOT NULL DEFAULT 0,
+            total_distance_m REAL,
+            alt_diff_m       REAL,
+            max_alt_m        REAL,
+            min_alt_m        REAL,
+            bndbox_min_lat   REAL,
+            bndbox_min_lon   REAL,
+            bndbox_max_lat   REAL,
+            bndbox_max_lon   REAL,
+            location_name    TEXT,
+            created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+            notes            TEXT,
+            home_lat         REAL,
+            home_lon         REAL,
+            vehicle_class    TEXT,
+            extra_json       TEXT
+        );",
+    )
+    .map_err(|e| format!("Schema creation error: {}", e))?;
+    conn.execute_batch(db::GPS_RECORDS_DDL_FULL)
+        .map_err(|e| format!("Schema creation error: {}", e))?;
+    conn.execute_batch(db::WEATHER_RECORDS_DDL_FULL)
+        .map_err(|e| format!("Schema creation error: {}", e))?;
+    conn.execute_batch(db::FLIGHT_VIDEOS_DDL_FULL)
+        .map_err(|e| format!("Schema creation error: {}", e))?;
 
     Ok(conn)
 }
