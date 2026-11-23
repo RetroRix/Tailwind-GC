@@ -9,6 +9,7 @@
 import { writable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { startTrainer, stopTrainer } from './trainer';
 
 /** A connected input device (matches the Rust `HidDevice`). */
 export interface HidDevice {
@@ -58,7 +59,7 @@ export const hidActive = writable<boolean>(false);
 let unlistenDevices: UnlistenFn | null = null;
 let unlistenInput: UnlistenFn | null = null;
 
-/** Start the HID input thread and begin receiving device/input events. Safe to call repeatedly. */
+/** Idempotent; also starts the Bluetooth trainer task when radios are remembered. */
 export async function startHid(): Promise<void> {
   if (unlistenDevices) return; // already wired
   unlistenDevices = await listen<HidDevice[]>('hid-devices', (e) => {
@@ -69,10 +70,11 @@ export async function startHid(): Promise<void> {
   unlistenInput = await listen<HidSnapshot>('hid-input', (e) => hidSnapshot.set(e.payload));
   await invoke('hid_start');
   hidActive.set(true);
+  void startTrainer();
 }
 
-/** Stop the HID input thread and tear down listeners. */
 export async function stopHid(): Promise<void> {
+  await stopTrainer();
   await invoke('hid_stop');
   unlistenDevices?.();
   unlistenInput?.();

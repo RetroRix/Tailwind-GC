@@ -6,7 +6,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { get } from 'svelte/store';
 import type { FcInfo, PortInfo, BleDeviceInfo, TransportType, ProtocolType } from '$lib/stores/connection';
 import type { InavStats } from '$lib/stores/flightlogTypes';
-import { connection, connectionProtocol, fcLinkAlive, availablePorts, lastHotpluggedPort, bleDevices, detectedPlatformType } from '$lib/stores/connection';
+import { connection, connectionProtocol, fcLinkAlive, availablePorts, lastHotpluggedPort, bleDevices, detectedPlatformType, hasMsp } from '$lib/stores/connection';
+import { vehicleDbFindByFcUid } from '$lib/stores/flightlog';
+import { settings } from '$lib/stores/settings';
+import { trainerRadioId } from '$lib/stores/trainer';
 import { startTelemetryListeners, stopTelemetryListeners, startConnectListeners, stopConnectListeners, resetTelemetry, setFcVariant } from '$lib/stores/telemetry';
 import { clearFcParams } from '$lib/stores/parameters';
 import { applyRelaysOnConnect, clearRelaysOnDisconnect } from '$lib/controllers/relayController';
@@ -100,7 +103,9 @@ function flushBleDevices(): void {
   bleDevices.update((list) => {
     let changed = false;
     const next = [...list];
+    const trainer = trainerRadioId();
     for (const dev of incoming.values()) {
+      if (dev.id === trainer) continue;
       const i = next.findIndex((d) => d.id === dev.id);
       if (i < 0) {
         next.push(dev);

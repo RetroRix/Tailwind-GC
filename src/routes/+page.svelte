@@ -38,6 +38,7 @@
   import ConnectionPopout from "$lib/components/phone/ConnectionPopout.svelte";
   import PhoneWidgetPanel from "$lib/components/phone/PhoneWidgetPanel.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
+  import { initTrainerHandover } from "$lib/controllers/trainerHandover";
   import UpdateDialog from "$lib/components/UpdateDialog.svelte";
   import { runUpdateCheck, resolveUpdateKind } from "$lib/controllers/updateCheck";
   import { checkDbBackupPrompt, runPendingDbUpgrade, probeDbSchema, formatBackupSize, type DbSchemaState, type DbUpgradeOutcome } from "$lib/controllers/dbBackupPrompt";
@@ -3131,6 +3132,7 @@
 
   async function initPage() {
     await startBleDeviceListener(); // live BLE discovery → bleDevices store
+    void initTrainerHandover(showDialog);
     await loadInfo();
     try {
       defaultFlightLogPath = await getDefaultFlightlogPath();
