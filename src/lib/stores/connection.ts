@@ -4,7 +4,7 @@
 // Connection state store
 // Manages the reactive state of the FC connection across the UI
 
-import { writable } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -135,6 +135,15 @@ export const connection = writable<ConnectionInfo>({
   errorMessage: '',
   fcInfo: null,
 });
+
+/** The connected link speaks MSP (Tailwind: a direct MSP link — the MSP-over-MAVLink tunnel is not
+ *  built, so there is no tunnel flag to OR in as upstream does). */
+export function linkHasMsp(c: ConnectionInfo): boolean {
+  return c.status === 'connected' && c.protocolType === 'msp';
+}
+
+/** Store form of `linkHasMsp`. */
+export const hasMsp = derived(connection, linkHasMsp);
 
 /** Platform type the handshake detected for the current link — `fcInfo.platform_type` diverges from it
  *  once the user overrides the type in the UAV Info panel (the panel shows the detected one as a hint). */
