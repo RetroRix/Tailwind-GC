@@ -125,6 +125,36 @@ where
     f(Path::new(src))
 }
 
+/// Bytes the user can still write on the volume of the existing folder `dir`; `None` where the
+/// system does not say.
+pub fn free_bytes(dir: &Path) -> Option<u64> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let path = std::ffi::CString::new(dir.as_os_str().as_bytes()).ok()?;
+        let mut stat = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+        // SAFETY: `path` is a NUL-terminated string and `stat` is written only on success (0).
+        let stat = unsafe {
+            if libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) != 0 {
+                return None;
+            }
+            stat.assume_init()
+        };
+        Some(stat.f_bavail as u64 * stat.f_frsize as u64)
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+        let wide: Vec<u16> = dir.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let mut free = 0u64;
+        // SAFETY: `wide` is NUL-terminated and outlives the call; `free` is a valid out pointer.
+        unsafe { GetDiskFreeSpaceExW(PCWSTR(wide.as_ptr()), Some(&mut free), None, None) }.ok()?;
+        Some(free)
+    }
+}
+
 /// A scratch path under app-private storage (Android) or the OS temp dir (desktop), unique per call.
 ///
 /// Named from the process id and a monotonic counter rather than a random source: two exports in the

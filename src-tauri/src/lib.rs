@@ -80,8 +80,6 @@ use commands::flightlog::{flightlog_flight_videos,
     vehicle_db_find_by_craft_name, vehicle_db_find_by_fc_uid, vehicle_db_delete, vehicle_db_aggregate, vehicle_db_flights,
     vehicle_db_set_baseline, vehicle_file_write, vehicle_file_read,
     mission_file_write, mission_file_read, mission_db_set_extra,
-    vehicle_db_resolve, vehicle_db_link_flights, vehicle_db_link_flights_count, vehicle_db_transfer_flights,
-    flight_set_vehicle, vehicle_db_set_fc_uid,
 };
 use commands::aero::{aero_fetch, aero_cache_stats, aero_cache_clear};
 use commands::hid::{
@@ -101,7 +99,7 @@ use commands::info::{get_app_version, is_debug_mode};
 use commands::system::{system_active_net_is_wifi, system_on_battery, system_open_folder};
 use commands::storage::{
     export_copy, export_scratch_clear, export_scratch_path, export_take_save_request, file_display_name,
-    share_file, storage_pick_folder, storage_flush_raw_logs,
+    share_file, storage_pick_folder,
 };
 use commands::video::{
     video_ffmpeg_status, video_hw_transcode_available, video_ffmpeg_download,
@@ -771,12 +769,12 @@ pub fn run() {
             mission_file_write,
             mission_file_read,
             mission_db_set_extra,
-            vehicle_db_resolve,
-            vehicle_db_link_flights,
-            vehicle_db_link_flights_count,
-            vehicle_db_transfer_flights,
-            flight_set_vehicle,
-            vehicle_db_set_fc_uid,
+
+
+
+
+
+
             flightlog_update_notes,
             flightlog_update_craft_name,
             flightlog_update_platform_type,

@@ -11,7 +11,7 @@ use crate::flightlog::video_files;
 use crate::flightlog::types::{
     BatteryAggregate, BatteryFile, BatteryPack, BatteryPackInput, BlackboxImportProgress,
     BlackboxImportStatus, Flight, FlightSummary, Mission, MissionInput, TelemetryRecord, Vehicle,
-    MissionFile, MissionFileBody, VehicleAggregate, VehicleFile, VehicleInput, VehicleResolution,
+    MissionFile, MissionFileBody, VehicleAggregate, VehicleFile, VehicleInput,
 };
 
 /// Whether the app runs in portable mode (`.portable` marker next to the executable).
@@ -58,6 +58,32 @@ pub fn flightlog_backup_info(db_path: Option<String>) -> Option<DbBackupInfo> {
 #[tauri::command(async)]
 pub fn flightlog_backup_delete(db_path: Option<String>) -> Result<(), String> {
     trash_or_delete(&db::backup_path_for(&db::resolve_db_path(&db_path.unwrap_or_default(), portable_mode())))
+}
+
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+fn move_to_trash(path: &std::path::Path) -> Result<(), String> {
+    // Linux: off the home file system the crate may COPY the file into the home trash — minutes and
+    // gigabytes for nothing. Such a drive counts as having no trash.
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let device = |p: &std::path::Path| std::fs::metadata(p).map(|m| m.dev()).ok();
+        let home = dirs::home_dir().ok_or("no home directory")?;
+        if device(path) != device(&home) {
+            return Err("not on the home file system".into());
+        }
+    }
+    // macOS: the crate's default drives Finder by Apple events, which needs an automation permission
+    // Tailwind does not declare; NSFileManager moves the file without it.
+    #[cfg(target_os = "macos")]
+    {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+        let mut ctx = trash::TrashContext::default();
+        ctx.set_delete_method(DeleteMethod::NsFileManager);
+        return ctx.delete(path).map_err(|e| e.to_string());
+    }
+    #[cfg(not(target_os = "macos"))]
+    trash::delete(path).map_err(|e| e.to_string())
 }
 
 fn trash_or_delete(file: &std::path::Path) -> Result<(), String> {
@@ -1298,6 +1324,8 @@ fn video_copy_progress(app_handle: &tauri::AppHandle) -> impl FnMut(u64, u64) + 
         }
     }
 }
+
+const EXPORT_NO_SPACE_ERROR: &str = "no-space:";
 
 /// `no-space:` when `dir` lacks room for `need` bytes (the marker of `EXPORT_NO_SPACE_ERROR`).
 fn need_space(dir: &std::path::Path, need: u64) -> Result<(), String> {

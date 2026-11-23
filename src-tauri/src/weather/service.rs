@@ -89,11 +89,7 @@ impl WeatherService {
     /// Tap the active vehicle's position and start the poller. Once, at app setup.
     pub fn start(&self, app: &AppHandle) {
         let tap = self.clone();
-        let filter = app.clone();
         app.listen("telemetry-gps", move |ev| {
-            if !crate::vehicle_registry::payload_is_active(&filter, ev.payload()) {
-                return;
-            }
             let Ok(g) = serde_json::from_str::<crate::telemetry_api::state::Gps>(ev.payload()) else { return };
             if g.fix_type >= 1 && (g.lat != 0.0 || g.lon != 0.0) {
                 tap.lock().gps = Some((g.lat, g.lon, Instant::now()));

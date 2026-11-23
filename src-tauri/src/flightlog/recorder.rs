@@ -516,6 +516,8 @@ impl FlightRecorder {
         log::info!("Flight log database: {}", db_path.display());
         log::info!("Raw log directory: {}", raw_log_dir.display());
 
+        let sessions_dir = db::sessions_dir(portable);
+
         // Validate the flight DB is openable now (fail fast). The actual writes use their own
         // connections — the temp store on arm, and the main DB at commit (ADR-041).
         db::open_database(&db_path).map_err(|e| {

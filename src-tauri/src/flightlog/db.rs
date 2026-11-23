@@ -15,7 +15,7 @@ use super::types::{
     Mission, MissionInput, TelemetryRecord, Vehicle, VehicleAggregate, VehicleInput, WeatherRecord,
 };
 
-const CURRENT_SCHEMA_VERSION: u32 = 19;
+pub const CURRENT_SCHEMA_VERSION: u32 = 19;
 
 /// Column list (excluding the autoincrement `id`) for `telemetry_records`, shared by the temp-session
 /// copy so the SELECT and INSERT column orders can never drift apart. `flight_id` is first so the
@@ -708,6 +708,13 @@ pub fn resolve_raw_log_dir(custom_path: &str, portable: bool) -> PathBuf {
 }
 
 // ── Schema migrations ────────────────────────────────────────────────
+
+/// Begin a write transaction (`BEGIN IMMEDIATE`). THE RULE: every writing transaction on the flight
+/// database goes through this, never a DEFERRED one — its read→write upgrade fails at once with
+/// SQLITE_BUSY (no busy timeout) while another connection, e.g. the background reclaim, writes.
+pub(crate) fn write_tx(conn: &Connection) -> SqlResult<rusqlite::Transaction<'_>> {
+    rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)
+}
 
 fn get_user_version(conn: &Connection) -> SqlResult<u32> {
     conn.query_row("PRAGMA user_version", [], |row| row.get(0))

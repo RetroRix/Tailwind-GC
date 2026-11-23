@@ -358,6 +358,8 @@ impl NativeRtsp {
         parent_hwnd: Option<isize>,
     ) -> Result<Started, String> {
         self.stop();
+        // This run's generation: a later stop/start bumps it and the first-frame wait below aborts.
+        let epoch = self.epoch.load(Ordering::SeqCst);
         // The main window hosts every surface until the detached video window registers itself.
         if let Some(h) = parent_hwnd {
             self.parents.lock().unwrap().insert("main".to_string(), h);
