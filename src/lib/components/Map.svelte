@@ -71,7 +71,7 @@
     type TrackColorMode,
     type TrackSegment,
   } from "$lib/helpers/trackColors";
-  import { modeColor } from "$lib/helpers/flightModeRegistry";
+  import { modeColor, guidedTargetOf } from "$lib/helpers/flightModeRegistry";
   import { PLATFORM_MULTIROTOR, type PlatformType, type UavModelOverride } from "$lib/helpers/uavIcons";
   import { resolveModelKind, modelUri } from "$lib/helpers/uavModels";
   import { loadUavMesh, type UavMesh } from "$lib/helpers/uavMesh";
@@ -686,9 +686,11 @@
    *  NAV_LOITER_RAD). MP shows a meaningless dashed ring here — ours is the real expected track. */
   function updateGuidedTarget() {
     if (!map) return;
-    const tgt = get(guidedTarget);
+    // A replayed flight shows its recorded target; no loiter ring — the radius is not recorded.
+    const replayed = playbackPoint != null;
+    const tgt = replayed ? guidedTargetOf(playbackPoint) : get(guidedTarget);
     const fcInGuided = get(activeMode)?.guided === true;
-    if (!tgt || get(connection).status !== 'connected' || !(get(guidedActive) || fcInGuided)) {
+    if (!tgt || (!replayed && (get(connection).status !== 'connected' || !(get(guidedActive) || fcInGuided)))) {
       if (guidedTargetMarker) { guidedTargetMarker.remove(); guidedTargetMarker = undefined; }
       if (guidedLoiterRing) { guidedLoiterRing.remove(); guidedLoiterRing = undefined; }
       return;
@@ -713,7 +715,7 @@
     const cls = get(arduVehicleClass);
     const fixedWing = cls === 'plane' || cls === 'quadplane';
     const radius = get(guidedParams).loiterRadius ?? get(fcLoiterRadius);
-    if (fixedWing && radius != null && radius > 0) {
+    if (!replayed && fixedWing && radius != null && radius > 0) {
       if (!guidedLoiterRing) {
         guidedLoiterRing = L.circle(ll, {
           radius,
@@ -2479,6 +2481,7 @@
   $effect(() => {
     if (!map) return;
     updatePlaybackMarker(playbackPoint);
+    updateGuidedTarget();
   });
 
   onDestroy(() => {

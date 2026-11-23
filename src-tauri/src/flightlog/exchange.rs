@@ -14,7 +14,8 @@ use rusqlite::{params, Connection};
 use super::db;
 use super::types::{BatteryRecord, Flight, FlightSummary, TelemetryRecord};
 
-/// Schema version stored in exported .kflight files
+/// Stays 2 while changes are additive: Kite 1.0 reads named columns and never checks it. Raise it when a
+/// file carries data an older importer drops — that importer then tells the user (`ImportResult::newer_format`).
 const KFLIGHT_SCHEMA_VERSION: u32 = 2;
 
 /// Application identifier stored in the export header
@@ -271,7 +272,10 @@ fn create_export_db(path: &Path) -> Result<Connection, String> {
             link_snr     INTEGER,
             link_rssi_dbm INTEGER,
             airspeed_ms  REAL,
-            throttle_pct REAL
+            throttle_pct REAL,
+            target_lat   REAL,
+            target_lon   REAL,
+            target_alt_m REAL
         );
 
         CREATE TABLE IF NOT EXISTS battery_records (
@@ -482,6 +486,8 @@ pub struct ImportResult {
     pub imported: usize,
     pub skipped: usize,
     pub errors: Vec<String>,
+    /// The file was written by a newer Kite: what this version knows was imported, the rest was left out.
+    pub newer_format: bool,
 }
 
 /// Import flights from a .kflight file into the main database.
@@ -494,14 +500,24 @@ pub fn import_flights(
         return Err("File not found".into());
     }
 
-    let src = Connection::open(kflight_path)
-        .map_err(|e| format!("Failed to open .kflight file: {}", e))?;
-
-    // Verify it's a valid kflight file
-    let _has_meta: bool = src
-        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='_kflight_meta'")
-        .and_then(|mut s| s.exists([]))
-        .unwrap_or(false);
+/// `import_flights` on the open working copy `src` (`kflight_path` names the user's file in the log).
+fn import_from(
+    target_conn: &Connection,
+    src: &Connection,
+    kflight_path: &Path,
+) -> Result<ImportResult, String> {
+    // No meta table, no version row, or one that does not parse: an old or foreign file, not a newer one.
+    let file_version: u32 = src
+        .query_row("SELECT value FROM _kflight_meta WHERE key = 'schema_version'", [], |r| r.get::<_, String>(0))
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    let newer_format = file_version > KFLIGHT_SCHEMA_VERSION;
+    if newer_format {
+        log::warn!(
+            ".kflight: format version {file_version}, this Kite reads up to {KFLIGHT_SCHEMA_VERSION} — importing what it knows"
+        );
+    }
 
     let has_flights: bool = src
         .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='flights'")
@@ -533,6 +549,7 @@ pub fn import_flights(
         imported: 0,
         skipped: 0,
         errors: Vec::new(),
+        newer_format,
     };
 
     for summary in &src_flights {
@@ -604,6 +621,56 @@ pub fn import_flights(
     Ok(result)
 }
 
+/// Run `f` on a private working copy of the `.kflight` (deleted afterwards): the user's file — maybe
+/// read-only or on a share — is never opened itself (columns get back-filled, `-wal`/`-shm` created).
+fn with_kflight_copy<T>(
+    path: &Path,
+    f: impl FnOnce(&Connection) -> Result<T, String>,
+) -> Result<T, String> {
+    let copy = crate::user_file::temp_path("kflight")?;
+    if let Err(e) = std::fs::copy(path, &copy) {
+        db::remove_temp_session(&copy); // a partial copy
+        return Err(format!("Failed to open .kflight file: {}", e));
+    }
+    // A WAL left by an unclean close holds committed pages of its own — bring it along.
+    let mut wal = path.as_os_str().to_os_string();
+    wal.push("-wal");
+    let wal = std::path::PathBuf::from(wal);
+    if wal.exists() {
+        let mut copy_wal = copy.as_os_str().to_os_string();
+        copy_wal.push("-wal");
+        if let Err(e) = std::fs::copy(&wal, std::path::PathBuf::from(copy_wal)) {
+            db::remove_temp_session(&copy);
+            return Err(format!("Failed to open .kflight file: {}", e));
+        }
+    }
+    let result = Connection::open(&copy)
+        .map_err(|e| format!("Failed to open .kflight file: {}", e))
+        .and_then(|conn| f(&conn));
+    db::remove_temp_session(&copy); // the copy + its -wal / -shm
+    result
+}
+
+/// A `.kflight` written by an older Kite lacks the columns added since; add them so the shared row
+/// readers apply. `flights.source_before_link` (v21) is NOT added: its absence marks a file whose value
+/// has to be derived (`source_before_link`).
+fn add_missing_columns(conn: &Connection) {
+    for (table, column, ddl) in [
+        ("flights", "fc_uid", "ALTER TABLE flights ADD COLUMN fc_uid TEXT;"),
+        ("flights", "group_id", "ALTER TABLE flights ADD COLUMN group_id TEXT;"),
+        ("flights", "vehicle_id", "ALTER TABLE flights ADD COLUMN vehicle_id INTEGER;"),
+        ("telemetry_records", "target_lat", "ALTER TABLE telemetry_records ADD COLUMN target_lat REAL;"),
+        ("telemetry_records", "target_lon", "ALTER TABLE telemetry_records ADD COLUMN target_lon REAL;"),
+        ("telemetry_records", "target_alt_m", "ALTER TABLE telemetry_records ADD COLUMN target_alt_m REAL;"),
+    ] {
+        if !db::column_exists(conn, table, column).unwrap_or(true) {
+            if let Err(e) = conn.execute_batch(ddl) {
+                log::warn!(".kflight: could not add {table}.{column}: {e}");
+            }
+        }
+    }
+}
+
 fn find_duplicate_in_summaries(
     baseline: &[FlightSummary],
     incoming: &FlightSummary,
@@ -641,7 +708,488 @@ pub fn get_flight_from_file(path: &Path, flight_id: i64) -> Result<Option<Flight
 
 /// Get the telemetry track from a .kflight file
 pub fn get_track_from_file(path: &Path, flight_id: i64) -> Result<Vec<TelemetryRecord>, String> {
-    let conn = Connection::open(path)
-        .map_err(|e| format!("Failed to open .kflight file: {}", e))?;
-    db::get_flight_track(&conn, flight_id).map_err(|e| format!("Query error: {}", e))
+    with_kflight_copy(path, |conn| {
+        add_missing_columns(conn);
+        db::get_flight_track(conn, flight_id).map_err(|e| format!("Query error: {}", e))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("kite-kflight-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn vehicle(conn: &Connection, name: &str, craft: Option<&str>, uid: Option<&str>) -> i64 {
+        conn.execute(
+            "INSERT INTO vehicles (name, craft_name, fc_uid) VALUES (?1, ?2, ?3)",
+            params![name, craft, uid],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
+    fn flight(craft: &str, uid: Option<&str>) -> Flight {
+        Flight {
+            id: 0,
+            start_time: chrono::DateTime::parse_from_rfc3339("2026-11-01T10:00:00Z").unwrap().with_timezone(&chrono::Utc),
+            end_time: None,
+            duration_sec: Some(60),
+            source: "live".into(),
+            craft_name: craft.into(),
+            fc_variant: "INAV".into(),
+            fc_version: "9.0.0".into(),
+            board_id: String::new(),
+            platform_type: 1,
+            protocol: "MSP".into(),
+            start_lat: Some(48.1),
+            start_lon: Some(11.5),
+            location_name: None,
+            weather_temp_c: None,
+            weather_wind_ms: None,
+            weather_wind_deg: None,
+            weather_desc: None,
+            max_alt_m: None,
+            max_speed_ms: None,
+            max_distance_m: None,
+            total_distance_m: None,
+            battery_used_mah: None,
+            notes: None,
+            linked_flight_id: None,
+            pilot_name: None,
+            pilot_id: None,
+            battery_serial: None,
+            utc_offset_min: None,
+            fc_uid: uid.map(String::from),
+            group_id: None,
+            vehicle_id: None,
+        }
+    }
+
+    /// The local vehicle link never travels in a `.kflight`: the export stores none, the import resolves
+    /// the flight against the target's library (FC id first) — also for a file written before v20.
+    #[test]
+    fn kflight_round_trip_resolves_the_vehicle_in_the_target_library() {
+        let dir = temp_dir("vehicle");
+        let file = dir.join("export.kflight");
+        {
+            let src = db::open_database(&dir.join("src").join("flights.db")).unwrap();
+            let src_vehicle = vehicle(&src, "Wing", Some("Wing"), Some("UIDA"));
+            let id = db::insert_flight(&src, &flight("Wing", Some("UIDA"))).unwrap();
+            assert_eq!(db::get_flight(&src, id).unwrap().unwrap().vehicle_id, Some(src_vehicle));
+            assert_eq!(export_flights(&src, &[id], &file).unwrap(), 1);
+        }
+        {
+            let k = Connection::open(&file).unwrap();
+            let v: Option<i64> = k.query_row("SELECT vehicle_id FROM flights", [], |r| r.get(0)).unwrap();
+            assert_eq!(v, None, "the export carries no local vehicle id");
+        }
+
+        {
+            let dst = db::open_database(&dir.join("dst").join("flights.db")).unwrap();
+            vehicle(&dst, "Filler A", Some("Quad"), None);
+            vehicle(&dst, "Filler B", Some("Plane"), None);
+            let by_craft = vehicle(&dst, "Same name", Some("wing"), None);
+            let same_fc = vehicle(&dst, "Same FC", None, Some("uida"));
+            let r = import_flights(&dst, &file).unwrap();
+            assert_eq!((r.imported, r.errors.len()), (1, 0));
+            let imported = db::list_flights(&dst).unwrap();
+            assert_eq!(imported.len(), 1);
+            assert_eq!(imported[0].vehicle_id, Some(same_fc), "the FC id beats the craft name ({by_craft})");
+            let f = db::get_flight(&dst, imported[0].id).unwrap().unwrap();
+            assert_eq!((f.craft_name.as_str(), f.fc_uid.as_deref()), ("Wing", Some("UIDA")));
+        }
+        // When unsure, unlinked: only a craft-name vehicle that stores another FC id → no link.
+        {
+            let dst = db::open_database(&dir.join("dst-conflict").join("flights.db")).unwrap();
+            vehicle(&dst, "Other FC", Some("Wing"), Some("UIDZ"));
+            let r = import_flights(&dst, &file).unwrap();
+            assert_eq!((r.imported, r.errors.len()), (1, 0));
+            assert_eq!(db::list_flights(&dst).unwrap()[0].vehicle_id, None);
+        }
+
+        // A `.kflight` from before v20 has no vehicle_id column: listed, imported, resolved.
+        {
+            let k = Connection::open(&file).unwrap();
+            k.execute_batch("ALTER TABLE flights DROP COLUMN vehicle_id;").unwrap();
+        }
+        assert_eq!(list_flights_in_file(&file).unwrap()[0].vehicle_id, None);
+        {
+            let dst = db::open_database(&dir.join("dst-old-file").join("flights.db")).unwrap();
+            let by_craft = vehicle(&dst, "By craft", Some(" WING "), None);
+            let r = import_flights(&dst, &file).unwrap();
+            assert_eq!((r.imported, r.errors.len()), (1, 0));
+            assert_eq!(db::list_flights(&dst).unwrap()[0].vehicle_id, Some(by_craft));
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn source_of(conn: &Connection, flight_id: i64) -> (String, Option<String>) {
+        conn.query_row(
+            "SELECT source, source_before_link FROM flights WHERE id = ?1",
+            params![flight_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap()
+    }
+
+    /// Imported flights by start minute → id (each test flight starts at its own minute).
+    fn by_minute(conn: &Connection) -> std::collections::HashMap<u32, i64> {
+        use chrono::Timelike;
+        db::list_flights(conn).unwrap().iter().map(|f| (f.start_time.minute(), f.id)).collect()
+    }
+
+    /// A flight in the `src` main DB, starting at `hh:mm` (tests tell flights apart by start minute).
+    fn at(src: &Connection, hour: u32, minute: u32, source: &str, protocol: &str) -> i64 {
+        let start = chrono::DateTime::parse_from_rfc3339(&format!("2026-11-01T{hour:02}:{minute:02}:00Z"))
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let f = Flight { start_time: start, source: source.into(), protocol: protocol.into(), ..flight("Wing", None) };
+        db::insert_flight(src, &f).unwrap()
+    }
+
+    /// The file's `blackbox_records` rows as (flight id, timestamp_us, csv_data).
+    fn records_in(k: &Connection) -> Vec<(i64, i64, String)> {
+        k.prepare("SELECT flight_id, timestamp_us, csv_data FROM blackbox_records ORDER BY flight_id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap()
+    }
+
+    /// Two linked pairs in one `.kflight`, one log flight with and one without an archived original: the
+    /// import keeps `source_before_link`, never copies the marker rows, and an unlink in the target
+    /// restores each flight's own source.
+    #[test]
+    fn kflight_round_trip_keeps_source_before_link() {
+        let dir = temp_dir("source-before-link");
+        let file = dir.join("pairs.kflight");
+        {
+            let src = db::open_database(&dir.join("src").join("flights.db")).unwrap();
+            let (live_1, log_1) = (at(&src, 10, 1, "live", "MSP"), at(&src, 10, 2, "blackbox", "MSP"));
+            let (live_2, log_2) = (at(&src, 10, 3, "live", "MSP"), at(&src, 10, 4, "blackbox", "MSP"));
+            db::insert_blackbox_file(&src, log_1, "LOG00001.TXT", 0, b"txt").unwrap();
+            db::link_flights(&src, live_1, log_1).unwrap();
+            db::link_flights(&src, live_2, log_2).unwrap();
+            assert_eq!(export_flights(&src, &[live_1, log_1, live_2, log_2], &file).unwrap(), 4);
+        }
+        {
+            let k = Connection::open(&file).unwrap();
+            let m = by_minute(&k);
+            assert_eq!(
+                records_in(&k),
+                [(m[&2], 0, String::new()), (m[&4], 0, String::new())],
+                "exactly one empty marker row per log flight, none for the live flights"
+            );
+            assert_eq!(source_of(&k, m[&2]), ("both".into(), Some("blackbox".into())));
+            assert_eq!(source_of(&k, m[&4]), ("both".into(), Some("blackbox".into())));
+            assert_eq!(source_of(&k, m[&3]), ("both".into(), Some("live".into())));
+        }
+        let dst = db::open_database(&dir.join("dst").join("flights.db")).unwrap();
+        let r = import_flights(&dst, &file).unwrap();
+        assert_eq!((r.imported, r.errors.len()), (4, 0));
+        let m = by_minute(&dst);
+        for (live, log) in [(m[&1], m[&2]), (m[&3], m[&4])] {
+            assert_eq!(db::get_flight(&dst, live).unwrap().unwrap().linked_flight_id, Some(log));
+            assert_eq!(source_of(&dst, live), ("both".into(), Some("live".into())));
+            assert_eq!(source_of(&dst, log), ("both".into(), Some("blackbox".into())));
+            db::unlink_flight(&dst, live).unwrap();
+            assert_eq!(source_of(&dst, live), ("live".into(), None));
+            assert_eq!(source_of(&dst, log), ("blackbox".into(), None), "flight {log}");
+        }
+        assert!(!db::table_exists(&dst, "blackbox_records").unwrap());
+        drop(dst);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A flight of a pair exported without its partner travels as the single flight it was: its own
+    /// source, no `source_before_link`, no link — and the marker row only if it is the log flight.
+    #[test]
+    fn flight_exported_without_its_partner_is_unlinked_in_the_file() {
+        let dir = temp_dir("lone-export");
+        let (log_file, live_file) = (dir.join("log.kflight"), dir.join("live.kflight"));
+        {
+            let src = db::open_database(&dir.join("src").join("flights.db")).unwrap();
+            let (live_1, log_1) = (at(&src, 12, 1, "live", "MSP"), at(&src, 12, 2, "blackbox", "DATAFLASH"));
+            let (live_2, log_2) = (at(&src, 12, 3, "live", "MSP"), at(&src, 12, 4, "blackbox", "BLACKBOX"));
+            db::link_flights(&src, live_1, log_1).unwrap();
+            db::link_flights(&src, live_2, log_2).unwrap();
+            assert_eq!(export_flights(&src, &[log_1], &log_file).unwrap(), 1);
+            assert_eq!(export_flights(&src, &[live_2], &live_file).unwrap(), 1);
+            // The main DB keeps its pairs.
+            assert_eq!(source_of(&src, log_1), ("both".into(), Some("blackbox".into())));
+        }
+        {
+            let k = Connection::open(&log_file).unwrap();
+            let id = by_minute(&k)[&2];
+            assert_eq!(source_of(&k, id), ("blackbox".into(), None));
+            assert_eq!(db::get_flight(&k, id).unwrap().unwrap().linked_flight_id, None);
+            assert_eq!(records_in(&k), [(id, 0, String::new())]);
+            let k = Connection::open(&live_file).unwrap();
+            assert_eq!(source_of(&k, by_minute(&k)[&3]), ("live".into(), None));
+            assert!(records_in(&k).is_empty());
+        }
+        let dst = db::open_database(&dir.join("dst").join("flights.db")).unwrap();
+        for f in [&log_file, &live_file] {
+            let r = import_flights(&dst, f).unwrap();
+            assert_eq!((r.imported, r.errors.len()), (1, 0));
+        }
+        let m = by_minute(&dst);
+        assert_eq!(source_of(&dst, m[&2]), ("blackbox".into(), None));
+        assert_eq!(source_of(&dst, m[&3]), ("live".into(), None));
+        drop(dst);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A `.kflight` from before v21: the import derives `source_before_link` for the `both` flights from
+    /// the FILE and never copies its `blackbox_records` rows. A `both` flight without its partner is
+    /// imported as the single flight it was.
+    #[test]
+    fn old_kflight_import_derives_source_before_link() {
+        let dir = temp_dir("old-source");
+        let file = dir.join("old.kflight");
+        {
+            let src = db::open_database(&dir.join("src").join("flights.db")).unwrap();
+            let (live_1, log_1) = (at(&src, 11, 1, "live", "MSP"), at(&src, 11, 2, "blackbox", "MSP"));
+            let (live_2, log_2) = (at(&src, 11, 3, "live", "MSP"), at(&src, 11, 4, "blackbox", "MSP"));
+            let lone = at(&src, 11, 5, "blackbox", "MSP");
+            let (live_3, log_3) = (at(&src, 11, 6, "live", "MSP"), at(&src, 11, 7, "blackbox", "MSP"));
+            let (live_4, log_4) = (at(&src, 11, 8, "live", "MSP"), at(&src, 11, 9, "blackbox", "DATAFLASH"));
+            let (live_5, log_5) = (at(&src, 11, 10, "live", "MSP"), at(&src, 11, 11, "blackbox", "MSP"));
+            db::insert_blackbox_file(&src, log_2, "00000042.BIN", 0, b"bin").unwrap();
+            db::insert_blackbox_file(&src, log_5, "LOG00005.TXT", 0, b"txt").unwrap();
+            for (a, b) in [(live_1, log_1), (live_2, log_2), (live_3, log_3), (live_4, log_4), (live_5, log_5)] {
+                db::link_flights(&src, a, b).unwrap();
+            }
+            let all = [live_1, log_1, live_2, log_2, lone, live_3, log_3, live_4, log_4, live_5, log_5];
+            assert_eq!(export_flights(&src, &all, &file).unwrap(), all.len());
+        }
+        {
+            // Make it an old file: no source_before_link column, no markers; decoded rows for pair 1's
+            // log flight and the unlinked one, a marker-shaped row for pair 3's; pair 4's ArduPilot flight
+            // has nothing but its protocol; pair 5 lost its link (each flight exported alone).
+            let k = Connection::open(&file).unwrap();
+            k.execute_batch("ALTER TABLE flights DROP COLUMN source_before_link; DELETE FROM blackbox_records;")
+                .unwrap();
+            let m = by_minute(&k);
+            for (id, csv) in [(m[&2], "1,2,3"), (m[&5], "1,2,3"), (m[&7], "")] {
+                k.execute(
+                    "INSERT INTO blackbox_records (flight_id, timestamp_us, csv_data) VALUES (?1, 0, ?2)",
+                    params![id, csv],
+                )
+                .unwrap();
+            }
+            k.execute("UPDATE flights SET linked_flight_id = NULL WHERE id IN (?1, ?2)", params![m[&10], m[&11]])
+                .unwrap();
+        }
+        let dst = db::open_database(&dir.join("dst").join("flights.db")).unwrap();
+        let r = import_flights(&dst, &file).unwrap();
+        assert_eq!((r.imported, r.errors.len()), (11, 0));
+        let m = by_minute(&dst);
+        let both = |before: &str| ("both".to_string(), Some(before.to_string()));
+        assert_eq!(source_of(&dst, m[&1]), both("live"));
+        assert_eq!(source_of(&dst, m[&2]), both("blackbox"), "decoded rows in the file");
+        assert_eq!(source_of(&dst, m[&3]), both("live"));
+        assert_eq!(source_of(&dst, m[&4]), both("blackbox"), "archived log in the file");
+        assert_eq!(source_of(&dst, m[&5]), ("blackbox".into(), None), "unlinked flights stay NULL");
+        assert_eq!(source_of(&dst, m[&6]), both("live"));
+        assert_eq!(source_of(&dst, m[&7]), both("blackbox"), "a marker row counts like decoded rows");
+        assert_eq!(source_of(&dst, m[&8]), both("live"));
+        assert_eq!(source_of(&dst, m[&9]), both("blackbox"), "a log importer's protocol");
+        assert_eq!(source_of(&dst, m[&10]), ("live".into(), None), "arrived without its partner");
+        assert_eq!(source_of(&dst, m[&11]), ("blackbox".into(), None), "arrived without its partner");
+        assert_eq!(db::get_flight(&dst, m[&11]).unwrap().unwrap().linked_flight_id, None);
+        assert!(!db::table_exists(&dst, "blackbox_records").unwrap(), "decoded rows never reach the main DB");
+        db::unlink_flight(&dst, m[&2]).unwrap();
+        assert_eq!(source_of(&dst, m[&1]), ("live".into(), None));
+        assert_eq!(source_of(&dst, m[&2]), ("blackbox".into(), None));
+        drop(dst);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn mission(hash: &str, extra: Option<&str>) -> MissionInput {
+        MissionInput {
+            content_hash: hash.into(),
+            name: "Survey".into(),
+            format: "ardupilot".into(),
+            waypoints_json: "[{\"lat\":48.1}]".into(),
+            source_xml: None,
+            wp_count: 1,
+            total_distance_m: Some(120.5),
+            alt_diff_m: None,
+            max_alt_m: None,
+            min_alt_m: None,
+            bndbox_min_lat: None,
+            bndbox_min_lon: None,
+            bndbox_max_lat: None,
+            bndbox_max_lon: None,
+            notes: Some("north field".into()),
+            home_lat: Some(48.1),
+            home_lon: Some(11.5),
+            vehicle_class: Some("plane".into()),
+            extra_json: extra.map(String::from),
+            created_at: Some("2026-10-01 08:00:00".into()),
+            location_name: Some("Testfeld".into()),
+        }
+    }
+
+    fn count(conn: &Connection, table: &str) -> i64 {
+        conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()
+    }
+
+    /// The linked mission, the v22 child tables and `alt_relative` travel with the flight; two flights
+    /// of one mission share its row, and a target that already holds the mission keeps its own row.
+    #[test]
+    fn kflight_round_trip_carries_the_mission_and_the_v22_tables() {
+        let dir = temp_dir("v22");
+        let file = dir.join("export.kflight");
+        {
+            let src = db::open_database(&dir.join("src").join("flights.db")).unwrap();
+            let a = db::insert_flight(&src, &flight("Wing", None)).unwrap();
+            let mut second = flight("Wing", None);
+            second.start_time += chrono::Duration::hours(1);
+            let b = db::insert_flight(&src, &second).unwrap();
+            let unlinked = db::upsert_mission(&src, &mission("hash-other", None)).unwrap();
+            let m = db::upsert_mission(&src, &mission("hash-a", Some("{\"pattern\":1}"))).unwrap();
+            db::link_flight_mission(&src, a, m).unwrap();
+            db::link_flight_mission(&src, b, m).unwrap();
+            assert_ne!(unlinked, m);
+            src.execute("UPDATE flights SET alt_relative = 1, logged_wp_count = 7 WHERE id = ?1", params![a]).unwrap();
+            db::insert_weather_record(&src, a, 2000, 48.1, 11.5, "open-meteo", "{\"steps\":[]}").unwrap();
+            db::insert_weather_record(&src, a, 302000, 48.1, 11.5, "open-meteo", "{\"steps\":[1]}").unwrap();
+            src.execute(
+                "INSERT INTO gps_records (flight_id, timestamp_ms, instance, fix_raw, num_sat, hdop, lat, yaw_deg)
+                 VALUES (?1, 1000, 1, 6, 17, 0.7, 48.1, NULL)",
+                params![a],
+            )
+            .unwrap();
+            src.execute(
+                "INSERT INTO flight_videos (flight_id, rel_path, sync_a_frame, created_at)
+                 VALUES (?1, 'cam/a.mp4', 12, '2026-11-01 10:00:00')",
+                params![a],
+            )
+            .unwrap();
+            assert_eq!(export_flights(&src, &[a, b], &file).unwrap(), 2);
+        }
+        {
+            let k = Connection::open(&file).unwrap();
+            assert_eq!(count(&k, "missions"), 1, "only the linked mission, once for both flights");
+            assert_eq!(count(&k, "weather_records"), 2);
+        }
+
+        let dst = db::open_database(&dir.join("dst").join("flights.db")).unwrap();
+        let r = import_flights(&dst, &file).unwrap();
+        assert_eq!((r.imported, r.errors.len(), r.newer_format), (2, 0, false));
+
+        // The same file stamped by a newer Kite: imported as far as known, and said so.
+        {
+            let k = Connection::open(&file).unwrap();
+            k.execute(
+                "UPDATE _kflight_meta SET value = ?1 WHERE key = 'schema_version'",
+                params![(KFLIGHT_SCHEMA_VERSION + 1).to_string()],
+            )
+            .unwrap();
+        }
+        let again = db::open_database(&dir.join("dst-newer").join("flights.db")).unwrap();
+        let r = import_flights(&again, &file).unwrap();
+        assert_eq!((r.imported, r.newer_format), (2, true));
+        let flights = db::list_flights(&dst).unwrap();
+        let a = flights.iter().min_by_key(|f| f.start_time).unwrap().id;
+        let b = flights.iter().max_by_key(|f| f.start_time).unwrap().id;
+        let m = db::get_mission_for_flight(&dst, a).unwrap().unwrap();
+        assert_eq!(db::get_mission_for_flight(&dst, b).unwrap().unwrap().id, m.id);
+        assert_eq!(count(&dst, "missions"), 1);
+        assert_eq!((m.content_hash.as_str(), m.vehicle_class.as_deref()), ("hash-a", Some("plane")));
+        assert_eq!(m.extra_json.as_deref(), Some("{\"pattern\":1}"));
+        assert_eq!((m.created_at.as_str(), m.location_name.as_deref()), ("2026-10-01 08:00:00", Some("Testfeld")));
+        let extra = |id: i64| -> (Option<i64>, Option<i64>) {
+            dst.query_row("SELECT alt_relative, logged_wp_count FROM flights WHERE id = ?1", params![id], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap()
+        };
+        assert_eq!((extra(a), extra(b)), ((Some(1), Some(7)), (None, None)));
+        for (table, cols) in CHILD_TABLES {
+            let mut listed: Vec<String> = cols.split(',').map(|c| c.trim().to_string()).collect();
+            let mut real: Vec<String> = dst
+                .prepare(&format!("SELECT name FROM pragma_table_info('{table}') WHERE name NOT IN ('id', 'flight_id')"))
+                .unwrap()
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap();
+            listed.sort();
+            real.sort();
+            assert_eq!(listed, real, "CHILD_TABLES lists every column of {table}");
+        }
+        let weather = db::get_flight_weather_records(&dst, a).unwrap();
+        assert_eq!(weather.iter().map(|w| w.timestamp_ms).collect::<Vec<_>>(), vec![2000, 302000]);
+        assert_eq!(weather[1].data_json, "{\"steps\":[1]}");
+        assert!(db::get_flight_weather_records(&dst, b).unwrap().is_empty());
+        let gps: (i64, i64, Option<i64>, f64, Option<f64>) = dst
+            .query_row(
+                "SELECT flight_id, instance, fix_raw, hdop, yaw_deg FROM gps_records",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
+        assert_eq!(gps, (a, 1, Some(6), 0.7, None));
+        let video: (i64, String, Option<i64>, String) = dst
+            .query_row("SELECT flight_id, rel_path, sync_a_frame, created_at FROM flight_videos", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .unwrap();
+        assert_eq!(video, (a, "cam/a.mp4".into(), Some(12), "2026-11-01 10:00:00".into()));
+        drop(dst);
+
+        // The target already holds the mission. Without a flight on it, the file's home, class and
+        // extra data replace its own; with one, it only gains what it lacks. Its name always stays.
+        for (case, has_flight) in [("dst-own", false), ("dst-own-linked", true)] {
+            let own = db::open_database(&dir.join(case).join("flights.db")).unwrap();
+            let mut mine = mission("hash-a", Some("{\"old\":1}"));
+            mine.name = "My name".into();
+            mine.vehicle_class = None;
+            (mine.home_lat, mine.home_lon) = (Some(1.0), Some(2.0));
+            let own_id = db::upsert_mission(&own, &mine).unwrap();
+            if has_flight {
+                let mut earlier = flight("Wing", None);
+                earlier.start_time -= chrono::Duration::days(1);
+                let id = db::insert_flight(&own, &earlier).unwrap();
+                db::link_flight_mission(&own, id, own_id).unwrap();
+            }
+            assert_eq!(import_flights(&own, &file).unwrap().imported, 2);
+            let newest = db::list_flights(&own).unwrap().into_iter().max_by_key(|f| f.start_time).unwrap().id;
+            let linked = db::get_mission_for_flight(&own, newest).unwrap().unwrap();
+            assert_eq!((linked.id, linked.name.as_str()), (own_id, "My name"), "{case}");
+            assert_eq!(linked.vehicle_class.as_deref(), Some("plane"), "{case}: filled in either way");
+            let (extra, home) = if has_flight { ("{\"old\":1}", (1.0, 2.0)) } else { ("{\"pattern\":1}", (48.1, 11.5)) };
+            assert_eq!(linked.extra_json.as_deref(), Some(extra), "{case}");
+            assert_eq!((linked.home_lat, linked.home_lon), (Some(home.0), Some(home.1)), "{case}");
+            assert_eq!(count(&own, "missions"), 1);
+            drop(own);
+        }
+
+        // A file from before v22: no mission link, none of the tables.
+        {
+            let k = Connection::open(&file).unwrap();
+            k.execute_batch(
+                "DROP TABLE missions; DROP TABLE gps_records; DROP TABLE weather_records; DROP TABLE flight_videos;
+                 ALTER TABLE flights DROP COLUMN mission_id; ALTER TABLE flights DROP COLUMN alt_relative;",
+            )
+            .unwrap();
+        }
+        let old = db::open_database(&dir.join("dst-old").join("flights.db")).unwrap();
+        let r = import_flights(&old, &file).unwrap();
+        assert_eq!((r.imported, r.errors.len()), (2, 0));
+        assert_eq!((count(&old, "missions"), count(&old, "weather_records")), (0, 0));
+        drop(old);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

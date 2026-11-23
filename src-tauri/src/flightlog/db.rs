@@ -28,7 +28,7 @@ const TELEMETRY_COLS: &str = "flight_id, timestamp_ms, lat, lon, alt_m, speed_ms
     rx_signal_received, hw_health_status, baro_temperature, \
     wind_n_ms, wind_e_ms, wind_d_ms, rc_data_json, rc_command_json, \
     nav_lat, nav_lon, nav_alt_m, mode_primary, mode_modifiers, link_snr, link_rssi_dbm, airspeed_ms, \
-    throttle_pct";
+    throttle_pct, target_lat, target_lon, target_alt_m";
 
 /// Full single-statement DDL for `telemetry_records` at the current field set. The main DB grows
 /// this table via the migration chain; the per-session temp DB (no migration history) creates it
@@ -47,7 +47,8 @@ const TELEMETRY_RECORDS_DDL_FULL: &str = "CREATE TABLE IF NOT EXISTS telemetry_r
     baro_temperature REAL, wind_n_ms REAL, wind_e_ms REAL, wind_d_ms REAL,
     rc_data_json TEXT, rc_command_json TEXT, nav_lat REAL, nav_lon REAL, nav_alt_m REAL,
     mode_primary TEXT, mode_modifiers TEXT, link_snr INTEGER, link_rssi_dbm INTEGER,
-    airspeed_ms REAL, throttle_pct REAL
+    airspeed_ms REAL, throttle_pct REAL,
+    target_lat REAL, target_lon REAL, target_alt_m REAL
 );";
 
 /// Per-instance battery samples (ArduPilot/PX4 multi-monitor). `flight_id` first so the temp-session
@@ -790,6 +791,7 @@ fn migrate(conn: &Connection) -> SqlResult<()> {
     ensure_v17_schema(conn)?;
     ensure_v18_schema(conn)?;
     ensure_v19_schema(conn)?;
+    ensure_v22_schema(conn)?;
 
     Ok(())
 }
@@ -1119,6 +1121,89 @@ fn migrate_v18_to_v19(conn: &Connection) -> SqlResult<()> {
     Ok(())
 }
 
+/// SQL condition on a `flights` row: altitudes relative to the arming point (passive CRSF / LTM carry no
+/// MSL; labels from `passive_telemetry/handler.rs`). Same rule as `isRelativeAltitudeProtocol`
+/// (helpers/altReference.ts) — change both together.
+const ALT_RELATIVE_PROTOCOL_SQL: &str =
+    "protocol LIKE 'Telemetry (%' AND (protocol LIKE '%CRSF%' OR protocol LIKE '%LTM%')";
+
+/// The nav target columns of `telemetry_records` (v22), for a table that predates them: the main database
+/// and a `.ktmp` session file left by an older build.
+fn add_nav_target_columns(conn: &Connection) -> SqlResult<()> {
+    for column in ["target_lat", "target_lon", "target_alt_m"] {
+        if !column_exists(conn, "telemetry_records", column)? {
+            conn.execute_batch(&format!("ALTER TABLE telemetry_records ADD COLUMN {column} REAL;"))?;
+        }
+    }
+    Ok(())
+}
+
+/// Tailwind keeps its own schema numbering (CURRENT stays 19): this ensure is additive and
+/// idempotent, so it runs from the self-heal pass on every open instead of a v20-v22 chain.
+/// (Upstream's v20 group-flight and v21 linked-source ensures are not ported.)
+/// v22 (Dev-Docs active/SCHEMA_V22.md). `missions.extra_json` is kept opaque: data this version does not
+/// know.
+fn ensure_v22_schema(conn: &Connection) -> SqlResult<()> {
+    conn.execute_batch(GPS_RECORDS_DDL_FULL)?;
+    conn.execute_batch(WEATHER_RECORDS_DDL_FULL)?;
+    conn.execute_batch(FLIGHT_VIDEOS_DDL_FULL)?;
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_gps_records_flight ON gps_records(flight_id, timestamp_ms);
+         CREATE INDEX IF NOT EXISTS idx_weather_records_flight ON weather_records(flight_id, timestamp_ms);
+         CREATE INDEX IF NOT EXISTS idx_flight_videos_flight ON flight_videos(flight_id);",
+    )?;
+    add_nav_target_columns(conn)?;
+    add_nav_target_columns(conn)?;
+    if !column_exists(conn, "missions", "extra_json")? {
+        conn.execute_batch("ALTER TABLE missions ADD COLUMN extra_json TEXT;")?;
+    }
+    if !column_exists(conn, "missions", "vehicle_class")? {
+        conn.execute_batch("ALTER TABLE missions ADD COLUMN vehicle_class TEXT;")?;
+    }
+    if !column_exists(conn, "flights", "alt_relative")? {
+        // Column and back-fill commit together; the back-fill runs only when the column is born. NULL
+        // (imported logs) = decide from the protocol label.
+        conn.execute_batch("SAVEPOINT v22_alt_relative;")?;
+        let added = conn.execute_batch("ALTER TABLE flights ADD COLUMN alt_relative INTEGER;").and_then(|_| {
+            conn.execute(
+                &format!("UPDATE flights SET alt_relative = CASE WHEN {ALT_RELATIVE_PROTOCOL_SQL} THEN 1 ELSE 0 END"),
+                [],
+            )
+        });
+        match added {
+            Ok(_) => conn.execute_batch("RELEASE v22_alt_relative;")?,
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK TO v22_alt_relative; RELEASE v22_alt_relative;");
+                return Err(e);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `flights.alt_relative`: the track's altitude is relative to the arming point, not MSL. `None` (the
+/// recorder was never told, e.g. a session recovered from disk) falls back to the protocol label rule.
+pub fn set_flight_alt_relative(conn: &Connection, flight_id: i64, relative: Option<bool>) -> SqlResult<()> {
+    conn.execute(
+        &format!(
+            "UPDATE flights SET alt_relative = COALESCE(?1, CASE WHEN {ALT_RELATIVE_PROTOCOL_SQL} THEN 1 ELSE 0 END)
+             WHERE id = ?2"
+        ),
+        params![relative, flight_id],
+    )?;
+    Ok(())
+}
+
+/// `None` for a flight without a stored value (imported logs, files from before v22).
+pub fn get_flight_alt_relative(conn: &Connection, flight_id: i64) -> SqlResult<Option<bool>> {
+    Ok(conn
+        .query_row("SELECT alt_relative FROM flights WHERE id = ?1", params![flight_id], |row| {
+            row.get::<_, Option<bool>>(0)
+        })
+        .optional()?
+        .flatten())
+}
+
 fn migrate_v6_to_v7(conn: &Connection) -> SqlResult<()> {
     conn.execute_batch(
         "ALTER TABLE telemetry_records ADD COLUMN battery_percentage INTEGER;",
@@ -1336,7 +1421,8 @@ pub fn insert_telemetry_batch(
                 rc_data_json, rc_command_json,
                 nav_lat, nav_lon, nav_alt_m,
                 mode_primary, mode_modifiers,
-                link_snr, link_rssi_dbm, airspeed_ms, throttle_pct
+                link_snr, link_rssi_dbm, airspeed_ms, throttle_pct,
+                target_lat, target_lon, target_alt_m
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
                 ?14, ?15, ?16, ?17, ?18, ?19, ?20,
@@ -1347,7 +1433,8 @@ pub fn insert_telemetry_batch(
                 ?36, ?37,
                 ?38, ?39, ?40,
                 ?41, ?42,
-                ?43, ?44, ?45, ?46
+                ?43, ?44, ?45, ?46, ?47,
+                ?48, ?49
             )",
         )?;
         for r in records {
@@ -1398,6 +1485,9 @@ pub fn insert_telemetry_batch(
                 r.link_rssi_dbm,
                 r.airspeed_ms,
                 r.throttle_pct,
+                r.target_lat,
+                r.target_lon,
+                r.target_alt_m,
             ])?;
         }
     }
@@ -1590,6 +1680,8 @@ pub fn open_temp_session(path: &Path) -> SqlResult<Connection> {
     if !column_exists(&conn, "session_meta", "fc_uid")? {
         conn.execute_batch("ALTER TABLE session_meta ADD COLUMN fc_uid TEXT;")?;
     }
+    // …and one written before the nav-target columns predates them (the commit copies TELEMETRY_COLS).
+    add_nav_target_columns(&conn)?;
     Ok(conn)
 }
 
@@ -2817,6 +2909,9 @@ fn read_telemetry_record(row: &rusqlite::Row) -> SqlResult<TelemetryRecord> {
         link_rssi_dbm: row.get(44)?,
         airspeed_ms: row.get(45)?,
         throttle_pct: row.get(46)?,
+        target_lat: row.get(47)?,
+        target_lon: row.get(48)?,
+        target_alt_m: row.get(49)?,
     })
 }
 
@@ -3585,6 +3680,9 @@ mod tests {
                 nav_lat: None,
                 nav_lon: None,
                 nav_alt_m: None,
+                target_lat: None,
+                target_lon: None,
+                target_alt_m: None,
                 mode_primary: None,
                 mode_modifiers: None,
                 link_snr: None,
@@ -3679,6 +3777,9 @@ mod tests {
             nav_lat: None,
             nav_lon: None,
             nav_alt_m: None,
+            target_lat: None,
+            target_lon: None,
+            target_alt_m: None,
             mode_primary: None,
             mode_modifiers: None,
             link_snr: None,
