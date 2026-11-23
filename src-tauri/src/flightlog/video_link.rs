@@ -494,8 +494,6 @@ mod tests {
             pilot_id: None,
             battery_serial: None,
             utc_offset_min: None,
-            group_id: None,
-            vehicle_id: None,
         }
     }
 
