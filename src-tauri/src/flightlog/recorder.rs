@@ -76,6 +76,9 @@ pub struct PendingSession {
     /// Last weather answer the session stored (`ActiveFlight::weather_seq`): a reopened session must
     /// not store the same answer again.
     pub weather_seq: u64,
+    /// The link reports altitude relative to the arming point (`FlightRecorder::alt_relative`); `None`
+    /// for a session recovered from disk.
+    pub alt_relative: Option<bool>,
 }
 
 /// Shared, connection-independent slot for the one pending session (see `state::AppState`).
@@ -155,6 +158,9 @@ pub fn commit_pending_session(session: &PendingSession) -> Result<i64, String> {
     }
     let flight_id = db::commit_session_to_main(&conn, &session.temp_path, &session.flight)
         .map_err(|e| format!("Failed to commit session: {}", e))?;
+    if let Err(e) = db::set_flight_alt_relative(&conn, flight_id, session.alt_relative) {
+        log::warn!("Flight {flight_id}: altitude reference not stored: {e}");
+    }
     db::remove_temp_session(&session.temp_path);
 
     if let (Some(lat), Some(lon)) = (session.flight.start_lat, session.flight.start_lon) {
@@ -288,6 +294,7 @@ pub fn summarize_temp_session(
             start_mah,
             last_timestamp_ms,
             weather_seq: 0,
+            alt_relative: None,
         },
         count,
     ))
@@ -435,6 +442,9 @@ pub struct FlightRecorder {
     settings: FlightLogSettings,
     fc_info: FcInfo,
     protocol: String,
+    /// Set by the passive handler at protocol lock (true for LTM / CRSF); `None` on an active MSP or
+    /// MAVLink link, which reports MSL.
+    alt_relative: Option<bool>,
     db_file_path: std::path::PathBuf,
     /// Base dir for raw logs (raw_logs/*.tlog | *.rawmsp) — separate from the DB folder.
     raw_log_dir: std::path::PathBuf,
@@ -509,6 +519,7 @@ impl FlightRecorder {
             settings,
             fc_info,
             protocol: protocol.to_string(),
+            alt_relative: None,
             db_file_path: db_path,
             raw_log_dir,
             msp_raw_sink,
@@ -538,6 +549,10 @@ impl FlightRecorder {
     /// "Telemetry (SmartPort)") once locked — before a flight is created on arm.
     pub fn set_protocol(&mut self, protocol: &str) {
         self.protocol = protocol.to_string();
+    }
+
+    pub fn set_alt_relative(&mut self, relative: bool) {
+        self.alt_relative = Some(relative);
     }
 
     /// Start continuous raw logging immediately on connect.
@@ -1098,6 +1113,7 @@ impl FlightRecorder {
                 start_mah: flight.start_mah,
                 last_timestamp_ms,
                 weather_seq: flight.weather_seq,
+                alt_relative: self.alt_relative.or(Some(false)),
             },
             sample_count,
         ))
