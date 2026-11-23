@@ -804,6 +804,14 @@ fn migrate(conn: &Connection) -> SqlResult<()> {
 }
 
 /// Whether `table` has a column named `column` (via PRAGMA table_info).
+pub(crate) fn table_exists(conn: &Connection, table: &str) -> SqlResult<bool> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+        params![table],
+        |row| row.get(0),
+    )
+}
+
 pub(crate) fn column_exists(conn: &Connection, table: &str, column: &str) -> SqlResult<bool> {
     // `table` is always a hardcoded literal here, so the format! is injection-safe.
     let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table))?;

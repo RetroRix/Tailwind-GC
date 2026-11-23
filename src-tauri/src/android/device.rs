@@ -68,6 +68,8 @@ pub fn internal_serial_ports() -> Vec<PortInfo> {
                 path: e.path,
                 label: e.label,
                 port_type: e.port_type,
+                vid: None,
+                pid: None,
             })
             .collect(),
         Err(e) => {
