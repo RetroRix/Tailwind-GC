@@ -8,6 +8,7 @@ import { writable } from 'svelte/store';
 import { currentProviderId } from '$lib/config/mapProviders';
 import type { RelayConfig } from '$lib/stores/relay';
 import { isMobile } from '$lib/platform';
+import type { LogbookSortMode } from '$lib/stores/flightlogTypes';
 import type { WidgetSize } from '$lib/config/widgetRegistry';
 import { normalizeTileSize, type UserMapSpec } from '$lib/config/mapProviders';
 import { validateTileTemplate } from '$lib/helpers/tileTemplate';
@@ -427,6 +428,8 @@ export interface AppSettings {
   flightWeatherRecording: boolean;
   /** Look up the place name of a flight's start point. */
   flightAutoLocation: boolean;
+  /** Grouping order of the logbook tree. */
+  logbookSortMode: LogbookSortMode;
   // Mission Control
   defaultWpAltitudeM: number;
   defaultPhTimeSec: number;
@@ -543,6 +546,7 @@ const defaults: AppSettings = {
   flightLogRawAlways: false,
   flightWeatherRecording: true,
   flightAutoLocation: true,
+  logbookSortMode: 'aircraft-location-date',
   defaultWpAltitudeM: 50,
   defaultPhTimeSec: 30,
   lastAutopilotSystem: 'inav',

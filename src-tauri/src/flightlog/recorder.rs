@@ -18,7 +18,8 @@ use super::tlog_logger::TlogLogger;
 use super::types::{BatteryRecord, Flight, FlightLogSettings, TelemetryRecord};
 use crate::msp::FcInfo;
 use crate::scheduler::telemetry::{
-    AirspeedData, AltitudeData, AnalogData, AttitudeData, BatteryInstanceData, GpsData, GpsStatsData,
+    AirspeedData, AltitudeData, AnalogData, AttitudeData, BatteryInstanceData, GpsData, GpsReceiverData,
+    GpsStatsData,
     LinkStatsData, Misc2Data, NavStatusData, SensorStatusData, StatusData, WindData,
 };
 
@@ -414,6 +415,9 @@ struct ActiveFlight {
     buffer: Vec<TelemetryRecord>,
     /// Accumulated per-instance battery records pending flush (multi-battery; ArduPilot/PX4).
     bat_buffer: Vec<BatteryRecord>,
+    /// Raw GPS receiver samples `(session ms, sample)` pending flush; written with the telemetry batch so
+    /// a crash loses the same tail of both.
+    gps_buffer: Vec<(i64, GpsReceiverData)>,
     /// Sequence number of the last weather answer written to the temp store; 0 = none yet.
     weather_seq: u64,
     // Statistics tracking
@@ -461,6 +465,18 @@ pub struct FlightRecorder {
 
 /// Thread-safe handle to the flight recorder
 pub type FlightRecorderHandle = Arc<Mutex<FlightRecorder>>;
+
+/// Write the pending GPS receiver samples to the temp store. The buffer is emptied either way: a
+/// failing store must not grow it for the rest of the flight.
+fn flush_gps(conn: &Connection, buffer: &mut Vec<(i64, GpsReceiverData)>) {
+    if buffer.is_empty() {
+        return;
+    }
+    let rows = std::mem::take(buffer);
+    if let Err(e) = db::insert_gps_records_batch(conn, 0, &rows) {
+        log::error!("Failed to flush GPS receiver batch to temp store: {}", e);
+    }
+}
 
 impl FlightRecorder {
     /// Create a new recorder. Returns None if logging is disabled.
@@ -620,6 +636,18 @@ impl FlightRecorder {
         flight.weather_seq = seq;
         if let Err(e) = db::insert_weather_record(conn, 0, elapsed_ms, lat, lon, source, data_json) {
             log::warn!("Failed to store the weather answer: {}", e);
+        }
+    }
+
+    /// One raw message of one GPS receiver: a `gps_records` row while a flight is recorded.
+    pub fn on_gps_receiver(&mut self, data: &GpsReceiverData) {
+        let Some(flight) = self.active_flight.as_mut() else { return };
+        let Some(conn) = flight.temp_db.as_ref() else { return };
+        let elapsed_ms = flight.start_instant.elapsed().as_millis() as i64;
+        flight.gps_buffer.push((elapsed_ms, *data));
+        // Normally flushed with the telemetry batch; this bounds it while no samples are recorded.
+        if flight.gps_buffer.len() >= FLUSH_THRESHOLD {
+            flush_gps(conn, &mut flight.gps_buffer);
         }
     }
 
@@ -866,6 +894,7 @@ impl FlightRecorder {
             start_lon: p.flight.start_lon,
             buffer: Vec::with_capacity(FLUSH_THRESHOLD),
             bat_buffer: Vec::new(),
+            gps_buffer: Vec::new(),
             weather_seq: p.weather_seq,
             max_alt: p.flight.max_alt_m.unwrap_or(0.0),
             max_speed: p.flight.max_speed_ms.unwrap_or(0.0),
@@ -957,6 +986,7 @@ impl FlightRecorder {
             start_lon: self.snapshot.lon,
             buffer: Vec::with_capacity(FLUSH_THRESHOLD),
             bat_buffer: Vec::new(),
+            gps_buffer: Vec::new(),
             weather_seq: 0,
             max_alt: 0.0,
             max_speed: 0.0,
@@ -1021,6 +1051,7 @@ impl FlightRecorder {
                 log::error!("Failed to flush final battery batch to temp store: {}", e);
             }
         }
+        flush_gps(&temp_db, &mut flight.gps_buffer);
         let sample_count = db::temp_session_row_count(&temp_db).unwrap_or(0);
         drop(temp_db); // checkpoint the WAL before any later ATTACH
 
@@ -1221,6 +1252,7 @@ impl FlightRecorder {
                         log::error!("Failed to flush battery batch to temp store: {}", e);
                     }
                 }
+                flush_gps(temp_db, &mut flight.gps_buffer);
             }
         }
     }
