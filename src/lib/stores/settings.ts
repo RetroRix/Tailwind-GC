@@ -8,6 +8,7 @@ import { writable } from 'svelte/store';
 import { currentProviderId } from '$lib/config/mapProviders';
 import type { RelayConfig } from '$lib/stores/relay';
 import { isMobile } from '$lib/platform';
+import type { LogbookSortMode } from '$lib/stores/flightlogTypes';
 import type { WidgetSize } from '$lib/config/widgetRegistry';
 import { normalizeTileSize, type UserMapSpec } from '$lib/config/mapProviders';
 import { validateTileTemplate } from '$lib/helpers/tileTemplate';
@@ -268,6 +269,15 @@ export interface RcControlSettings {
   /** Offline platform selection for the config editor (see docs/active/MAVLINK_RC_CONTROL.md §2). When a
    *  FC is connected the detected platform wins and locks; this is the choice used while disconnected. */
   platform: RcPlatform;
+  /** FrSky radios remembered as Bluetooth trainer inputs; absent in older settings. */
+  trainerRadios?: TrainerRadio[];
+}
+
+/** A remembered trainer radio: BLE id, name, and whether its module needs the PIN pairing. */
+export interface TrainerRadio {
+  id: string;
+  name: string;
+  pairing?: boolean;
 }
 
 /** Flight-stack the RC-control config targets — drives the channel split + the send adapter. */
@@ -423,6 +433,12 @@ export interface AppSettings {
   flightLogRawPath: string;
   flightLogRawEnabled: boolean;
   flightLogRawAlways: boolean;
+  /** Weather requests without a weather widget on screen: during a recording and for a stored flight. */
+  flightWeatherRecording: boolean;
+  /** Look up the place name of a flight's start point. */
+  flightAutoLocation: boolean;
+  /** Grouping order of the logbook tree. */
+  logbookSortMode: LogbookSortMode;
   // Mission Control
   defaultWpAltitudeM: number;
   defaultPhTimeSec: number;
@@ -464,6 +480,9 @@ export interface AppSettings {
   cesiumIonToken: string;
   /** User chose "don't remind me" on the missing-Cesium-key prompt → never auto-show it again. */
   cesiumKeyPromptDismissed: boolean;
+  /** Answers to the backup prompt, by backup file path, for the backup with this modification time:
+   *  `remindAt` 0 = keep and do not ask again, else the time (ms) from which the prompt comes back. */
+  dbBackupAck: Record<string, { modifiedMs: number; remindAt: number }>;
   /** Low-power 3D render cap: off = uncapped · on = always 20fps · auto = 20fps only while on battery. */
   lowPower3D: 'off' | 'on' | 'auto';
   /** 3D globe at native pixel density (on) or half of it (off). Default: on for desktop, off for mobile. */
@@ -537,6 +556,9 @@ const defaults: AppSettings = {
   flightLogRawPath: '',
   flightLogRawEnabled: false,
   flightLogRawAlways: false,
+  flightWeatherRecording: true,
+  flightAutoLocation: true,
+  logbookSortMode: 'aircraft-location-date',
   defaultWpAltitudeM: 50,
   defaultPhTimeSec: 30,
   lastAutopilotSystem: 'inav',
@@ -565,6 +587,7 @@ const defaults: AppSettings = {
   stayAwake: false,
   cesiumIonToken: '',
   cesiumKeyPromptDismissed: false,
+  dbBackupAck: {},
   lowPower3D: 'auto',
   highRes3D: !isMobile,
   altitudeCurtain3D: true,

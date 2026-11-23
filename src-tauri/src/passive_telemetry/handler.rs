@@ -172,8 +172,8 @@ fn handler_loop(
     let mut detector = Detector::new();
     // Active decoder, created once the detector locks a protocol we can decode (FrSky first).
     let mut frsky: Option<FrskyDecoder> = None;
-    // CRSF decoder (Phase E2): on lock, decodes frames into the radiotelem_<ts>.crsf.txt dump for
-    // offline scaling validation. Does NOT yet publish unified events (that is E4).
+    // CRSF decoder, created on lock: publishes unified events, feeds the recorder and writes a
+    // radiotelem_<ts>.crsf.txt dump.
     let mut crsf: Option<CrsfDecoder> = None;
     // LTM decoder: on lock, publishes unified events + feeds the recorder, and writes a
     // radiotelem_<ts>.ltm.txt decoded dump for validation.
@@ -242,11 +242,15 @@ fn handler_loop(
                             Protocol::Ltm => "Telemetry (LTM)",
                             Protocol::Mavlink => "Telemetry (MAVLink)",
                         };
-                        if let Some(ref rec) = recorder {
-                            if let Ok(mut r) = rec.lock() { r.set_protocol(label); }
-                        }
-                        // LTM and CRSF count as arming-relative; a CRSF stream that shows MSL corrects this below.
+                        // LTM / CRSF send only arming-relative altitude: the frontend anchors it to a
+                        // ground reference (captured at the arm edge), the recorder stores the fact.
                         let msl = !matches!(p, Protocol::Ltm | Protocol::Crsf);
+                        if let Some(ref rec) = recorder {
+                            if let Ok(mut r) = rec.lock() {
+                                r.set_protocol(label);
+                                r.set_alt_relative(!msl);
+                            }
+                        }
                         let _ = app_handle.emit("telemetry-alt-ref", AltRef { msl });
                         log::info!("Passive telemetry locked: {} (alt MSL: {})", label, msl);
                         protocol_labeled = true;
@@ -260,7 +264,7 @@ fn handler_loop(
                         msp_probe.get_or_insert_with(MspProbe::new).push_bytes(chunk);
                     }
                 }
-                // Once CRSF is locked, decode into unified events (+ dump for validation).
+                // Once CRSF is locked, decode into unified events (+ dump).
                 if detector.locked() == Some(Protocol::Crsf) {
                     crsf.get_or_insert_with(|| {
                         CrsfDecoder::new(capture.as_ref().map(|c| c.sibling_path("crsf.txt")))

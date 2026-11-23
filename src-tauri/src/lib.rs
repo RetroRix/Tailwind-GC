@@ -12,6 +12,8 @@ mod flightlog;
 mod flightmode;
 mod github_release;
 mod hid;
+#[cfg(target_os = "ios")]
+mod ios_device;
 mod link_presence;
 mod link_stats;
 mod link_status;
@@ -40,16 +42,20 @@ mod transport;
 mod user_agent;
 mod user_file;
 mod video;
+mod weather;
 
 use commands::connection::{connect, disconnect, set_platform_type, inav_set_craft_name, inav_read_stats, scan_ble_devices, ble_scan_start, ble_scan_stop};
 use commands::connection::list_serial_ports;
-use commands::flightlog::{
+use commands::flightlog::{flightlog_flight_videos,
+    flightlog_export_videos_info, flightlog_export_videos, flightlog_import_videos_info, flightlog_import_videos,
+    flightlog_delete_videos_info, flightlog_orphan_videos_info, flightlog_orphan_videos_delete,
     flightlog_list, flightlog_get, flightlog_get_track, flightlog_get_battery_records, flightlog_delete,
     flightlog_update_notes, flightlog_update_craft_name, flightlog_update_platform_type, flightlog_update_pilot, flightlog_update_weather, flightlog_geocode, flightlog_fetch_weather,
     flightlog_default_db_path, flightlog_default_raw_log_path, flightlog_import_blackbox,
     flightlog_blackbox_log_count,
     flightlog_export, flightlog_export_blackbox, flightlog_blackbox_file_info, flightlog_delete_blackbox_file, flightlog_compact_db, flightlog_export_track, flightlog_import_kflight,
-    flightlog_backup_info, flightlog_backup_delete,
+    flightlog_backup_info, flightlog_backup_delete, flightlog_schema_state, flightlog_upgrade_run,
+    flightlog_folder_state, flightlog_db_move, flightlog_db_retire,
     flightlog_kflight_list, flightlog_kflight_get, flightlog_kflight_track,
     flightlog_probe_ardupilot, flightlog_decode_ardupilot_csv,
     flightlog_import_ardupilot, flightlog_import_raw, flightlog_import_ulog,
@@ -63,7 +69,7 @@ use commands::flightlog::{
     flightlog_hires_info, flightlog_hires_parse, flightlog_hires_sample, flightlog_hires_drop,
     flightlog_hires_cleanup, flightlog_scratch_dir, flightlog_scratch_clear,
     mission_db_save, mission_db_get, mission_db_for_flight, flight_link_mission,
-    flight_logged_wp_count, mission_db_geocode, mission_db_find_by_hash, mission_db_update,
+    flight_logged_wp_count, flight_alt_relative, mission_db_geocode, mission_db_find_by_hash, mission_db_update,
     flight_unlink_mission, mission_db_delete, mission_db_flights, mission_db_list,
     mission_db_set_meta,
     battery_db_create, battery_db_update, battery_db_list, battery_db_get,
@@ -73,10 +79,13 @@ use commands::flightlog::{
     vehicle_db_create, vehicle_db_update, vehicle_db_list, vehicle_db_get,
     vehicle_db_find_by_craft_name, vehicle_db_find_by_fc_uid, vehicle_db_delete, vehicle_db_aggregate, vehicle_db_flights,
     vehicle_db_set_baseline, vehicle_file_write, vehicle_file_read,
+    mission_file_write, mission_file_read, mission_db_set_extra,
+    vehicle_db_resolve, vehicle_db_link_flights, vehicle_db_link_flights_count, vehicle_db_transfer_flights,
+    flight_set_vehicle, vehicle_db_set_fc_uid,
 };
 use commands::aero::{aero_fetch, aero_cache_stats, aero_cache_clear};
 use commands::hid::{
-    hid_start, hid_stop, hid_select_device,
+    hid_start, hid_stop, hid_select_device, trainer_start, trainer_stop,
     hid_profiles_dir, hid_profile_list, hid_profile_save, hid_profile_delete,
 };
 use commands::rc::{
@@ -89,8 +98,11 @@ use commands::geozone::{geozone_read_all, geozone_write_all};
 use commands::fence::{fence_read_all, fence_write_all};
 use commands::rally::{rally_read_all, rally_write_all};
 use commands::info::{get_app_version, is_debug_mode};
-use commands::system::{system_active_net_is_wifi, system_on_battery};
-use commands::storage::{share_file, storage_pick_folder};
+use commands::system::{system_active_net_is_wifi, system_on_battery, system_open_folder};
+use commands::storage::{
+    export_copy, export_scratch_clear, export_scratch_path, export_take_save_request, file_display_name,
+    share_file, storage_pick_folder, storage_flush_raw_logs,
+};
 use commands::video::{
     video_ffmpeg_status, video_hw_transcode_available, video_ffmpeg_download,
     video_engine_status, video_engine_download, video_webrtc_start, video_webrtc_offer,
@@ -102,6 +114,8 @@ use commands::video::{
     video_rtsp_native_sink_surfaces, video_rtsp_native_stats,
     video_linux_hole_spike,
     video_rtsp_native_sink_buffer, video_rtsp_native_sink_orient,
+    video_record_default_dir, video_record_enable, video_record_start, video_record_stop, video_record_status,
+    video_replay_open, video_replay_sync,
     video_detached_open, video_detached_close, video_detached_pin_top, video_detached_chrome, video_detached_aspect, video_detached_nudge,
 };
 use video::{MediaMtx, MjpegServer};
@@ -116,6 +130,7 @@ use commands::terrain::{
     terrain_profile,
 };
 use terrain::TerrainProvider;
+use commands::weather::{flightlog_set_lookups, weather_set_reference, weather_watch};
 use commands::mission::{
     mission_get, mission_clear, mission_set, mission_add_wp, mission_insert_wp,
     mission_remove_wp, mission_update_wp, mission_reorder_wp,
@@ -471,10 +486,21 @@ pub fn run() {
 
     builder
         .setup(|_app| {
+            flightlog::video_link::note_startup();
             // Android: record where app data actually landed, and flag any disagreement with Tauri's
             // own idea of it (see `android::log_resolved_dirs`).
             #[cfg(target_os = "android")]
             android::log_resolved_dirs(_app.handle());
+            // At startup, so every mobile log carries the hardware identification.
+            #[cfg(target_os = "android")]
+            android::device::profile();
+            #[cfg(target_os = "ios")]
+            ios_device::log_model();
+
+            {
+                use tauri::Manager;
+                _app.state::<weather::service::WeatherService>().start(_app.handle());
+            }
 
             // Linux: re-host the WebView over the native video layer (hole-punch decode sink,
             // MOBILE_RTSP.md P2.3). Needs the transparent window from tauri.linux.conf.json.
@@ -615,7 +641,9 @@ pub fn run() {
         .manage(RelayHub::new())
         .manage(TelemetryApi::new())
         .manage(NtripService::new())
+        .manage(weather::service::WeatherService::new())
         .manage(HidManager::new())
+        .manage(hid::frsky_trainer::TrainerManager::new())
         // As an `Arc` so the start command can hand it to a blocking task (process spawn +
         // readiness poll) without pinning an async runtime thread.
         .manage(std::sync::Arc::new(MediaMtx::new()))
@@ -706,6 +734,7 @@ pub fn run() {
             mission_db_for_flight,
             flight_link_mission,
             flight_logged_wp_count,
+            flight_alt_relative,
             mission_db_geocode,
             mission_db_find_by_hash,
             mission_db_update,
@@ -739,6 +768,15 @@ pub fn run() {
             vehicle_db_set_baseline,
             vehicle_file_write,
             vehicle_file_read,
+            mission_file_write,
+            mission_file_read,
+            mission_db_set_extra,
+            vehicle_db_resolve,
+            vehicle_db_link_flights,
+            vehicle_db_link_flights_count,
+            vehicle_db_transfer_flights,
+            flight_set_vehicle,
+            vehicle_db_set_fc_uid,
             flightlog_update_notes,
             flightlog_update_craft_name,
             flightlog_update_platform_type,
@@ -757,6 +795,11 @@ pub fn run() {
             flightlog_compact_db,
             flightlog_backup_info,
             flightlog_backup_delete,
+            flightlog_schema_state,
+            flightlog_upgrade_run,
+            flightlog_folder_state,
+            flightlog_db_move,
+            flightlog_db_retire,
             flightlog_export_track,
             flightlog_import_kflight,
             flightlog_kflight_list,
@@ -793,12 +836,23 @@ pub fn run() {
             terrain_elevations,
             terrain_profile,
             terrain_fan,
+            weather_watch,
+            weather_set_reference,
+            flightlog_set_lookups,
+            commands::flightlog::flightlog_get_weather_records,
+            commands::flightlog::flightlog_get_gps_records,
             terrain_cache_stats,
             terrain_cache_clear,
             system_on_battery,
+            system_open_folder,
             system_active_net_is_wifi,
             storage_pick_folder,
             share_file,
+            file_display_name,
+            export_scratch_path,
+            export_scratch_clear,
+            export_take_save_request,
+            export_copy,
             video_ffmpeg_status,
             video_hw_transcode_available,
             video_ffmpeg_download,
@@ -820,6 +874,21 @@ pub fn run() {
             video_rtsp_native_stats,
             video_rtsp_native_sink_buffer,
             video_rtsp_native_sink_orient,
+            video_record_default_dir,
+            video_record_enable,
+            video_record_start,
+            video_record_stop,
+            video_record_status,
+            video_replay_open,
+            video_replay_sync,
+            flightlog_flight_videos,
+            flightlog_export_videos_info,
+            flightlog_export_videos,
+            flightlog_import_videos_info,
+            flightlog_import_videos,
+            flightlog_delete_videos_info,
+            flightlog_orphan_videos_info,
+            flightlog_orphan_videos_delete,
             video_native_mjpeg_stop,
             video_detached_open,
             video_detached_close,
@@ -844,6 +913,8 @@ pub fn run() {
             hid_start,
             hid_stop,
             hid_select_device,
+            trainer_start,
+            trainer_stop,
             hid_profiles_dir,
             hid_profile_list,
             hid_profile_save,
@@ -879,6 +950,10 @@ pub fn run() {
                 app.state::<MjpegServer>().stop();
                 app.state::<NtripService>().stop();
                 app.state::<video::rtsp_native::NativeRtsp>().stop();
+                commands::video::finish_recording_at_exit(&app.state::<video::rtsp_native::NativeRtsp>());
+                // A bond left in the OS makes the older FrSky module drop every later connection.
+                #[cfg(not(any(target_os = "ios", target_os = "android")))]
+                transport::ble_pairing::release_all_blocking();
             }
             // The detached video window keeps the app alive on its own (Tauri exits when the LAST
             // window closes), so closing Kite would leave a naked video frame on the desktop. It

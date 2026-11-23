@@ -1,20 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Marc Hoffmann (b14ckyy)
 
-// HID / joystick input backend for GCS RC control (INAV RC over MSP — see docs/archive/MSP_RC_CONTROL.md).
-//
-// Phase 1: raw device input only. A dedicated thread polls the selected device at ~50 Hz and streams
-// RAW axis/button/hat state to the frontend (`hid-input`), plus the connected-device list
-// (`hid-devices`) on hotplug. No channel mapping happens here yet — the frontend's calibration UI
-// consumes raw values; mapping → RC channels is a later phase that will move into this thread.
-//
-// We use **native per-OS backends** (not a gamepad-abstraction library): flight hardware / RC
-// transmitters expose many axes + hats that a gamepad model (Xbox layout) misclassifies as buttons.
-//   Windows → Windows.Gaming.Input `RawGameController` (raw axes/buttons/switches, no projection).
-//   Linux   → evdev (raw ABS axes / BTN keys / HAT axes).
-// Each backend yields the same `HidDevice` / `HidSnapshot` shape. The owning thread is the only place
-// a backend is touched (the WGI COM objects aren't `Send`), controlled via `HidManager`.
+// HID input for RC control: one thread polls the OS backend at ~50 Hz (`hid-devices`, `hid-input`); the
+// FrSky Bluetooth trainer (frsky_trainer.rs) joins that list and emits its own `hid-input` per frame.
+// The owning thread is the only place a backend is touched (the WGI COM objects aren't `Send`).
 
+pub mod frsky_trainer;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -194,15 +185,36 @@ fn resolve_target(devices: &[HidDevice], selected: usize) -> Option<usize> {
 fn input_loop(app: AppHandle, running: Arc<AtomicBool>, selected: Arc<AtomicUsize>) {
     let mut backend = make_backend();
     let mut last_devices: Vec<HidDevice> = Vec::new();
+    let mut cur_target: Option<usize> = None;
+    let mut got_reading = false;
+    let mut since = Instant::now();
+    let mut warned_silent = false;
+    let mut last_trace = Instant::now();
+    let mut last_axes: Vec<i32> = Vec::new();
 
     while running.load(Ordering::SeqCst) {
-        let devices = backend.poll();
+        let mut devices = backend.poll();
+        devices.extend(frsky_trainer::device());
         if devices != last_devices {
             let _ = app.emit("hid-devices", &devices);
             last_devices = devices.clone();
         }
 
-        if let Some(target) = resolve_target(&devices, selected.load(Ordering::SeqCst)) {
+        let target = resolve_target(&devices, selected.load(Ordering::SeqCst));
+        if target != cur_target {
+            cur_target = target;
+            got_reading = false;
+            warned_silent = false;
+            since = Instant::now();
+            if let Some(id) = target {
+                log::info!("[hid] streaming device id={}", id);
+            }
+        }
+
+        // The trainer task emits its own `hid-input` on frame arrival.
+        let trainer = target == Some(frsky_trainer::DEVICE_ID);
+        frsky_trainer::set_selected(trainer);
+        if let Some(target) = target.filter(|_| !trainer) {
             if let Some(mut snap) = backend.snapshot(target) {
                 for axis in &mut snap.axes {
                     axis.value = apply_deadband(axis.value);
@@ -213,4 +225,6 @@ fn input_loop(app: AppHandle, running: Arc<AtomicBool>, selected: Arc<AtomicUsiz
 
         thread::sleep(POLL_INTERVAL);
     }
+    frsky_trainer::set_selected(false);
+    log::info!("[hid] input thread stopped");
 }

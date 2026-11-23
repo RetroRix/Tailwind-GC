@@ -279,9 +279,12 @@ pub async fn mission_upload(
     Ok(store.snapshot())
 }
 
-/// One INAV multi-mission list, numbered through. INAV ends a mission on 0xA5 only: a stray one inside is
-/// cleared, fly-by-home (0x48) stays inside. On the last WP that byte is taken, so fly-by-home goes as
-/// lat/lon 0, INAV's other home marker. Resolve AGL before this: (0,0) has no terrain.
+/// One INAV multi-mission list, numbered through. INAV ends a mission on 0xA5 only: every mission's last
+/// WP gets it, a stray one inside is cleared. Fly-by-home (0x48) is kept inside a mission; on the last WP
+/// the flag byte is taken, so it goes as lat/lon 0, which INAV also reads as home. Empty missions are skipped.
+/// One INAV multi-mission list, numbered through. INAV ends a mission on 0xA5 only: every mission's last
+/// WP gets it, a stray one inside is cleared. Fly-by-home (0x48) is kept inside a mission; on the last WP
+/// the flag byte is taken, so it goes as lat/lon 0, which INAV also reads as home. Empty missions are skipped.
 fn assemble_multi_mission(missions: &[Vec<Waypoint>]) -> Vec<Waypoint> {
     let mut out: Vec<Waypoint> = Vec::new();
     for seg in missions {
@@ -451,8 +454,7 @@ pub async fn mission_save_file_from_json(
     let mission = Mission { waypoints, info: MissionInfo::default(), dirty: false, home: None };
     let resolved = resolve_agl(&mission, &terrain).await?;
     let xml = mission_to_xml(&resolved);
-    std::fs::write(&path, xml).map_err(|e| format!("Failed to save: {e}"))?;
-    Ok(())
+    crate::user_file::with_write_path(&path, |p| std::fs::write(p, &xml).map_err(|e| format!("Failed to save: {e}")))
 }
 
 /// Import mission from MW XML string

@@ -15,6 +15,7 @@
   import { SUPPORTED_LOCALES } from '$lib/i18n';
   import { MAP_PROVIDERS, getProviderById, isCustomProviderId, userProviderId } from '$lib/config/mapProviders';
   import { settings } from '$lib/stores/settings';
+  import { formatBackupSize } from '$lib/controllers/dbBackupPrompt';
   import UserMapsDialog from '$lib/components/UserMapsDialog.svelte';
   import {
     customMaps, ensureCustomMapsLoaded, chooseCustomMapsFolder, resetCustomMapsFolder, rescanCustomMaps,
@@ -238,13 +239,12 @@
     } catch (e) {
       console.warn('[settings] revealItemInDir failed', e);
     }
-    // Second try: open the containing folder itself, which some file managers handle when "reveal"
-    // isn't wired up.
+    // Second try: the folder itself, which a file manager opens also where "reveal" isn't wired up.
     try {
-      await openPath(p.replace(/[\/][^\/]*$/, ''));
+      await invoke('system_open_folder', { path: p });
       return;
     } catch (e) {
-      console.warn('[settings] openPath failed', e);
+      console.warn('[settings] system_open_folder failed', e);
       logOpenError = e instanceof Error ? e.message : String(e);
     }
   }
@@ -376,11 +376,6 @@
       /* refresh below shows the truth either way */
     }
     await loadDbBackup();
-  }
-  function fmtBackupSize(bytes: number): string {
-    return bytes >= 1024 ** 3
-      ? `${(bytes / 1024 ** 3).toFixed(2)} GB`
-      : `${Math.max(1, Math.round(bytes / 1024 ** 2))} MB`;
   }
   function handleMapProviderChange(event: Event) {
     onPatch({ mapProvider: (event.target as HTMLSelectElement).value });
@@ -1059,6 +1054,14 @@
         <label class="s-label" for="flightlog-raw-always">{$t('settings.continuousRawLogging')}</label>
         <Toggle checked={flightLogRawAlways} id="flightlog-raw-always" disabled={!flightRecordingEnabled} onchange={(c) => onPatch({ flightLogRawAlways: c })} />
       </div>
+      <div class="s-row" title={$t('settings.flightWeatherRecordingHint')}>
+        <label class="s-label" for="flightlog-weather">{$t('settings.flightWeatherRecording')}</label>
+        <Toggle checked={$settings.flightWeatherRecording} id="flightlog-weather" onchange={(c) => onPatch({ flightWeatherRecording: c })} />
+      </div>
+      <div class="s-row" title={$t('settings.flightAutoLocationHint')}>
+        <label class="s-label" for="flightlog-auto-location">{$t('settings.flightAutoLocation')}</label>
+        <Toggle checked={$settings.flightAutoLocation} id="flightlog-auto-location" onchange={(c) => onPatch({ flightAutoLocation: c })} />
+      </div>
       <div class="s-row s-row-stack">
         <span class="s-label">{$t('settings.flightLogDbPath')}</span>
         <div class="path-picker-row">
@@ -1077,7 +1080,7 @@
       {#if dbBackup}
         <div class="s-row" title={dbBackup.path}>
           <span class="s-label" title={$t('settings.dbBackupHint')}>
-            {$t('settings.dbBackup')} · {fmtBackupSize(dbBackup.size_bytes)}
+            {$t('settings.dbBackup')} · {formatBackupSize(dbBackup.size_bytes)}
           </span>
           <Button variant="standard" size="sm" onclick={deleteDbBackup} title={$t('settings.dbBackupHint')}>
             {$t('settings.dbBackupDelete')}

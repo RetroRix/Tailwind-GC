@@ -77,11 +77,19 @@ struct NominatimAddress {
     country: Option<String>,
 }
 
-/// Reverse geocode a lat/lon to a human-readable location name.
-/// Returns a short name like "Garching, Bayern, Germany".
-/// `lang` is a BCP 47 language tag (e.g. "en", "de") used for Nominatim's
-/// `accept-language` parameter so names are returned in the UI language.
-/// Returns None on error (network, parse, etc.) — never blocks the recorder.
+/// Setting "Auto-detect flight location": the place name of a flight is looked up without being asked for.
+pub static AUTO_FLIGHT_LOCATION: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// Place name of a flight's start point, for every lookup the user did not trigger; `None` with the setting off.
+pub async fn flight_location(lat: f64, lon: f64, lang: &str) -> Option<String> {
+    if !AUTO_FLIGHT_LOCATION.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    reverse_geocode(lat, lon, lang).await
+}
+
+/// Reverse geocode to a short name ("Garching, Bayern, Germany") in `lang` (BCP 47, Nominatim's
+/// `accept-language`). `None` on any error — never blocks the recorder.
 pub async fn reverse_geocode(lat: f64, lon: f64, lang: &str) -> Option<String> {
     if !lat.is_finite() || !lon.is_finite() {
         return None;

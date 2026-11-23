@@ -19,6 +19,8 @@
     buttons?: DialogButton[];
     /** Optional opt-in checkbox shown above the buttons; read via `checkboxResult()`. */
     checkbox?: { label: string; checked?: boolean };
+    /** Overrides the Cancel button's label (e.g. "Keep both" on the DB-folder switch). */
+    cancelLabel?: string;
   }
 </script>
 
@@ -31,6 +33,7 @@
   let buttons = $state<DialogButton[]>([]);
   let checkboxLabel = $state<string | null>(null);
   let checkboxChecked = $state(false);
+  let cancelLabel = $state<string | null>(null);
   let resolver: ((value: string | null) => void) | null = null;
 
   /** State of the optional checkbox at the time the dialog was dismissed. */
@@ -47,6 +50,7 @@
     buttons = opts.buttons ?? [];
     checkboxLabel = opts.checkbox?.label ?? null;
     checkboxChecked = opts.checkbox?.checked ?? false;
+    cancelLabel = opts.cancelLabel ?? null;
     open = true;
     return new Promise<string | null>((resolve) => {
       resolver = resolve;
@@ -87,7 +91,7 @@
           <!-- Info-only: just an OK button -->
           <button class="dialog-btn dialog-btn-primary" onclick={() => close('ok')}>OK</button>
         {:else}
-          <button class="dialog-btn dialog-btn-cancel" onclick={() => close(null)}>{$tLocal('dialog.cancel')}</button>
+          <button class="dialog-btn dialog-btn-cancel" onclick={() => close(null)}>{cancelLabel ?? $tLocal('dialog.cancel')}</button>
           {#each buttons as btn}
             <button
               class="dialog-btn"

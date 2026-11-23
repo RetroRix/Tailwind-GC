@@ -18,7 +18,8 @@ use super::tlog_logger::TlogLogger;
 use super::types::{BatteryRecord, Flight, FlightLogSettings, TelemetryRecord};
 use crate::msp::FcInfo;
 use crate::scheduler::telemetry::{
-    AirspeedData, AltitudeData, AnalogData, AttitudeData, BatteryInstanceData, GpsData, GpsStatsData,
+    AirspeedData, AltitudeData, AnalogData, AttitudeData, BatteryInstanceData, GpsData, GpsReceiverData,
+    GpsStatsData,
     LinkStatsData, Misc2Data, NavStatusData, SensorStatusData, StatusData, WindData,
 };
 
@@ -72,6 +73,12 @@ pub struct PendingSession {
     pub disarm_instant: Instant,
     pub start_mah: Option<u32>,
     pub last_timestamp_ms: i64,
+    /// Last weather answer the session stored (`ActiveFlight::weather_seq`): a reopened session must
+    /// not store the same answer again.
+    pub weather_seq: u64,
+    /// The link reports altitude relative to the arming point (`FlightRecorder::alt_relative`); `None`
+    /// for a session recovered from disk.
+    pub alt_relative: Option<bool>,
 }
 
 /// Shared, connection-independent slot for the one pending session (see `state::AppState`).
@@ -151,7 +158,11 @@ pub fn commit_pending_session(session: &PendingSession) -> Result<i64, String> {
     }
     let flight_id = db::commit_session_to_main(&conn, &session.temp_path, &session.flight)
         .map_err(|e| format!("Failed to commit session: {}", e))?;
+    if let Err(e) = db::set_flight_alt_relative(&conn, flight_id, session.alt_relative) {
+        log::warn!("Flight {flight_id}: altitude reference not stored: {e}");
+    }
     db::remove_temp_session(&session.temp_path);
+    super::video_link::attach_waiting(&conn, &session.db_path, flight_id, &session.flight);
 
     if let (Some(lat), Some(lon)) = (session.flight.start_lat, session.flight.start_lon) {
         if is_valid_gps_coord(lat, lon) {
@@ -283,6 +294,8 @@ pub fn summarize_temp_session(
             disarm_instant: Instant::now(),
             start_mah,
             last_timestamp_ms,
+            weather_seq: 0,
+            alt_relative: None,
         },
         count,
     ))
@@ -297,15 +310,17 @@ fn is_valid_gps_coord(lat: f64, lon: f64) -> bool {
         && !(lat == 0.0 && lon == 0.0)
 }
 
-/// Async enrichment: fetch weather + geocode for a newly armed flight.
-/// Runs in the background, never blocks the recorder thread.
+/// Weather + place name of a committed flight, in the background — never blocks the recorder thread.
 async fn enrich_flight_async(flight_id: i64, lat: f64, lon: f64, db_path: String) {
     // Fetch weather and geocode (sequential — no tokio::join available)
     let weather = super::weather::fetch_weather(lat, lon).await;
-    let location = super::geocode::reverse_geocode(lat, lon, "en").await;
+    let location = super::geocode::flight_location(lat, lon, "en").await;
 
-    // Open a fresh connection for the update (recorder's conn is on another thread)
-    let conn = match db::open_database(std::path::Path::new(&db_path)) {
+    // No CREATE: a database moved away meanwhile must not come back as an empty file.
+    let conn = match rusqlite::Connection::open_with_flags(
+        std::path::Path::new(&db_path),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
+    ) {
         Ok(c) => c,
         Err(e) => {
             log::warn!("Enrichment: failed to open DB: {}", e);
@@ -387,6 +402,8 @@ struct TelemetrySnapshot {
     // Navigation (MSP_NAV_STATUS) — mission context for replay
     active_wp_number: Option<i32>,
     nav_state: Option<i32>,
+    // The FC's position target (POSITION_TARGET_GLOBAL_INT), in any mode
+    target: Option<(f64, f64, f64)>,
     // GPS quality (MSP_GPSSTATISTICS)
     gps_hdop: Option<f64>,
     gps_eph: Option<f64>,
@@ -411,6 +428,11 @@ struct ActiveFlight {
     buffer: Vec<TelemetryRecord>,
     /// Accumulated per-instance battery records pending flush (multi-battery; ArduPilot/PX4).
     bat_buffer: Vec<BatteryRecord>,
+    /// Raw GPS receiver samples `(session ms, sample)` pending flush; written with the telemetry batch so
+    /// a crash loses the same tail of both.
+    gps_buffer: Vec<(i64, GpsReceiverData)>,
+    /// Sequence number of the last weather answer written to the temp store; 0 = none yet.
+    weather_seq: u64,
     // Statistics tracking
     max_alt: f64,
     max_speed: f64,
@@ -426,7 +448,11 @@ pub struct FlightRecorder {
     settings: FlightLogSettings,
     fc_info: FcInfo,
     protocol: String,
+    /// Set by the passive handler at protocol lock (true for LTM / CRSF); `None` on an active MSP or
+    /// MAVLink link, which reports MSL.
+    alt_relative: Option<bool>,
     db_file_path: std::path::PathBuf,
+    sessions_dir: PathBuf,
     /// Base dir for raw logs (raw_logs/*.tlog | *.rawmsp) — separate from the DB folder.
     raw_log_dir: std::path::PathBuf,
     /// Shared MSP raw-log sink (ADR-049): the transport writes the raw serial bytes into it; the
@@ -456,6 +482,18 @@ pub struct FlightRecorder {
 
 /// Thread-safe handle to the flight recorder
 pub type FlightRecorderHandle = Arc<Mutex<FlightRecorder>>;
+
+/// Write the pending GPS receiver samples to the temp store. The buffer is emptied either way: a
+/// failing store must not grow it for the rest of the flight.
+fn flush_gps(conn: &Connection, buffer: &mut Vec<(i64, GpsReceiverData)>) {
+    if buffer.is_empty() {
+        return;
+    }
+    let rows = std::mem::take(buffer);
+    if let Err(e) = db::insert_gps_records_batch(conn, 0, &rows) {
+        log::error!("Failed to flush GPS receiver batch to temp store: {}", e);
+    }
+}
 
 impl FlightRecorder {
     /// Create a new recorder. Returns None if logging is disabled.
@@ -488,6 +526,8 @@ impl FlightRecorder {
             settings,
             fc_info,
             protocol: protocol.to_string(),
+            alt_relative: None,
+            sessions_dir,
             db_file_path: db_path,
             raw_log_dir,
             msp_raw_sink,
@@ -517,6 +557,10 @@ impl FlightRecorder {
     /// "Telemetry (SmartPort)") once locked — before a flight is created on arm.
     pub fn set_protocol(&mut self, protocol: &str) {
         self.protocol = protocol.to_string();
+    }
+
+    pub fn set_alt_relative(&mut self, relative: bool) {
+        self.alt_relative = Some(relative);
     }
 
     /// Start continuous raw logging immediately on connect.
@@ -598,6 +642,38 @@ impl FlightRecorder {
         self.maybe_record_sample();
     }
 
+    /// Whether an answer of the weather service would be stored now (a session with a temp store).
+    pub fn records_weather(&self) -> bool {
+        self.active_flight.as_ref().is_some_and(|f| f.temp_db.is_some())
+    }
+
+    /// An answer of the weather service; offered repeatedly, stored once per `seq` and session.
+    pub fn on_weather(&mut self, seq: u64, lat: f64, lon: f64, source: &str, data_json: &str) {
+        let Some(flight) = self.active_flight.as_mut() else { return };
+        if flight.weather_seq == seq {
+            return;
+        }
+        let Some(conn) = flight.temp_db.as_ref() else { return };
+        let elapsed_ms = flight.start_instant.elapsed().as_millis() as i64;
+        // Also after a failed insert: the answer comes again every few seconds.
+        flight.weather_seq = seq;
+        if let Err(e) = db::insert_weather_record(conn, 0, elapsed_ms, lat, lon, source, data_json) {
+            log::warn!("Failed to store the weather answer: {}", e);
+        }
+    }
+
+    /// One raw message of one GPS receiver: a `gps_records` row while a flight is recorded.
+    pub fn on_gps_receiver(&mut self, data: &GpsReceiverData) {
+        let Some(flight) = self.active_flight.as_mut() else { return };
+        let Some(conn) = flight.temp_db.as_ref() else { return };
+        let elapsed_ms = flight.start_instant.elapsed().as_millis() as i64;
+        flight.gps_buffer.push((elapsed_ms, *data));
+        // Normally flushed with the telemetry batch; this bounds it while no samples are recorded.
+        if flight.gps_buffer.len() >= FLUSH_THRESHOLD {
+            flush_gps(conn, &mut flight.gps_buffer);
+        }
+    }
+
     /// Feed altitude data from the scheduler
     pub fn on_altitude(&mut self, data: &AltitudeData) {
         self.snapshot.alt_baro = Some(data.altitude);
@@ -670,6 +746,12 @@ impl FlightRecorder {
     pub fn on_nav_status(&mut self, data: &NavStatusData) {
         self.snapshot.active_wp_number = Some(data.active_wp_number as i32);
         self.snapshot.nav_state = Some(data.nav_state as i32);
+    }
+
+    /// Feed the FC's position target `(lat, lon, alt_m)` — see `TelemetryRecord::target_lat`. `None` = the
+    /// FC reports no target.
+    pub fn on_nav_target(&mut self, target: Option<(f64, f64, f64)>) {
+        self.snapshot.target = target;
     }
 
     /// Feed GPS quality stats (MSP_GPSSTATISTICS) — HDOP/EPH/EPV carried in one message.
@@ -749,7 +831,9 @@ impl FlightRecorder {
     /// Move a finalized session into the shared pending slot and tell the frontend to show the
     /// End-Flight summary (Save/Discard). Used by `on_disarm` and the continue-on-reconnect
     /// disarmed-on-first-poll path.
-    fn stash_pending_and_emit_ended(&self, session: PendingSession) {
+    fn stash_pending_and_emit_ended(&self, mut session: PendingSession) {
+        // A session queued before the database folder changed is saved where the database is now.
+        session.db_path = self.db_file_path.clone();
         let ev = RecordingEndedEvent {
             duration_sec: session.flight.duration_sec.unwrap_or(0),
             max_alt_m: session.flight.max_alt_m.unwrap_or(0.0),
@@ -841,6 +925,8 @@ impl FlightRecorder {
             start_lon: p.flight.start_lon,
             buffer: Vec::with_capacity(FLUSH_THRESHOLD),
             bat_buffer: Vec::new(),
+            gps_buffer: Vec::new(),
+            weather_seq: p.weather_seq,
             max_alt: p.flight.max_alt_m.unwrap_or(0.0),
             max_speed: p.flight.max_speed_ms.unwrap_or(0.0),
             max_distance: p.flight.max_distance_m.unwrap_or(0.0),
@@ -862,7 +948,6 @@ impl FlightRecorder {
 
         let now = Utc::now();
 
-        // Open the per-session temp store (DB recording only).
         let (temp_db, temp_path) = if self.settings.db_enabled {
             let sessions_dir = self
                 .db_file_path
@@ -931,6 +1016,8 @@ impl FlightRecorder {
             start_lon: self.snapshot.lon,
             buffer: Vec::with_capacity(FLUSH_THRESHOLD),
             bat_buffer: Vec::new(),
+            gps_buffer: Vec::new(),
+            weather_seq: 0,
             max_alt: 0.0,
             max_speed: 0.0,
             max_distance: 0.0,
@@ -994,6 +1081,7 @@ impl FlightRecorder {
                 log::error!("Failed to flush final battery batch to temp store: {}", e);
             }
         }
+        flush_gps(&temp_db, &mut flight.gps_buffer);
         let sample_count = db::temp_session_row_count(&temp_db).unwrap_or(0);
         drop(temp_db); // checkpoint the WAL before any later ATTACH
 
@@ -1039,6 +1127,8 @@ impl FlightRecorder {
                 disarm_instant: Instant::now(),
                 start_mah: flight.start_mah,
                 last_timestamp_ms,
+                weather_seq: flight.weather_seq,
+                alt_relative: self.alt_relative.or(Some(false)),
             },
             sample_count,
         ))
@@ -1118,6 +1208,9 @@ impl FlightRecorder {
             nav_lat: None,
             nav_lon: None,
             nav_alt_m: None,
+            target_lat: self.snapshot.target.map(|t| t.0),
+            target_lon: self.snapshot.target.map(|t| t.1),
+            target_alt_m: self.snapshot.target.map(|t| t.2),
             mode_primary: self.snapshot.mode_primary.clone(),
             mode_modifiers: self.snapshot.mode_modifiers.clone(),
             link_snr: self.snapshot.link_snr,
@@ -1193,6 +1286,7 @@ impl FlightRecorder {
                         log::error!("Failed to flush battery batch to temp store: {}", e);
                     }
                 }
+                flush_gps(temp_db, &mut flight.gps_buffer);
             }
         }
     }
@@ -1327,6 +1421,9 @@ mod tests {
             nav_lat: None,
             nav_lon: None,
             nav_alt_m: None,
+            target_lat: None,
+            target_lon: None,
+            target_alt_m: None,
             mode_primary: None,
             mode_modifiers: None,
             link_snr: None,

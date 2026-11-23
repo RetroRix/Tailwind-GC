@@ -36,6 +36,7 @@
     generatePolygonCrosshatch,
     generatePolygonLawnmower,
     polygonLongestEdgeOrientation,
+    isPolygonSelfIntersecting,
     cameraLineSpacingM,
     cameraFootprintM,
     pathDistanceM,
@@ -186,6 +187,35 @@
     if (!finishSurveyDraw()) {
       await showDialog($t('survey.title'), $t('survey.drawInvalid'));
     }
+  }
+
+  /** Rival-inspired (clean-room): one click turns the current mission's positioned waypoints into the
+   *  survey polygon — the corners the pilot already placed as waypoints become the area, in order.
+   *  The grid defaults to the polygon's longest edge, like a finished draw. */
+  async function polygonFromMissionWaypoints() {
+    let pts: LngLat[] = [];
+    if (get(autopilotSystem) === 'inav') {
+      const { mission } = await import('$lib/stores/mission');
+      pts = get(mission).waypoints
+        .filter((w) => w.lat !== 0 || w.lon !== 0)
+        .map((w) => ({ lat: w.lat / 1e7, lng: w.lon / 1e7 }));
+    } else {
+      const { arduMission } = await import('$lib/stores/missionArdupilot');
+      pts = get(arduMission)
+        .filter((w) => w.lat !== 0 || w.lon !== 0)
+        .map((w) => ({ lat: w.lat / 1e7, lng: w.lon / 1e7 }));
+    }
+    if (pts.length < 3) {
+      await showDialog($t('survey.title'), $t('survey.fromWaypointsTooFew'));
+      return;
+    }
+    if (isPolygonSelfIntersecting(pts)) {
+      await showDialog($t('survey.title'), $t('survey.fromWaypointsCrossing'));
+      return;
+    }
+    polygonParams.points = pts;
+    polygonParams.trackOrientation = polygonLongestEdgeOrientation(pts);
+    updatePolygonParams(polygonParams);
   }
 
   // Full list of supported shapes (visualization for non-Rectangle comes progressively)
@@ -768,6 +798,7 @@
         </div>
       {:else}
         <button class="btn-ctrl btn-draw" onclick={() => startSurveyDraw()}>✏️ {$t('survey.drawPolygon')}</button>
+        <button class="btn-ctrl" onclick={polygonFromMissionWaypoints}>{$t('survey.fromWaypoints')}</button>
       {/if}
 
       {#if activeSurveyPattern.config?.shape === 'polygon'}

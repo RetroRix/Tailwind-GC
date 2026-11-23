@@ -8,18 +8,22 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { open, save } from "@tauri-apps/plugin-dialog";
-  import { connection, availablePorts, bleDevices, defaultNetPort, netHostOrLocal, lastHotpluggedPort } from "$lib/stores/connection";
+  import { connection, hasMsp, availablePorts, bleDevices, defaultNetPort, netHostOrLocal, lastHotpluggedPort } from "$lib/stores/connection";
   import type { FcInfo, PortInfo, BleDeviceInfo, TransportType, ProtocolType } from "$lib/stores/connection";
   import { settings } from "$lib/stores/settings";
-  import { isAndroid, isMobile, isTablet, isPhone as isPhoneDevice, hasSerialPorts, hasRcControl, logPlayerWidth } from "$lib/platform";
+  import { tickSnapshot } from "$lib/helpers/telemetryTick.svelte";
+  import { isAndroid, isMobile, isTablet, isPhone as isPhoneDevice, hasSerialPorts, hasVideo, hasRcControl, logPlayerWidth, deviceProfile } from "$lib/platform";
   import { isDebugMode } from "$lib/stores/debug";
   import { telemetry } from "$lib/stores/telemetry";
   import { startRadarListeners, configureRadar, setRadarCenter, setRadarNode } from "$lib/stores/radarTracking";
   import { effectiveLink } from "$lib/helpers/radarPorts";
   import { startRadarAlerts } from "$lib/controllers/radarAlerts";
   import { startBreachMonitor } from "$lib/controllers/breachMonitor";
+  import { startVideoRecording } from "$lib/controllers/videoRecording";
+  import { syncVideoReplay } from "$lib/controllers/videoReplay";
   import { startAlertAudio } from "$lib/controllers/alertAudio";
   import { get } from "svelte/store";
+  import { phoneEdit } from "$lib/stores/phoneEdit.svelte";
   import { t, locale } from 'svelte-i18n';
   import Map from "$lib/components/Map.svelte";
   import Map3D from "$lib/components/Map3D.svelte";
@@ -34,8 +38,17 @@
   import ConnectionPopout from "$lib/components/phone/ConnectionPopout.svelte";
   import PhoneWidgetPanel from "$lib/components/phone/PhoneWidgetPanel.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
+  import { initTrainerHandover } from "$lib/controllers/trainerHandover";
   import UpdateDialog from "$lib/components/UpdateDialog.svelte";
   import { runUpdateCheck, resolveUpdateKind } from "$lib/controllers/updateCheck";
+  import { checkDbBackupPrompt, runPendingDbUpgrade, probeDbSchema, formatBackupSize, type DbSchemaState, type DbUpgradeOutcome } from "$lib/controllers/dbBackupPrompt";
+  import { planDbFolderSwitch, askAboutPreviousDb, type DbFolderPlan } from "$lib/controllers/dbFolderSwitch";
+  import { exportDatabase, importDatabase, exportAllFlights, removeOriginalLogs, withExportProgress, type DbTransferUi } from "$lib/controllers/dbTransfer";
+  import { offerVideoExport, offerVideoImport, offerVideoDelete } from "$lib/controllers/flightVideoTransfer";
+  import { exportFile, sharesExports, flightFileStem, clearExportCache, setExportErrorReporter } from "$lib/helpers/exportFile";
+  import type { LibraryMission } from "$lib/stores/flightlogTypes";
+  import DbUpgradeNotice from "$lib/components/DbUpgradeNotice.svelte";
+  import { importMissionFile } from "$lib/helpers/missionFile";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import BatchEditPopup from "$lib/components/mission/BatchEditPopup.svelte";
   import ArduBatchEditPopup from "$lib/components/mission/ArduBatchEditPopup.svelte";
@@ -73,6 +86,7 @@
   import { PlaybackController } from '$lib/controllers/playbackController';
   import { refreshSerialPorts, connectFC, disconnectFC, startBleScan, stopBleScan, startBleDeviceListener, stopBleDeviceListener, clearBleDevices } from '$lib/controllers/connectionController';
   import * as logbookCtrl from '$lib/controllers/logbookController';
+  import { loadReplayWind, seekReplayWind } from '$lib/controllers/windAloft';
   import * as widgetCtrl from '$lib/controllers/widgetController';
   import * as phoneCtrl from '$lib/controllers/phoneWidgetController';
   import { PHONE_GRID_PAD } from '$lib/config/phoneGrid';
@@ -82,11 +96,11 @@
   import { liveTrack, appendLivePoint, clearLiveTrack, backfillLivePoints } from '$lib/stores/liveTrack';
   import { toTelemetryData } from '$lib/adapters/telemetryAdapter';
   import { activeWpNumber, replayWpTotal } from '$lib/stores/navStatus';
-  import { missionManagerOpen, missionManagerSelectedId, requestOpenFlightId, requestOpenMissionId } from '$lib/stores/missionManager';
+  import { missionManagerOpen, missionManagerSelectedId, requestOpenFlightId, requestOpenMissionId, missionLibraryRevision } from '$lib/stores/missionManager';
   import { batteryManagerOpen, batteryManagerCreateSerial, normalizeSerial } from '$lib/stores/batteryManager';
   import { vehicleManagerOpen, vehicleManagerCreateCraft, vehicleManagerSelectedId } from '$lib/stores/vehicleManager';
   import type { BlackboxImportStatus } from '$lib/stores/flightlog';
-  import { missionDbForFlight, flightLoggedWpCount, missionDbSave, flightLinkMission, missionDbGeocode, flightSetBatterySerial, updateFlightNotes, getFlight, flightlogCommitPending, flightlogDiscardPending, flightlogContinuePending, scanOrphanSessions, recoverDiscard, recoverSaveIncomplete, recoverContinue, batteryDbFindBySerial, batteryDbAddUsage, vehicleDbFindByCraftName, blackboxLegacyMode, blackboxDecoderAvailable, downloadBlackboxDecode, hiresInfo, hiresParse, hiresSample, hiresDrop, hiresCleanup, scratchDir, scratchClear } from '$lib/stores/flightlog';
+  import { missionDbGet, missionDbForFlight, flightLoggedWpCount, missionDbSave, flightLinkMission, missionDbGeocode, flightSetBatterySerial, updateFlightNotes, getFlight, flightlogCommitPending, flightlogDiscardPending, flightlogContinuePending, scanOrphanSessions, recoverDiscard, recoverSaveIncomplete, recoverContinue, batteryDbFindBySerial, batteryDbAddUsage, vehicleDbFindByCraftName, blackboxLegacyMode, blackboxDecoderAvailable, downloadBlackboxDecode, hiresInfo, hiresParse, hiresSample, hiresDrop, hiresCleanup, scratchDir, scratchClear } from '$lib/stores/flightlog';
   import EndFlightDialog from "$lib/components/logbook/EndFlightDialog.svelte";
   import type { EndFlightStats } from "$lib/components/logbook/EndFlightDialog.svelte";
   import RecoveryPrompt from "$lib/components/logbook/RecoveryPrompt.svelte";
@@ -110,7 +124,7 @@
   import StaleDataHud from "$lib/components/StaleDataHud.svelte";
   import PhoneBottomBar from "$lib/components/phone/PhoneBottomBar.svelte";
   import PhoneDragGhost from "$lib/components/phone/PhoneDragGhost.svelte";
-  import { setNativeRightBound } from "$lib/controllers/nativeVideo";
+  import { setNativeRightBound, MAX_SURFACES as NATIVE_SURFACE_CAP } from "$lib/controllers/nativeVideo";
   import { doubleTap, mouseDoubleClick } from "$lib/helpers/doubleTap";
   import { startFloatMove, startFloatResize } from "$lib/helpers/floatWindowGestures";
   import { initVideo, videoState, videoStream, bindVideoEl, setMapLocation, reportMjpegError, setVideoWidgetActive, floatFrameRect, togglePhoneDockCompact, PHONE_DOCK_COMPACT, FLOAT_BEZEL_PX, FLOAT_MARGIN_PX, FLOAT_BTN_PX, FLOAT_BTN_GAP_PX } from "$lib/stores/video";
@@ -120,9 +134,9 @@
   import { initPulseBlink } from "$lib/stores/pulseBlink";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import TerrainAnalysisPanel from "$lib/components/terrain/TerrainAnalysisPanel.svelte";
-  import { editMode, replayActive, mission, missionFlags, missionDownload, missionUpload, missionFcInfo, markMissionSynced, loadedMissionId, missionSetWaypoints, missionImportXml, launchPoint, hasLocation, toDeg, type Waypoint } from "$lib/stores/mission";
+  import { editMode, replayActive, mission, missionFlags, missionDownload, missionUpload, missionFcInfo, markMissionSynced, loadedMissionId, missionLoadLibrary, missionImportXml, applyMissionLaunchDefault, getTotalWpCount, launchPoint, hasLocation, toDeg, type Waypoint } from "$lib/stores/mission";
   import { pendingSystemSwitch, autopilotSystem, autopilotLocked, setAutopilotSystem, confirmSystemSwitch } from "$lib/stores/autopilotContext";
-  import { arduEditMode, arduMission, arduSelectedWpIndex, arduLoadedMissionId, parseWaypoints, parsePlanFile, planFirmwareTarget, loadArduMissionFromFile, type ArduWaypoint } from "$lib/stores/missionArdupilot";
+  import { arduMission, arduSelectedWpIndex, arduLoadedMissionId, arduEditMode, parseWaypoints, parsePlanFile, planFirmwareTarget, planVehicleClass, loadArduMissionFromFile, arduVehicleClass, setArduVehicleClass, knownVehicleClass, arduClearUndoHistory, markArduMissionSynced, arduMissionFlags, downloadArduMissionFromFc, type ArduWaypoint } from "$lib/stores/missionArdupilot";
   import { frameMissionOnMap } from "$lib/stores/mapCamera";
   import { terrainAnalysis, patchTerrainAnalysis } from "$lib/stores/terrainAnalysis";
   import { DEFAULT_RADAR, DEFAULT_AIRSPACE, BUILTIN_ADSB_PROVIDERS } from "$lib/stores/settings";
@@ -632,12 +646,22 @@
   $effect(() => {
     if (selectedProtocol !== prevProtocol) {
       prevProtocol = selectedProtocol;
+      if (onInternalUart) return;
       if (selectedProtocol === 'mavlink') {
         selectedBaud = 57600;
       } else {
         selectedBaud = 115200;
       }
     }
+  });
+  // The internal UART runs at its radio module's baud (AX12 ELRS: 460800): set once when the
+  // selection moves onto it; the protocol default never overrides it.
+  const INTERNAL_UART_BAUD = 460800;
+  let onInternalUart = false;
+  $effect(() => {
+    const internal = ports.some((p) => p.path === selectedPort && p.port_type === 'internal-uart');
+    if (internal && !onInternalUart) selectedBaud = INTERNAL_UART_BAUD;
+    onInternalUart = internal;
   });
   bleDevices.subscribe((d) => {
     bleDeviceList = d;
@@ -707,6 +731,7 @@
   let flightSummaries = $state<FlightSummary[]>([]);
   let selectedFlight: Flight | null = $state(null);
   let selectedFlightTrack = $state<TelemetryRecord[]>([]);
+  let selectedFlightAltRelative = $state(false);
   let selectedFlightTrackCount = $state(0);
   let selectedFlightId: number | null = $state(null);
   let selectedFlightNotes = $state("");
@@ -973,6 +998,8 @@
   const saved = get(settings);
   selectedPort = saved.lastPort;
   selectedBaud = saved.lastBaud;
+  // A restored internal UART keeps its saved baud instead of being reset to the module default.
+  onInternalUart = deviceProfile !== null && saved.lastPort.startsWith('/dev/tty');
   const startupProtocol = resolveStartupProtocol(saved);
   selectedProtocol = startupProtocol;
   // Restore the full last-used connection path so nothing has to be re-entered. A serial value is only
@@ -1057,6 +1084,8 @@
       flightLog: s.flightLoggingEnabled, rawLog: s.flightLogRawEnabled,
       batteryAlertPct: s.batteryAlertPct, mapProvider: s.mapProvider,
       uiScale: s.uiScale, logLevel: savedLogLevel,
+      device: deviceProfile, viewport: `${window.innerWidth}x${window.innerHeight}@${window.devicePixelRatio}`,
+      ua: navigator.userAgent,
     });
     void invoke('log_session_settings', { summary }).catch(() => {});
   }
@@ -1123,13 +1152,24 @@
     const c = get(settings).map.center;
     return { lat: c[0], lon: c[1], radiusKm: cfgKm };
   }
-  /** Distance/bearing reference for ALL tracked vehicles: the connected UAV (valid fix), else the
-   *  GCS marker location (null when the GCS marker is OFF). (MSP is implicitly the UAV; others inherit.) */
+  let radarRefHeld: { lat: number; lon: number } | null = null;
+  /** Distance/bearing reference for all tracked vehicles: the connected UAV (valid fix), else the GCS
+   *  marker (null when OFF). In ~11 m steps and the SAME object in between: every map consumer rebuilds
+   *  its contact markers when the reference changes. */
   const radarReference = $derived.by<{ lat: number; lon: number } | null>(() => {
     const t = $telemetry;
     if (connStatus === 'connected' && isValidGpsCoordinate(t.lat, t.lon) && t.fixType >= 2) {
-      return { lat: t.lat, lon: t.lon };
+      const lat = Math.round(t.lat * 1e4) / 1e4;
+      const lon = Math.round(t.lon * 1e4) / 1e4;
+      if (!radarRefHeld || radarRefHeld.lat !== lat || radarRefHeld.lon !== lon) radarRefHeld = { lat, lon };
+      return radarRefHeld;
     }
+    return $gcsLocation;
+  });
+  /** The same reference unstepped, for the contact list: a formation peer at 30 m needs the exact point. */
+  const radarReferenceExact = $derived.by<{ lat: number; lon: number } | null>(() => {
+    const t = $telemetry;
+    if (connStatus === 'connected' && isValidGpsCoordinate(t.lat, t.lon) && t.fixType >= 2) return { lat: t.lat, lon: t.lon };
     return $gcsLocation;
   });
   /** GCS ground level (m MSL) from terrain data at the GCS location — used as the colour-scale
@@ -1144,12 +1184,12 @@
       .catch(() => { if (!cancelled) gcsGroundAltM = null; });
     return () => { cancelled = true; };
   });
-  /** Reference altitude (m MSL) for the relative-altitude colour scale: the UAV's GPS MSL altitude when
-   *  connected with a fix, else the GCS terrain ground level (else null → absolute colour fallback). */
+  /** Reference altitude (m MSL, in 5 m steps) for the relative-altitude colour scale: the UAV's GPS MSL
+   *  altitude when connected with a fix, else the GCS ground level (null → absolute colours). */
   const radarRefAltM = $derived.by<number | null>(() => {
     const t = $telemetry;
     if (connStatus === 'connected' && isValidGpsCoordinate(t.lat, t.lon) && t.fixType >= 2) {
-      return t.altMsl;
+      return Math.round(t.altMsl / 5) * 5;
     }
     return gcsGroundAltM;
   });
@@ -1203,6 +1243,7 @@
     startAlertAudio();
     void startStatusText();
     startBreachMonitor();
+      startVideoRecording();
     pushRadarConfig();
     // Query centre follows the map view: 2D pans update settings.map.center (broad subscribe, gated by
     // the ~100 m key); 3D camera moves come via Map3D's onCamFocus; the mode flip via the effect below.
@@ -1242,6 +1283,13 @@
     const g = $gcsLocation;
     if (!g) return;
     void setRadarNode(g.lat, g.lon, gcsGroundAltM ?? 0);
+  });
+
+  // The backend makes these lookups on its own (recorder, imports): it needs the two switches.
+  $effect(() => {
+    const weather = $settings.flightWeatherRecording;
+    const location = $settings.flightAutoLocation;
+    void invoke('flightlog_set_lookups', { weather, location }).catch((e) => console.warn('[settings] lookups not set:', e));
   });
 
   // Telemetry API (Dev-Docs active/TELEMETRY_API.md): push the persisted config on start + every change;
@@ -1418,21 +1466,100 @@
     return typeof selected === 'string' && selected.length > 0 ? selected : null;
   }
 
+  // The flight database upgrade at start, before anything else opens the database (a plain open would
+  // upgrade it unseen, and on the main thread). 'failed' leaves the database to the error shown.
+  let dbUpgrade = $state<DbSchemaState | null>(null);
+  const dbUpgradeOutcome: Promise<DbUpgradeOutcome | 'failed'> =
+    runPendingDbUpgrade(get(settings).flightLogDbPath, (p) => { dbUpgrade = p; })
+      .catch((e) => { errorMsg = String(e); return 'failed' as const; });
+
+  function askAboutDbBackup(dbPath: string): Promise<void> {
+    return checkDbBackupPrompt(dbPath, showDialog, (key, values) => $t(key, { values }));
+  }
+
+  let dbMoveBusy = $state<'move' | 'backup' | null>(null);
+  let dbTransferNotice = $state<{ title: string; message: string } | null>(null);
+  const dbTransferUi: DbTransferUi = {
+    show: (opts) => showDialog(opts),
+    tr: (key, values) => $t(key, { values }),
+    notice: (n) => { dbTransferNotice = n; },
+  };
+
+  async function switchFlightLogPath(next: string) {
+    if (get(connection).status !== 'disconnected') return; // the buttons are disabled then
+    const prev = flightLogDbPath;
+    if (next === prev) return;
+    // An import writes to the current database in batches; what it stores after the copy would be lost.
+    if (blackboxImporting) {
+      errorMsg = $t('settings.dbMove.busyImport');
+      return;
+    }
+    const tr = (key: string, values?: Record<string, string>) => $t(key, { values });
+    // Android keeps the database in app storage whatever folder is chosen (it only mirrors there).
+    const plan: DbFolderPlan = isAndroid ? { action: 'same' } : await planDbFolderSwitch(prev, next, showDialog, tr);
+    if (plan.action === 'cancel') return;
+
+    // Row ids restart in every database and the hi-res cache is named by them: nothing of the old
+    // folder may stay selected, loaded or cached.
+    resetPlayback();
+    selectedFlight = null;
+    selectedFlightId = null;
+    selectedFlightTrack = [];
+    selectedFlightTrackCount = 0;
+    loadedMissionId.set(null);
+    arduLoadedMissionId.set(null);
+    void hiresCleanup(prev).catch(() => {});
+    const use = (path: string) => {
+      flightLogDbPath = path;
+      settings.patch({ flightLogDbPath: path });
+    };
+
+    if (plan.action === 'same') {
+      use(next);
+      return;
+    }
+    if (plan.action === 'move') {
+      dbMoveBusy = 'move';
+      try {
+        const outcome = await invoke<{ source_left: boolean }>('flightlog_db_move', { from: prev, to: next, overwrite: plan.overwrite });
+        dbMoveBusy = null;
+        use(next);
+        if (outcome.source_left) {
+          await showInfo($t('settings.dbMove.moveTitle'), $t('settings.dbMove.sourceLeft', { values: { path: prev || defaultFlightLogPath } }));
+        }
+      } catch (e) {
+        dbMoveBusy = null;
+        await showInfo($t('settings.dbMove.failedTitle'), $t('settings.dbMove.failedMsg', { values: { error: String(e) } }));
+      }
+      return;
+    }
+
+    use(next);
+    if (!plan.to.exists) return;
+    try {
+      if ((await runPendingDbUpgrade(next, (p) => { dbUpgrade = p; })) === 'done') await askAboutDbBackup(next);
+    } catch (e) {
+      // A database that cannot be upgraded would fail on every access: back to the folder that worked.
+      use(prev);
+      errorMsg = String(e);
+      return;
+    }
+    if (plan.from.exists) {
+      await askAboutPreviousDb(prev, next, plan.from, prev || defaultFlightLogPath, showDialog, tr, (on) => { dbMoveBusy = on ? 'backup' : null; });
+    }
+  }
+
   async function chooseFlightLogPath() {
     try {
       const selected = await pickStorageFolder(flightLogDbPath || defaultFlightLogPath || undefined);
-      if (selected) {
-        flightLogDbPath = selected;
-        settings.patch({ flightLogDbPath });
-      }
+      if (selected) await switchFlightLogPath(selected);
     } catch (e) {
       console.error('Failed to choose flight log path', e);
     }
   }
 
   function resetFlightLogPath() {
-    flightLogDbPath = '';
-    settings.patch({ flightLogDbPath: '' });
+    void switchFlightLogPath('');
   }
 
   async function chooseRawLogPath() {
@@ -1650,8 +1777,8 @@
     if (files.some((f) => BLACKBOX_EXTS.test(f)) && !(await ensureBlackboxDecoder())) return;
 
     if (selectedFlight != null) closePlayer();
-    const dir = openedLogs?.dir ?? (await scratchDir(flightLogDbPath));
-    if (!openedLogs) await scratchClear(flightLogDbPath); // fresh set → start from an empty scratch
+    const dir = openedLogs?.dir ?? (await scratchDir());
+    if (!openedLogs) await scratchClear(); // fresh set → start from an empty scratch
     blackboxImporting = true;
     const failures: string[] = [];
     const added: OpenedFlight[] = [];
@@ -1671,7 +1798,7 @@
         await loadLogbook();
         await selectFlight(added[0].id);
       } else if (!openedLogs) {
-        void scratchClear(flightLogDbPath).catch(() => {});
+        void scratchClear().catch(() => {});
       }
     } finally {
       blackboxImporting = false;
@@ -1688,7 +1815,7 @@
     if (selectedFlight != null) closePlayer();
     if (!openedLogs) return;
     openedLogs = null;
-    await scratchClear(flightLogDbPath).catch(() => {});
+    await scratchClear().catch(() => {});
     if (reload) await loadLogbook();
   }
 
@@ -1877,7 +2004,10 @@
     let msg = $t('logbook.importKflightResult', {
       values: { imported: result.imported, skipped: result.skipped },
     });
+    if (result.newer_format) msg += '\n\n' + $t('logbook.importKflightNewer');
     if (result.errors.length > 0) msg += '\n' + result.errors.join('\n');
+    const videos = await offerVideoImport(dbTransferUi, filePath, result.imported_ids, flightLogDbPath);
+    if (videos) msg += '\n' + videos;
     await showInfo($t('logbook.importKflightTitle'), msg);
   }
 
@@ -2008,14 +2138,77 @@
     await importFiles(supported);
   }
 
-  /** Import a mission file dropped anywhere over the app (the docs' "drag a mission file onto the
-   *  map") — the ONLY working drop path is Tauri's native drag-drop event: with `dragDropEnabled`
-   *  the WebView never sees DOM drop events, so element-scoped drop zones cannot exist. Routed by
-   *  extension: .mission → INAV, .plan/.waypoints → the ArduPilot/PX4 stack. `.txt` stays with the
-   *  logbook (SD blackbox logs use it too). If the file belongs to the other mission family, the
-   *  editor switches — with 'keep': INAV and Ardu keep separate stores, so nothing is lost — unless
-   *  a connected FC locks the system, which reports instead of silently importing into a hidden
-   *  store. */
+  /** A dropped library mission goes onto the map only when the map is empty (both editors) and, with a
+   *  vehicle connected, only when it is that vehicle's system. Returns the system to show it in, or null. */
+  function mapSystemForDrop(m: LibraryMission): 'inav' | 'ardupilot' | 'px4' | null {
+    if (getTotalWpCount() > 0 || get(arduMission).length > 0) return null;
+    const target = m.format === 'ardupilot' || m.format === 'px4' ? m.format : 'inav';
+    if (get(autopilotSystem) === target) return target;
+    return get(autopilotLocked) ? null : target;
+  }
+
+  /** `.kmission` files dropped on the window: all go into the library; with `showOnMap` the first one
+   *  `mapSystemForDrop` admits is also shown on the map. */
+  async function importDroppedLibraryMissions(paths: string[], showOnMap: boolean): Promise<void> {
+    let added = 0;
+    let known = 0;
+    let shown = !showOnMap;
+    for (const path of paths) {
+      try {
+        const res = await importMissionFile(path, flightLogDbPath, showDialog, (key) => $t(key));
+        if (!res) continue;
+        if (res.added) {
+          added++;
+          void missionDbGeocode(res.id, $locale ?? 'en', flightLogDbPath)
+            .then(() => missionLibraryRevision.update((n) => n + 1))
+            .catch(() => {});
+        } else {
+          known++;
+        }
+        // Not a failed import when only the map step fails: the entry is in the library.
+        if (!shown) shown = await showLibraryMissionOnMap(res.id).catch(() => false);
+      } catch (e) {
+        errorMsg = $t('mission.importFailed', { values: { error: String(e) } });
+      }
+    }
+    if (added + known === 0 || (showOnMap && shown && paths.length === 1)) return;
+    await showInfo(
+      $t('missionMgr.title'),
+      $t('missionMgr.importedCount', { values: { added: String(added), known: String(known) } }),
+    );
+  }
+
+  async function showLibraryMissionOnMap(id: number): Promise<boolean> {
+    const m = await missionDbGet(id, flightLogDbPath);
+    const system = m ? mapSystemForDrop(m) : null;
+    if (!m || !system) return false;
+    if (get(autopilotSystem) !== system) setAutopilotSystem(system);
+    if (get(autopilotSystem) !== system) return false;
+    if (system === 'inav') {
+      const loaded = await missionLoadLibrary(JSON.parse(m.waypoints_json));
+      loadedMissionId.set(m.id);
+      applyMissionLaunchDefault(
+        loaded,
+        m.home_lat != null && m.home_lon != null ? { lat: m.home_lat, lng: m.home_lon } : undefined,
+        true,
+      );
+    } else {
+      const wps = JSON.parse(m.waypoints_json) as ArduWaypoint[];
+      const cls = knownVehicleClass(m.vehicle_class);
+      if (cls) setArduVehicleClass(cls);
+      arduMission.set(wps);
+      arduSelectedWpIndex.set(-1);
+      arduLoadedMissionId.set(m.id);
+      arduClearUndoHistory();
+      markArduMissionSynced('db', wps);
+    }
+    frameMissionOnMap();
+    return true;
+  }
+
+  /** Import a mission file dropped anywhere — only via Tauri's native drag-drop event (with dragDropEnabled
+   *  the WebView gets no DOM drop events). .mission → INAV, .plan/.waypoints → ArduPilot/PX4 (.txt is the
+   *  logbook's); switches the editor family ('keep') unless a connected FC locks it, which reports instead. */
   async function importDroppedMission(path: string): Promise<void> {
     console.log('[IMPORT] mission file dropped:', path);
     try {
@@ -2027,7 +2220,11 @@
           if (get(pendingSystemSwitch)) confirmSystemSwitch('keep');
           if (get(autopilotSystem) !== 'inav') return;
         }
-        await missionImportXml(content);
+        await missionImportXml(content, async (count) => (await showDialog({
+          title: $t('missionMgr.replaceTitle'),
+          message: $t('missionMgr.replaceSetMsg', { values: { count: String(count) } }),
+          buttons: [{ label: $t('missionMgr.replaceYes'), value: 'replace', primary: true }],
+        })) === 'replace');
       } else {
         const isPlan = /\.plan$/i.test(path);
         const wps = isPlan ? parsePlanFile(content) : parseWaypoints(content);
@@ -2037,7 +2234,7 @@
           if (get(pendingSystemSwitch)) confirmSystemSwitch('keep');
           if (get(autopilotSystem) === 'inav') return;
         }
-        loadArduMissionFromFile(wps);
+        loadArduMissionFromFile(wps, isPlan ? planVehicleClass(content) : null);
       }
       frameMissionOnMap();
     } catch (e) {
@@ -2048,7 +2245,6 @@
   async function exportFlightsToKflight(flightIds: number[]) {
     if (flightIds.length === 0) return;
     try {
-      // Auto-include linked partner flights
       const allIds = new Set(flightIds);
       for (const id of flightIds) {
         const summary = flightSummaries.find((f) => f.id === id);
@@ -2056,13 +2252,24 @@
       }
       const exportIds = [...allIds];
 
-      const outputPath = await save({
+      // One flight (with its linked partner): named after it; several: after their number.
+      const named = flightSummaries.find((f) => f.id === flightIds[0]);
+      const stem = flightIds.length === 1 && named ? flightFileStem(named) : `Flights_${exportIds.length}`;
+      let count = 0;
+      const outputPath = await exportFile({
+        name: `${stem}.kflight`,
         filters: [{ name: $t('logbook.kflightFileFilter'), extensions: ['kflight'] }],
-        defaultPath: exportIds.length === 1 ? `flight_${exportIds[0]}.kflight` : `flights_export.kflight`,
+        write: async (path) => {
+          count = await withExportProgress(dbTransferUi, $t('logbook.exportBusyTitle'), exportIds.length, () =>
+            logbookCtrl.exportSelectedFlights(exportIds, path, flightLogDbPath));
+        },
       });
       if (!outputPath) return;
-      const count = await logbookCtrl.exportSelectedFlights(exportIds, outputPath, flightLogDbPath);
-      await showInfo($t('logbook.exportTitle'), $t('logbook.exportSuccess', { values: { count } }));
+      // The share sheet is the confirmation on mobile; a dialog under it would only be in the way.
+      if (sharesExports) return;
+      const videos = await offerVideoExport(dbTransferUi, exportIds, outputPath, flightLogDbPath);
+      const done = $t('logbook.exportSuccess', { values: { count } });
+      await showInfo($t('logbook.exportTitle'), videos ? `${done}\n${videos}` : done);
     } catch (e) {
       errorMsg = String(e);
     }
@@ -2079,16 +2286,14 @@
       const orig = blackboxFileInfo?.filename ?? '';
       const dot = orig.lastIndexOf('.');
       const ext = (dot > 0 ? orig.slice(dot + 1) : 'log').toLowerCase();
-      const craft = (selectedFlight.craft_name || 'flight')
-        .trim().replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'flight';
-      const date = (selectedFlight.start_time ?? '').slice(0, 10); // YYYY-MM-DD
-      const base = date ? `${craft}_${date}_${selectedFlightId}` : `${craft}_${selectedFlightId}`;
-      const outputPath = await save({
+      const base = flightFileStem(selectedFlight);
+      const flightId = selectedFlightId;
+      const outputPath = await exportFile({
+        name: `${base}.${ext}`,
         filters: [{ name: $t('logbook.blackboxFileFilter'), extensions: [ext] }],
-        defaultPath: `${base}.${ext}`,
+        write: (path) => logbookCtrl.exportBlackbox(flightId, path, activeDbPath),
       });
-      if (!outputPath) return;
-      await logbookCtrl.exportBlackbox(selectedFlightId, outputPath, activeDbPath);
+      if (!outputPath || sharesExports) return;
       const savedName = outputPath.split(/[\\/]/).pop() ?? `${base}.${ext}`;
       await showInfo($t('logbook.exportBlackboxTitle'), $t('logbook.exportBlackboxSuccess', { values: { filename: savedName } }));
     } catch (e) {
@@ -2165,23 +2370,35 @@
     );
   }
 
+  const TRACK_FORMATS = [
+    { name: 'KMZ (Google Earth)', extensions: ['kmz'] },
+    { name: 'KML (Google Earth)', extensions: ['kml'] },
+    { name: 'GPX (GPS Exchange)', extensions: ['gpx'] },
+    { name: 'CSV (Spreadsheet)', extensions: ['csv'] },
+  ];
+
   async function exportTrack() {
     if (!selectedFlightId || !selectedFlight) return;
     try {
-      const craft = selectedFlight.craft_name || 'flight';
-      const date = selectedFlight.start_time ? new Date(selectedFlight.start_time).toISOString().slice(0, 10) : '';
-      const defaultName = `${craft}_${date}`.replace(/\s+/g, '_');
-      const outputPath = await save({
-        filters: [
-          { name: 'KMZ (Google Earth)', extensions: ['kmz'] },
-          { name: 'KML (Google Earth)', extensions: ['kml'] },
-          { name: 'GPX (GPS Exchange)', extensions: ['gpx'] },
-          { name: 'CSV (Spreadsheet)', extensions: ['csv'] },
-        ],
-        defaultPath: `${defaultName}.kmz`,
+      // The backend tells the format from the extension. Desktop picks it in the save dialog; with the
+      // share sheet there is no such dialog, so it is asked for here.
+      let filters = TRACK_FORMATS;
+      if (sharesExports) {
+        const ext = await showDialog({
+          title: $t('logbook.exportTrack'),
+          message: $t('logbook.exportTrackFormat'),
+          buttons: TRACK_FORMATS.map((f) => ({ label: f.extensions[0].toUpperCase(), value: f.extensions[0] })),
+        });
+        if (ext == null) return;
+        filters = TRACK_FORMATS.filter((f) => f.extensions[0] === ext);
+      }
+      const flightId = selectedFlightId;
+      const outputPath = await exportFile({
+        name: `${flightFileStem(selectedFlight)}.${filters[0].extensions[0]}`,
+        filters,
+        write: (path) => logbookCtrl.exportTrack(flightId, path, activeDbPath),
       });
-      if (!outputPath) return;
-      await logbookCtrl.exportTrack(selectedFlightId, outputPath, activeDbPath);
+      if (!outputPath || sharesExports) return;
       await showInfo($t('logbook.exportTrackTitle'), $t('logbook.exportTrackSuccess'));
     } catch (e) {
       errorMsg = String(e);
@@ -2291,6 +2508,7 @@
     if (selectedFlightId !== flightId) return;
     selectedFlight = data.flight;
     selectedFlightTrack = data.track;
+    selectedFlightAltRelative = data.altRelative;
     selectedFlightTrackCount = data.trackCount;
     selectedFlightNotes = data.notes;
     weatherTempC = weatherTempDisplayFromC(data.weatherTempC, interfaceSettings);
@@ -2327,9 +2545,8 @@
           const linkedSys = linked.format === 'ardupilot' || linked.format === 'px4' ? linked.format : 'inav';
           if (linkedSys === 'inav') {
             switchAutopilotSystemForReplay('inav');
-            await missionSetWaypoints(JSON.parse(linked.waypoints_json));
+            await missionLoadLibrary(JSON.parse(linked.waypoints_json));
             loadedMissionId.set(linked.id);
-            markMissionSynced('db'); // it's the library mission → trusted for the highlight
             // Launch/home reference for the replay mission (REL waypoint altitudes + 3D height):
             // the real flown start if known, else the mission's saved home, else its first waypoint.
             const fl = data.flight;
@@ -2594,10 +2811,70 @@
       }
     }
 
+    // Not when only the live half of a pair goes: the flight stays, as its blackbox half.
+    const removeVideos = value === 'live' ? null : await offerVideoDelete(dbTransferUi, idsToDelete, flightLogDbPath);
     for (const id of idsToDelete) {
       await logbookCtrl.removeFlight(id, flightLogDbPath);
     }
+    await removeVideos?.();
 
+    forgetSelectedFlight();
+    await loadLogbook();
+  }
+
+  /** Add a flight's battery usage to its pack's lifetime totals — done before the flight is deleted. */
+  async function consolidateBatteryUsage(flightId: number) {
+    const f = await getFlight(flightId, flightLogDbPath).catch(() => null);
+    if (!f?.battery_serial) return;
+    const mah = f.battery_used_mah ?? 0;
+    // A flight on several packs lists their serials comma-separated; each pack gets the whole flight,
+    // as the packs' own totals count it.
+    for (const serial of f.battery_serial.split(',').map((s) => s.trim()).filter(Boolean)) {
+      const pack = await batteryDbFindBySerial(serial, flightLogDbPath).catch(() => null);
+      if (!pack) continue;
+      const cycles = pack.capacity_mah ? mah / pack.capacity_mah : 0;
+      await batteryDbAddUsage(pack.id, f.duration_sec ?? 0, mah, cycles, 0, flightLogDbPath);
+    }
+  }
+
+  /** Delete exactly the ticked flights; a linked partner that is not ticked stays. */
+  async function removeFlights(ids: number[]) {
+    if (ids.length === 0) return;
+    const count = String(ids.length);
+    const value = await showDialog({
+      title: $t('logbook.deleteManyTitle'),
+      message: $t('logbook.deleteManyWarning', { values: { count } }),
+      buttons: [{ label: $t('logbook.deleteManyConfirm', { values: { count } }), value: 'delete', danger: true }],
+      checkbox: { label: $t('logbook.deleteManyConsolidate') },
+    });
+    if (value !== 'delete') return;
+    const consolidateBattery = confirmDialog.checkboxResult();
+    const removeVideos = await offerVideoDelete(dbTransferUi, ids, flightLogDbPath);
+    const progress = (done: number) => {
+      dbTransferNotice = {
+        title: $t('logbook.deleteManyBusyTitle'),
+        message: $t('settings.dbTransfer.flightsBusyMsg', { values: { done: String(done), total: count } }),
+      };
+    };
+    try {
+      // The open flight goes when it is deleted — or its partner, whose track and link it still shows.
+      const partner = selectedFlight?.linked_flight_id ?? null;
+      if (selectedFlightId != null && (ids.includes(selectedFlightId) || (partner != null && ids.includes(partner)))) forgetSelectedFlight();
+      for (const [i, id] of ids.entries()) {
+        progress(i);
+        if (consolidateBattery) await consolidateBatteryUsage(id);
+        await logbookCtrl.removeFlight(id, flightLogDbPath);
+      }
+    } catch (e) {
+      errorMsg = String(e);
+    } finally {
+      dbTransferNotice = null;
+      await loadLogbook();
+    }
+    await removeVideos();
+  }
+
+  function forgetSelectedFlight() {
     resetPlayback();
     selectedFlight = null;
     selectedFlightTrack = [];
@@ -2610,7 +2887,6 @@
     weatherWindDir = '';
     weatherDesc = '';
     weatherEditing = false;
-    await loadLogbook();
   }
 
   async function loadInfo() {
@@ -2856,6 +3132,7 @@
 
   async function initPage() {
     await startBleDeviceListener(); // live BLE discovery → bleDevices store
+    void initTrainerHandover(showDialog);
     await loadInfo();
     try {
       defaultFlightLogPath = await getDefaultFlightlogPath();
@@ -2868,6 +3145,7 @@
       defaultRawLogPath = '';
     }
     if (activeTab === 'logbook') {
+      await dbUpgradeOutcome;
       await loadLogbook();
     }
   }
@@ -2922,14 +3200,29 @@
     8 + PHONE_CTL_STEP_PX * ($videoState.status === 'live' && !phoneCtrl.isPhoneWidgetActive(phoneWidgets, 'videoFeed') ? 3 : 2),
   );
 
-  // The video store learns whether a Video widget is on screen (dock or phone grid): Start then
-  // leaves the floating window parked — the widget is the picture.
+  // The video store needs it: Start then leaves the floating window parked — the tile is the picture.
+  const videoTileOnScreen = $derived(
+    phoneUi
+      ? phoneCtrl.isPhoneWidgetActive(phoneWidgets, 'videoFeed')
+      : (panels.bottom.includes('videoFeed') && $layout.bottomDock.visible) ||
+          (panels.right.includes('videoFeed') && $layout.sideDock.visible),
+  );
   $effect(() => {
-    setVideoWidgetActive(
-      phoneUi
-        ? phoneCtrl.isPhoneWidgetActive(phoneWidgets, 'videoFeed')
-        : panels.bottom.includes('videoFeed') || panels.right.includes('videoFeed'),
-    );
+    setVideoWidgetActive(videoTileOnScreen);
+  });
+  // A map in the floating window moves into the video tile once that window is gone: put away, or — phone —
+  // replaced by the tile (the grid's video widget takes the dock's place). Not while the phone's edit mode
+  // parks the window for the moment; checked a task later, when the dock has reacted to the same change.
+  $effect(() => {
+    const windowGone = phoneUi || !$videoState.floating;
+    if ($videoState.mapLocation !== 'floating' || !videoTileOnScreen || !windowGone || phoneEdit.editing) return;
+    const id = setTimeout(() => {
+      const v = get(videoState);
+      if (v.mapLocation === 'floating' && v.status === 'live' && (phoneUi || !v.floating) && !phoneEdit.editing) {
+        setMapLocation('widget');
+      }
+    }, 0);
+    return () => clearTimeout(id);
   });
 
   function toggleWidget(widgetId: string) {
@@ -2997,6 +3290,16 @@
   // Mirror replay-mode state to the store so the map layers can gate mission
   // visibility (replay → follow the MISSION toggle; planning/live → always show).
   $effect(() => { replayActive.set(showPlayer); });
+  $effect(() => {
+    void loadReplayWind(showPlayer ? selectedFlightId : null, activeDbPath);
+  });
+  $effect(() => {
+    const ts = playbackPoint?.timestamp_ms;
+    if (!showPlayer || ts == null || replayStartEpochMs == null) return;
+    // The linked blackbox track counts from the FC's boot, the weather rows from the recording's start.
+    const offset = activeReplayTrack === selectedFlightTrack ? 0 : (activeReplayTrack[0]?.timestamp_ms ?? 0);
+    seekReplayWind(ts - offset, replayStartEpochMs);
+  });
   const playbackBaseMs = $derived(
     selectedTrackWithPosition.length > 0 ? selectedTrackWithPosition[0].timestamp_ms : 0,
   );
@@ -3011,6 +3314,22 @@
       : 0,
   );
   const logbookHasFlightOnMap = $derived(activeTab === 'logbook' && selectedFlight != null && !isPrimaryConnected);
+  // The replayed flight's recording follows the replay (controllers/videoReplay.ts). Only for the flight's
+  // own track: a linked partner's track runs on another clock.
+  $effect(() => {
+    const onMap = selectedFlight != null && !isPrimaryConnected && activeReplayTrack === selectedFlightTrack && selectedFlightTrack.length > 1;
+    // The continuous clock still holds the old time for a frame after a jump or a scrub: only trust it
+    // near the 10 Hz step, or the video would go back there once.
+    const stepMs = playbackPoint?.timestamp_ms ?? 0;
+    const ms = playbackPlaying && hiresVirtualMs != null && Math.abs(hiresVirtualMs - stepMs) < 500 ? hiresVirtualMs : stepMs;
+    syncVideoReplay({
+      flightId: onMap ? selectedFlightId : null,
+      dbPath: activeDbPath,
+      flightMs: ms,
+      playing: playbackPlaying,
+      rate: playbackSpeed,
+    });
+  });
 
   // Platform type for the UAV map symbol. Live and replay are mutually exclusive on the map
   // (mapTrack/playbackPoint gate on !isPrimaryConnected), so: connected → live FC type;
@@ -3026,9 +3345,10 @@
   // FC variant for the selected flight (used by mode widgets + map coloring)
   const replayFcVariant = $derived((selectedFlight as Flight | null)?.fc_variant ?? 'INAV');
 
-  // Recording protocol of the selected flight — the 3D map needs it to tell a true-MSL track from an
-  // arming-relative one (CRSF/LTM), which decides how its altitude anchor is derived.
-  const replayProtocol = $derived((selectedFlight as Flight | null)?.protocol ?? null);
+  // The linked blackbox track is a log import and carries MSL, whatever the selected flight says.
+  const replayAltRelative = $derived(
+    replaySource === 'blackbox' && linkedPartnerTrack.length > 0 ? false : selectedFlightAltRelative,
+  );
 
   // Absolute flight-start epoch (ms) — telemetry timestamp_ms is flight-relative, so the
   // 3D sky clock needs this origin to reconstruct the real instant for sun positioning.
@@ -3047,12 +3367,32 @@
   );
 
   // Unified telemetry: live data when connected, playback data when replaying. While hi-res is
-  // active the full-rate sample overrides the 10 Hz row (same shape, same clock, denser rows).
+  // active the full-rate sample overrides the 10 Hz row (same shape, same clock, denser rows); the
+  // per-instance lists exist on the stored row only.
   const telem = $derived(
     playbackActive && !isPrimaryConnected && playbackPoint
-      ? toTelemetryData(hiresActive && hiresSamplePoint ? hiresSamplePoint : playbackPoint, replayFcVariant)
+      ? toTelemetryData(
+          hiresActive && hiresSamplePoint
+            ? { ...hiresSamplePoint, gpsReceivers: playbackPoint.gpsReceivers, batteries: playbackPoint.batteries }
+            : playbackPoint,
+          replayFcVariant,
+        )
       : liveTelem,
   );
+
+  // Widgets on phones and tablets: one telemetry snapshot per tick (the rate rows are stored at). The
+  // desktop keeps every sample — high-resolution replay exceeds it.
+  const WIDGET_TICK_MS = 100;
+  const tickedTelem = isMobile ? tickSnapshot(() => telem, WIDGET_TICK_MS) : null;
+  const widgetTelem = $derived(tickedTelem ? tickedTelem() : telem);
+  // The video tile takes no dock space while it has nothing to show — no stream, or (a native sink with
+  // one output) the floating window holds the picture; edit mode shows it for placing.
+  const videoTileBehindWindow = $derived(NATIVE_SURFACE_CAP === 1 && $videoState.nativeSink && $videoState.floating);
+  const idleWidgetIds = $derived($videoState.status === 'off' || videoTileBehindWindow ? ['videoFeed'] : []);
+  // Docks only (the phone grid keeps its tile): a map inside the tile moves on before the tile hides.
+  $effect(() => {
+    if (!phoneUi && videoTileBehindWindow && $videoState.mapLocation === 'widget') setMapLocation('floating');
+  });
 
   // ── Active-WP highlight trust gating (see MISSION_TRACKING_AND_PROVENANCE.md) ──
   // The highlight only shows when the loaded mission is trusted for the active context:
@@ -3140,8 +3480,8 @@
   });
 
   async function onConnectMissionPrompt() {
-    // INAV/MSP only for now (ArduPilot/MAVLink mission sync is a separate path).
-    if (get(connection).protocolType !== 'msp') return;
+    // INAV over MSP, direct or tunnelled. ArduPilot / PX4 are asked by `onFcMissionReported`.
+    if (!get(hasMsp)) return;
     let fcWpCount = 0;
     try { fcWpCount = (await missionFcInfo()).wp_count; } catch { /* FC may not answer — treat as none */ }
     const mapHasMission = get(mission).waypoints.length > 0;
@@ -3164,6 +3504,35 @@
     }
   }
 
+  // ArduPilot / PX4 report the size of their mission with the telemetry: offered once per connection, when
+  // it shows, without a request of our own. Held back while the system switch still asks about the map's mission.
+  let fcMissionAsked = false;
+  const fcMissionItems = $derived(telem.fcMissionItems);
+  $effect(() => {
+    if (!isPrimaryConnected) {
+      fcMissionAsked = false;
+      return;
+    }
+    const count = fcMissionItems;
+    if (fcMissionAsked || count === 0 || $hasMsp || $autopilotSystem === 'inav' || $pendingSystemSwitch) return;
+    fcMissionAsked = true;
+    if (!get(arduMissionFlags).fc) void onFcMissionReported(count);
+  });
+
+  async function onFcMissionReported(count: number) {
+    const ans = await showDialog({
+      title: $t('mission.connTitle'),
+      message: $t('mission.connMsgDownloadOnly', { values: { count } }),
+      buttons: [{ label: $t('mission.connDownload'), value: 'download', primary: true }],
+    });
+    if (ans !== 'download') return;
+    try {
+      await downloadArduMissionFromFc();
+    } catch (e) {
+      await showInfo($t('mission.connTitle'), String(e));
+    }
+  }
+
   // When primary connection is established, clear playback
   $effect(() => {
     if (isPrimaryConnected && playbackActive) {
@@ -3181,16 +3550,18 @@
     inavWps: Waypoint[];
     arduWps: ArduWaypoint[];
     fc: boolean;
+    /** Vehicle class of the ArduPilot / PX4 editor at capture: the prompt may be answered much later. */
+    cls: string | null;
   }
-  let endedMission: EndedMissionSnapshot = { system: 'inav', inavWps: [], arduWps: [], fc: false };
+  let endedMission: EndedMissionSnapshot = { system: 'inav', inavWps: [], arduWps: [], fc: false, cls: null };
 
   /** Snapshot the flown mission from the active autopilot system (at disarm / interrupt). */
   function captureEndedMission(): void {
     const sys = get(autopilotSystem);
     if (sys === 'inav') {
-      endedMission = { system: 'inav', inavWps: [...get(mission).waypoints], arduWps: [], fc: get(missionFlags).fc };
+      endedMission = { system: 'inav', inavWps: [...get(mission).waypoints], arduWps: [], fc: get(missionFlags).fc, cls: null };
     } else {
-      endedMission = { system: sys, inavWps: [], arduWps: [...get(arduMission)], fc: false };
+      endedMission = { system: sys, inavWps: [], arduWps: [...get(arduMission)], fc: false, cls: get(arduVehicleClass) };
     }
   }
 
@@ -3207,7 +3578,7 @@
       loadedMissionId.set(id);
     } else {
       const fmt = snap.system === 'px4' ? 'px4' : 'ardupilot';
-      id = await missionDbSave(await buildArduMissionInput(snap.arduWps, { format: fmt }), flightLogDbPath);
+      id = await missionDbSave(await buildArduMissionInput(snap.arduWps, { format: fmt, vehicleClass: snap.cls }), flightLogDbPath);
       arduLoadedMissionId.set(id);
     }
     await flightLinkMission(flightId, id, flightLogDbPath);
@@ -3223,10 +3594,9 @@
     catch (e) { console.warn('[end-flight] mission link failed', e); }
   }
 
-  // Fresh recording started — clear any stale captured-mission snapshot (defensive).
   function onRecordingStarted(): void {
     pendingEpoch++;
-    endedMission = { system: 'inav', inavWps: [], arduWps: [], fc: false };
+    endedMission = { system: 'inav', inavWps: [], arduWps: [], fc: false, cls: null };
   }
 
   /** Switch the active autopilot system for replay rendering (the mission layer switches on it),
@@ -3391,7 +3761,7 @@
     // Hi-res caches and the opened-file scratch store left by a crash are worthless (always
     // reproducible) — wipe them in passing.
     void hiresCleanup(flightLogDbPath).catch(() => {});
-    void scratchClear(flightLogDbPath).catch(() => {});
+    void scratchClear().catch(() => {});
     try {
       for (let round = 0; round < 10; round++) {
         const orphan = await scanOrphanSessions(flightLogDbPath);
@@ -3418,7 +3788,14 @@
     }
   }
 
-  onMount(() => { void runStartupRecovery(); });
+  // After the upgrade: recovery opens the database too. No backup question on a database that failed to
+  // upgrade or belongs to a newer Kite — its backup is the way back.
+  onMount(() => {
+    void dbUpgradeOutcome.then(async (outcome) => {
+      await runStartupRecovery();
+      if (outcome === 'none' || outcome === 'done') await askAboutDbBackup(flightLogDbPath);
+    });
+  });
 
   // The Windows main window starts hidden (`visible: false` in tauri.windows.conf.json): it is
   // `transparent: true` for the native-video hole punch, so before the WebView's first paint the
@@ -3435,6 +3812,10 @@
   // class that CSS gates the expensive widget-bar transitions off (see stores/lowPower.ts). It is a
   // readable store, so it only runs while something subscribes — this is that subscription.
   onMount(() => lowPowerActive.subscribe(() => {}));
+  onMount(() => {
+    clearExportCache();
+    setExportErrorReporter((message) => { errorMsg = message; });
+  });
 
   // Hard-blink indicator mode on WebKitGTK and Android — see stores/pulseBlink.ts for why a looping
   // CSS animation costs a large fraction of a core there (per-frame fixed cost, not per pixel).
@@ -3558,7 +3939,15 @@
       if (!paths.length) return;
       // Mission files import from anywhere (see importDroppedMission). `.txt` deliberately stays on
       // the logbook side (SD blackbox collision).
+      // `.kmission` = library entries: always imported, every one of a drop. A plain mission file in the
+      // same drop keeps the map for itself.
+      const libraryFiles = paths.filter((p) => /\.kmission$/i.test(p));
       const missionFile = paths.find((p) => /\.(mission|plan|waypoints)$/i.test(p));
+      if (libraryFiles.length > 0) {
+        void importDroppedLibraryMissions(libraryFiles, !missionFile)
+          .then(() => (missionFile ? importDroppedMission(missionFile) : undefined));
+        return;
+      }
       if (missionFile) {
         void importDroppedMission(missionFile);
         return;
@@ -3691,7 +4080,7 @@
           active={mapViewMode === '3d'}
           playbackTrack={mapTrack}
           playbackPoint={playbackPoint}
-          playbackProtocol={replayProtocol}
+          playbackAltRelative={replayAltRelative}
           {replayStartEpochMs}
           {trackColorMode}
           platformType={mapPlatformType}
@@ -3820,7 +4209,7 @@
   <div class="zone-phone-widgets">
     <PhoneWidgetPanel
       config={phoneWidgets}
-      {telem}
+      telem={widgetTelem}
       {interfaceSettings}
       onresize={(id) => patchPhoneWidgets(phoneCtrl.cyclePhoneWidgetSize(phoneWidgets, id))}
       onmove={phoneMoveToColumn}
@@ -3832,7 +4221,7 @@
        in the stacking order; the drag ghost shared with the column sits over everything. -->
   <PhoneBottomBar
     config={phoneWidgets}
-    {telem}
+    telem={widgetTelem}
     {interfaceSettings}
     frameShift={phoneShift}
     leftReserve={navPanelOpen ? NAV_RAIL_RIGHT_PX : 0}
@@ -3841,7 +4230,7 @@
     ontogglewide={() => patchPhoneWidgets(phoneCtrl.togglePhoneBottomWide(phoneWidgets))}
     bind:barH={phoneBarH}
   />
-  <PhoneDragGhost {telem} {interfaceSettings} />
+  <PhoneDragGhost telem={widgetTelem} {interfaceSettings} />
   <div class="phone-bottom-chips">
     <PhoneBottomChips {telem} />
   </div>
@@ -4041,8 +4430,9 @@
         pxPerVmin={bottomPxPerUnit}
         smallBoost={isPhonePortrait ? 1.5 : isTablet ? 1.4 : 1}
         sizes={panels.sizes ?? {}}
+        idleIds={idleWidgetIds}
         bind:crossPx={bottomPanelCrossPx}
-        {telem}
+        telem={widgetTelem}
         bind:editing={widgetEditMode}
         {interfaceSettings}
         onreorder={handleReorder}
@@ -4065,8 +4455,9 @@
       pxPerVmin={sidePxPerUnit}
       smallBoost={isTablet ? 1.4 : 1}
       sizes={panels.sizes ?? {}}
+      idleIds={idleWidgetIds}
       bind:crossPx={sidePanelCrossPx}
-      {telem}
+      telem={widgetTelem}
       bind:editing={widgetEditMode}
       {interfaceSettings}
       onreorder={handleReorder}
@@ -4263,7 +4654,7 @@
             <RcControlPanel />
           {/if}
         {:else if activeTab === 'radar'}
-          <RadarPanel radar={radarSettings} {interfaceSettings} referencePoint={radarReference} mspSupported={mspAdsbSupported} mainSerialPort={$connection.status === 'connected' && $connection.transportType === 'serial' ? selectedPort || null : null} mainUdpPort={selectedTransport === 'udp' ? tcpPort : null} onPatch={applySettingsPatch} />
+          <RadarPanel radar={radarSettings} {interfaceSettings} referencePoint={radarReferenceExact} mspSupported={mspAdsbSupported} mainSerialPort={$connection.status === 'connected' && $connection.transportType === 'serial' ? selectedPort || null : null} mainUdpPort={selectedTransport === 'udp' ? tcpPort : null} onPatch={applySettingsPatch} />
         {:else if activeTab === 'offline-maps'}
           <OfflineMapsPanel />
         {:else if activeTab === 'airspace'}
@@ -4273,7 +4664,7 @@
             <AirspaceManagerPanel reference={radarReference} distanceUnit={interfaceSettings.distanceUnit} />
           {/key}
         {:else if activeTab === 'video'}
-          <VideoPanel />
+          <VideoPanel dbPath={flightLogDbPath} transferUi={dbTransferUi} />
         {:else if DEV_MODE && activeTab === 'dev-playground'}
           <PanelPlayground initial="compact" label="DEV Playground" />
         {/if}
@@ -4293,6 +4684,13 @@
       </div>
     {/if}
     <ConfirmDialog bind:this={confirmDialog} />
+    {#if dbUpgrade}
+      <DbUpgradeNotice title={$t('settings.dbUpgradeTitle')} message={$t('settings.dbUpgradeMsg', { values: { size: formatBackupSize(dbUpgrade.size_bytes) } })} />
+    {:else if dbMoveBusy}
+      <DbUpgradeNotice title={$t(`settings.dbMove.${dbMoveBusy}BusyTitle`)} message={$t('settings.dbMove.busyMsg')} />
+    {:else if dbTransferNotice}
+      <DbUpgradeNotice title={dbTransferNotice.title} message={dbTransferNotice.message} />
+    {/if}
     <UpdateDialog />
     <CesiumKeyPrompt bind:open={cesiumKeyPromptOpen} onSave={cesiumKeySave} onRemindLater={cesiumKeyRemindLater} onIgnore={cesiumKeyIgnore} />
     <EndFlightDialog bind:this={endFlightDialog} {interfaceSettings} />

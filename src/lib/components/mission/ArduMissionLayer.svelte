@@ -113,10 +113,12 @@
     return 'REL';
   }
 
-  function nextFrame(frame: MavFrame): MavFrame {
-    if (frame === MAV_FRAME_GLOBAL_RELATIVE_ALT) return MAV_FRAME_GLOBAL;
-    if (frame === MAV_FRAME_GLOBAL) return MAV_FRAME_GLOBAL_TERRAIN_ALT;
-    return MAV_FRAME_GLOBAL_RELATIVE_ALT;
+  /** Segmented altitude-reference switch (Home / Sea / Terrain) for the editor popup — one click sets
+   *  the MAV_FRAME directly (rival-inspired, clean-room; replaces the click-to-cycle toggle). */
+  function frameSwitchHtml(frame: MavFrame): string {
+    const seg = (f: MavFrame, key: string) =>
+      `<button data-frame="${f}" class="wpe-altref-btn${frame === f ? ' wpe-altref-on' : ''}">${$t(key)}</button>`;
+    return `<span class="wpe-altref">${seg(MAV_FRAME_GLOBAL_RELATIVE_ALT, 'missionLayer.altRefHome')}${seg(MAV_FRAME_GLOBAL, 'missionLayer.altRefSea')}${seg(MAV_FRAME_GLOBAL_TERRAIN_ALT, 'missionLayer.altRefTerrain')}</span>`;
   }
 
   // ── Catalog-driven editor HTML ──────────────────────────────────────
@@ -201,7 +203,7 @@
         + `<div class="wpe-num-ctrl"><button class="wpe-num-btn" data-numdir="-1">−</button>`
         + `<input type="number" data-field="alt" value="${wp.alt}" step="1" min="0"/>`
         + `<button class="wpe-num-btn" data-numdir="1">+</button></div>`
-        + `<button data-field="frameToggle" class="wpe-toggle">${frameLabel(wp.frame)}</button></div>`;
+        + `${frameSwitchHtml(wp.frame)}</div>`;
       // Takeoff coords are hidden only for a connected coordinate-less "take off in place" (it uses the
       // FC home); shown when the takeoff has a real coordinate (PX4 / fixed-wing) or while planning
       // offline, so the operator can place it precisely (drag on the map or type here).
@@ -283,9 +285,15 @@
       arduUpdateWp(idx, { ...cur, alt: Number((e.target as HTMLInputElement).value) });
     });
 
-    (el.querySelector('button[data-field="frameToggle"]') as HTMLButtonElement | null)?.addEventListener('click', () => {
-      const cur = wp(); if (!cur) return;
-      arduUpdateWp(idx, { ...cur, frame: nextFrame(cur.frame) });
+    // Altitude reference switch: set the frame (Home / Sea / Terrain) directly; the altitude number
+    // is kept — its meaning follows the frame, as with the batch editor's frame toggle.
+    el.querySelectorAll<HTMLButtonElement>('button[data-frame]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const cur = wp(); if (!cur) return;
+        const frame = Number(btn.dataset.frame) as MavFrame;
+        if (frame === cur.frame) return;
+        arduUpdateWp(idx, { ...cur, frame });
+      });
     });
 
     const latInput = el.querySelector('input[data-field="lat"]') as HTMLInputElement | null;
@@ -656,6 +664,12 @@
      popup so INAV's narrower layout is untouched. */
   :global(.wp-editor-popup-ardu .wpe-row label) { width: 78px; white-space: nowrap; }
   :global(.wpe-applies) { color: #888; font-size: 10px; font-weight: 400; margin-left: 4px; }
+  /* Altitude-reference switch (duplicated from InavMissionLayer — only one mission layer mounts). */
+  :global(.wpe-altref) { display: inline-flex; border: 1px solid #555; border-radius: 3px; overflow: hidden; }
+  :global(.wpe-altref-btn) { background: #2a2a2a; color: #ccc; border: none; border-right: 1px solid #555; padding: 3px 6px; font-size: 11px; cursor: pointer; }
+  :global(.wpe-altref-btn:last-child) { border-right: none; }
+  :global(.wpe-altref-btn:hover) { background: #3a3a3a; }
+  :global(.wpe-altref-on) { background: #2563eb; color: #fff; }
   :global(.wpe-canonical) { color: #7a7a7a; font-size: 10px; font-weight: 400; font-family: 'Consolas', monospace; }
   :global(.wpe-canonical-line) { margin: 1px 0 4px; padding-left: 2px; }
   :global(.wpe-info) { color: #37a8db; font-size: 10px; cursor: help; opacity: 0.8; }

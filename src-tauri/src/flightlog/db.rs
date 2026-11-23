@@ -11,8 +11,8 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 
 use super::types::{
-    BatteryAggregate, BatteryPack, BatteryPackInput, BatteryRecord, Flight, FlightSummary, Mission,
-    MissionInput, TelemetryRecord, Vehicle, VehicleAggregate, VehicleInput,
+    BatteryAggregate, BatteryPack, BatteryPackInput, BatteryRecord, Flight, FlightSummary, GpsRecord,
+    Mission, MissionInput, TelemetryRecord, Vehicle, VehicleAggregate, VehicleInput, WeatherRecord,
 };
 
 const CURRENT_SCHEMA_VERSION: u32 = 19;
@@ -28,7 +28,7 @@ const TELEMETRY_COLS: &str = "flight_id, timestamp_ms, lat, lon, alt_m, speed_ms
     rx_signal_received, hw_health_status, baro_temperature, \
     wind_n_ms, wind_e_ms, wind_d_ms, rc_data_json, rc_command_json, \
     nav_lat, nav_lon, nav_alt_m, mode_primary, mode_modifiers, link_snr, link_rssi_dbm, airspeed_ms, \
-    throttle_pct";
+    throttle_pct, target_lat, target_lon, target_alt_m";
 
 /// Full single-statement DDL for `telemetry_records` at the current field set. The main DB grows
 /// this table via the migration chain; the per-session temp DB (no migration history) creates it
@@ -47,7 +47,8 @@ const TELEMETRY_RECORDS_DDL_FULL: &str = "CREATE TABLE IF NOT EXISTS telemetry_r
     baro_temperature REAL, wind_n_ms REAL, wind_e_ms REAL, wind_d_ms REAL,
     rc_data_json TEXT, rc_command_json TEXT, nav_lat REAL, nav_lon REAL, nav_alt_m REAL,
     mode_primary TEXT, mode_modifiers TEXT, link_snr INTEGER, link_rssi_dbm INTEGER,
-    airspeed_ms REAL, throttle_pct REAL
+    airspeed_ms REAL, throttle_pct REAL,
+    target_lat REAL, target_lon REAL, target_alt_m REAL
 );";
 
 /// Per-instance battery samples (ArduPilot/PX4 multi-monitor). `flight_id` first so the temp-session
@@ -138,6 +139,83 @@ const RECLAIM_BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs
 /// Directories whose databases are never reclaimed: the scratch store of "open a log without importing
 /// it" (registered by `commands::flightlog::scratch_dir`). It is thrown away whole, so reclaiming it is
 /// wasted I/O — and on Windows its wipe fails while a reclaim thread holds the database open.
+/// Raw values of every GPS receiver next to the fused track (`instance` 0 = GPS_RAW_INT, 1 = GPS2_RAW).
+/// `fix_type` is the unified scale, `fix_raw` MAVLink's `GPS_FIX_TYPE` as sent.
+pub(crate) const GPS_RECORDS_DDL_FULL: &str = "CREATE TABLE IF NOT EXISTS gps_records (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    flight_id     INTEGER NOT NULL,
+    timestamp_ms  INTEGER NOT NULL,
+    instance      INTEGER NOT NULL,
+    fix_type      INTEGER,
+    fix_raw       INTEGER,
+    num_sat       INTEGER,
+    hdop          REAL,
+    lat           REAL,
+    lon           REAL,
+    alt_msl       REAL,
+    vdop          REAL,
+    h_acc_m       REAL,
+    v_acc_m       REAL,
+    speed_ms      REAL,
+    course_deg    REAL,
+    yaw_deg       REAL
+);";
+
+/// One row per weather answer during a flight; `data_json` is the backend's `WindAloft` as returned, so
+/// the widget reads it back unchanged and a new field needs no schema change.
+pub(crate) const WEATHER_RECORDS_DDL_FULL: &str = "CREATE TABLE IF NOT EXISTS weather_records (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    flight_id     INTEGER NOT NULL,
+    timestamp_ms  INTEGER NOT NULL,
+    lat           REAL,
+    lon           REAL,
+    source        TEXT,
+    data_json     TEXT NOT NULL
+);";
+
+/// Videos attached to a flight: a path relative to the video folder (a setting), never the file. The
+/// sync is two anchors (a, b), each a video frame / video time and the flight time it belongs to, so a
+/// split or partial recording maps onto the log. Dev-Docs active/SCHEMA_V22.md.
+pub(crate) const FLIGHT_VIDEOS_DDL_FULL: &str = "CREATE TABLE IF NOT EXISTS flight_videos (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    flight_id         INTEGER NOT NULL,
+    rel_path          TEXT NOT NULL,
+    label             TEXT,
+    duration_ms       INTEGER,
+    codec             TEXT,
+    width             INTEGER,
+    height            INTEGER,
+    fps               REAL,
+    frame_count       INTEGER,
+    file_size         INTEGER,
+    fingerprint       TEXT,
+    sync_a_frame      INTEGER,
+    sync_a_video_ms   INTEGER,
+    sync_a_flight_ms  INTEGER,
+    sync_b_frame      INTEGER,
+    sync_b_video_ms   INTEGER,
+    sync_b_flight_ms  INTEGER,
+    extra_json        TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);";
+
+static UPGRADE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// The schema version of an EXISTING database that has upgrade steps pending.
+fn upgrade_pending_on(conn: &Connection) -> SqlResult<Option<u32>> {
+    let version = get_user_version(conn)?;
+    Ok((version > 0 && version < CURRENT_SCHEMA_VERSION).then_some(version))
+}
+
+/// `(found, current)` schema versions of an existing database that is not at this build's: lower = an
+/// open would upgrade it, higher = written by a newer Kite. Read-only — nothing is created, migrated or
+/// backed up; a missing, fresh or unreadable file is `None`.
+pub fn schema_mismatch(path: &Path) -> Option<(u32, u32)> {
+    let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+    let found = get_user_version(&conn).ok()?;
+    (found > 0 && found != CURRENT_SCHEMA_VERSION).then_some((found, CURRENT_SCHEMA_VERSION))
+}
+
 static NO_RECLAIM_DIRS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
 
 /// Never reclaim a database inside `dir` (see `NO_RECLAIM_DIRS`).
@@ -582,10 +660,15 @@ pub fn resolve_db_path(custom_path: &str, portable: bool) -> PathBuf {
     PathBuf::from("flights.db")
 }
 
-/// Resolve the **raw-log base directory** (where `raw_logs/` with .tlog / raw MSP files live). This is
-/// intentionally **separate from the database folder**: the DB defaults to AppData, but raw logs default
-/// to the user's Documents (`Documents/KiteGC`) where they are easy to find / hand to Mission Planner.
-/// `custom_path` (empty = use default) overrides it; both are configurable independently in Settings.
+/// Where the temp sessions of a recording live: always the app's own data folder, never a database
+/// folder the user chose — they are written all through a flight and must not sit on a removable or
+/// network drive.
+pub fn sessions_dir(portable: bool) -> PathBuf {
+    resolve_db_path("", portable).parent().unwrap_or(Path::new(".")).join("sessions")
+}
+
+/// The raw-log base directory — deliberately NOT the DB folder: raw logs default to `Documents/KiteGC`,
+/// easy to find and hand to Mission Planner. `custom_path` (empty = default) overrides it.
 pub fn resolve_raw_log_dir(custom_path: &str, portable: bool) -> PathBuf {
     // Android: same as resolve_db_path — a SAF tree URI cannot be written through std::fs, so the
     // writers stay in the app-private staging dir below and the mirror copies finished files out.
@@ -708,6 +791,7 @@ fn migrate(conn: &Connection) -> SqlResult<()> {
     ensure_v17_schema(conn)?;
     ensure_v18_schema(conn)?;
     ensure_v19_schema(conn)?;
+    ensure_v22_schema(conn)?;
 
     Ok(())
 }
@@ -1037,6 +1121,89 @@ fn migrate_v18_to_v19(conn: &Connection) -> SqlResult<()> {
     Ok(())
 }
 
+/// SQL condition on a `flights` row: altitudes relative to the arming point (passive CRSF / LTM carry no
+/// MSL; labels from `passive_telemetry/handler.rs`). Same rule as `isRelativeAltitudeProtocol`
+/// (helpers/altReference.ts) — change both together.
+const ALT_RELATIVE_PROTOCOL_SQL: &str =
+    "protocol LIKE 'Telemetry (%' AND (protocol LIKE '%CRSF%' OR protocol LIKE '%LTM%')";
+
+/// The nav target columns of `telemetry_records` (v22), for a table that predates them: the main database
+/// and a `.ktmp` session file left by an older build.
+fn add_nav_target_columns(conn: &Connection) -> SqlResult<()> {
+    for column in ["target_lat", "target_lon", "target_alt_m"] {
+        if !column_exists(conn, "telemetry_records", column)? {
+            conn.execute_batch(&format!("ALTER TABLE telemetry_records ADD COLUMN {column} REAL;"))?;
+        }
+    }
+    Ok(())
+}
+
+/// Tailwind keeps its own schema numbering (CURRENT stays 19): this ensure is additive and
+/// idempotent, so it runs from the self-heal pass on every open instead of a v20-v22 chain.
+/// (Upstream's v20 group-flight and v21 linked-source ensures are not ported.)
+/// v22 (Dev-Docs active/SCHEMA_V22.md). `missions.extra_json` is kept opaque: data this version does not
+/// know.
+fn ensure_v22_schema(conn: &Connection) -> SqlResult<()> {
+    conn.execute_batch(GPS_RECORDS_DDL_FULL)?;
+    conn.execute_batch(WEATHER_RECORDS_DDL_FULL)?;
+    conn.execute_batch(FLIGHT_VIDEOS_DDL_FULL)?;
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_gps_records_flight ON gps_records(flight_id, timestamp_ms);
+         CREATE INDEX IF NOT EXISTS idx_weather_records_flight ON weather_records(flight_id, timestamp_ms);
+         CREATE INDEX IF NOT EXISTS idx_flight_videos_flight ON flight_videos(flight_id);",
+    )?;
+    add_nav_target_columns(conn)?;
+    add_nav_target_columns(conn)?;
+    if !column_exists(conn, "missions", "extra_json")? {
+        conn.execute_batch("ALTER TABLE missions ADD COLUMN extra_json TEXT;")?;
+    }
+    if !column_exists(conn, "missions", "vehicle_class")? {
+        conn.execute_batch("ALTER TABLE missions ADD COLUMN vehicle_class TEXT;")?;
+    }
+    if !column_exists(conn, "flights", "alt_relative")? {
+        // Column and back-fill commit together; the back-fill runs only when the column is born. NULL
+        // (imported logs) = decide from the protocol label.
+        conn.execute_batch("SAVEPOINT v22_alt_relative;")?;
+        let added = conn.execute_batch("ALTER TABLE flights ADD COLUMN alt_relative INTEGER;").and_then(|_| {
+            conn.execute(
+                &format!("UPDATE flights SET alt_relative = CASE WHEN {ALT_RELATIVE_PROTOCOL_SQL} THEN 1 ELSE 0 END"),
+                [],
+            )
+        });
+        match added {
+            Ok(_) => conn.execute_batch("RELEASE v22_alt_relative;")?,
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK TO v22_alt_relative; RELEASE v22_alt_relative;");
+                return Err(e);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `flights.alt_relative`: the track's altitude is relative to the arming point, not MSL. `None` (the
+/// recorder was never told, e.g. a session recovered from disk) falls back to the protocol label rule.
+pub fn set_flight_alt_relative(conn: &Connection, flight_id: i64, relative: Option<bool>) -> SqlResult<()> {
+    conn.execute(
+        &format!(
+            "UPDATE flights SET alt_relative = COALESCE(?1, CASE WHEN {ALT_RELATIVE_PROTOCOL_SQL} THEN 1 ELSE 0 END)
+             WHERE id = ?2"
+        ),
+        params![relative, flight_id],
+    )?;
+    Ok(())
+}
+
+/// `None` for a flight without a stored value (imported logs, files from before v22).
+pub fn get_flight_alt_relative(conn: &Connection, flight_id: i64) -> SqlResult<Option<bool>> {
+    Ok(conn
+        .query_row("SELECT alt_relative FROM flights WHERE id = ?1", params![flight_id], |row| {
+            row.get::<_, Option<bool>>(0)
+        })
+        .optional()?
+        .flatten())
+}
+
 fn migrate_v6_to_v7(conn: &Connection) -> SqlResult<()> {
     conn.execute_batch(
         "ALTER TABLE telemetry_records ADD COLUMN battery_percentage INTEGER;",
@@ -1254,7 +1421,8 @@ pub fn insert_telemetry_batch(
                 rc_data_json, rc_command_json,
                 nav_lat, nav_lon, nav_alt_m,
                 mode_primary, mode_modifiers,
-                link_snr, link_rssi_dbm, airspeed_ms, throttle_pct
+                link_snr, link_rssi_dbm, airspeed_ms, throttle_pct,
+                target_lat, target_lon, target_alt_m
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
                 ?14, ?15, ?16, ?17, ?18, ?19, ?20,
@@ -1265,7 +1433,8 @@ pub fn insert_telemetry_batch(
                 ?36, ?37,
                 ?38, ?39, ?40,
                 ?41, ?42,
-                ?43, ?44, ?45, ?46
+                ?43, ?44, ?45, ?46, ?47,
+                ?48, ?49
             )",
         )?;
         for r in records {
@@ -1316,6 +1485,9 @@ pub fn insert_telemetry_batch(
                 r.link_rssi_dbm,
                 r.airspeed_ms,
                 r.throttle_pct,
+                r.target_lat,
+                r.target_lon,
+                r.target_alt_m,
             ])?;
         }
     }
@@ -1379,6 +1551,95 @@ pub fn get_flight_battery_records(conn: &Connection, flight_id: i64) -> SqlResul
     rows.collect()
 }
 
+/// One answer of the weather service, stored whole: `data_json` is the widget's `WindAloft`.
+pub fn insert_weather_record(
+    conn: &Connection,
+    flight_id: i64,
+    timestamp_ms: i64,
+    lat: f64,
+    lon: f64,
+    source: &str,
+    data_json: &str,
+) -> SqlResult<()> {
+    conn.execute(
+        "INSERT INTO weather_records (flight_id, timestamp_ms, lat, lon, source, data_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![flight_id, timestamp_ms, lat, lon, source, data_json],
+    )?;
+    Ok(())
+}
+
+/// The weather answers of a flight, oldest first, for the replay.
+pub fn get_flight_weather_records(conn: &Connection, flight_id: i64) -> SqlResult<Vec<WeatherRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT timestamp_ms, lat, lon, source, data_json FROM weather_records
+         WHERE flight_id = ?1 ORDER BY timestamp_ms ASC, id ASC",
+    )?;
+    let rows = stmt.query_map(params![flight_id], |r| {
+        Ok(WeatherRecord {
+            timestamp_ms: r.get(0)?,
+            lat: r.get(1)?,
+            lon: r.get(2)?,
+            source: r.get(3)?,
+            data_json: r.get(4)?,
+        })
+    })?;
+    rows.collect()
+}
+
+/// The columns of `gps_records` behind `flight_id`, in the order `insert_gps_record` binds them.
+const GPS_RECORDS_COLS: &str = "timestamp_ms, instance, fix_type, fix_raw, num_sat, hdop, lat, lon, alt_msl, \
+    vdop, h_acc_m, v_acc_m, speed_ms, course_deg, yaw_deg";
+
+/// `(timestamp_ms, sample)` pairs of one flight, in one transaction.
+pub fn insert_gps_records_batch(
+    conn: &Connection,
+    flight_id: i64,
+    records: &[(i64, crate::scheduler::telemetry::GpsReceiverData)],
+) -> SqlResult<()> {
+    let tx = write_tx(conn)?;
+    {
+        let mut stmt = tx.prepare_cached(&format!(
+            "INSERT INTO gps_records (flight_id, {GPS_RECORDS_COLS})
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)"
+        ))?;
+        for (timestamp_ms, r) in records {
+            stmt.execute(params![
+                flight_id, timestamp_ms, r.id, r.fix_type, r.fix_raw, r.num_sat, r.hdop, r.lat, r.lon, r.alt_msl,
+                r.vdop, r.h_acc_m, r.v_acc_m, r.speed_ms, r.course_deg, r.yaw_deg,
+            ])?;
+        }
+    }
+    tx.commit()
+}
+
+/// The raw receiver samples of a flight, oldest first, for the replay.
+pub fn get_flight_gps_records(conn: &Connection, flight_id: i64) -> SqlResult<Vec<GpsRecord>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {GPS_RECORDS_COLS} FROM gps_records WHERE flight_id = ?1 ORDER BY timestamp_ms ASC, id ASC"
+    ))?;
+    let rows = stmt.query_map(params![flight_id], |r| {
+        Ok(GpsRecord {
+            timestamp_ms: r.get(0)?,
+            instance: r.get(1)?,
+            fix_type: r.get(2)?,
+            fix_raw: r.get(3)?,
+            num_sat: r.get(4)?,
+            hdop: r.get(5)?,
+            lat: r.get(6)?,
+            lon: r.get(7)?,
+            alt_msl: r.get(8)?,
+            vdop: r.get(9)?,
+            h_acc_m: r.get(10)?,
+            v_acc_m: r.get(11)?,
+            speed_ms: r.get(12)?,
+            course_deg: r.get(13)?,
+            yaw_deg: r.get(14)?,
+        })
+    })?;
+    rows.collect()
+}
+
 // ── Live recording: per-session temp store (commit-on-disarm, ADR-040) ──────────────
 
 /// Open (creating its parent dir) a per-session temp SQLite file: the `telemetry_records` table
@@ -1396,6 +1657,8 @@ pub fn open_temp_session(path: &Path) -> SqlResult<Connection> {
     )?;
     conn.execute_batch(TELEMETRY_RECORDS_DDL_FULL)?;
     conn.execute_batch(BATTERY_RECORDS_DDL_FULL)?;
+    conn.execute_batch(WEATHER_RECORDS_DDL_FULL)?;
+    conn.execute_batch(GPS_RECORDS_DDL_FULL)?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS session_meta (
             id            INTEGER PRIMARY KEY CHECK (id = 1),
@@ -1417,6 +1680,8 @@ pub fn open_temp_session(path: &Path) -> SqlResult<Connection> {
     if !column_exists(&conn, "session_meta", "fc_uid")? {
         conn.execute_batch("ALTER TABLE session_meta ADD COLUMN fc_uid TEXT;")?;
     }
+    // …and one written before the nav-target columns predates them (the commit copies TELEMETRY_COLS).
+    add_nav_target_columns(&conn)?;
     Ok(conn)
 }
 
@@ -1521,6 +1786,8 @@ pub fn commit_session_to_main(
     conn.execute("ATTACH DATABASE ?1 AS sess", params![temp_str])?;
 
     let outcome = (|| -> SqlResult<i64> {
+        let has_weather = attached_table_exists(conn, "weather_records")?;
+        let has_gps = attached_table_exists(conn, "gps_records")?;
         let tx = conn.unchecked_transaction()?;
         let flight_id = insert_flight(&tx, flight)?;
         // Swap the leading `flight_id` column name for the new id literal in the SELECT.
@@ -1534,7 +1801,6 @@ pub fn commit_session_to_main(
             ),
             [],
         )?;
-        // Copy per-instance battery samples too (multi-battery), rewriting flight_id like above.
         let bat_select = BATTERY_RECORDS_COLS.replacen("flight_id", &flight_id.to_string(), 1);
         tx.execute(
             &format!(
@@ -1545,6 +1811,23 @@ pub fn commit_session_to_main(
             ),
             [],
         )?;
+        if has_weather {
+            tx.execute(
+                "INSERT INTO main.weather_records (flight_id, timestamp_ms, lat, lon, source, data_json)
+                 SELECT ?1, timestamp_ms, lat, lon, source, data_json
+                 FROM sess.weather_records ORDER BY timestamp_ms ASC, id ASC",
+                params![flight_id],
+            )?;
+        }
+        if has_gps {
+            tx.execute(
+                &format!(
+                    "INSERT INTO main.gps_records (flight_id, {GPS_RECORDS_COLS})
+                     SELECT ?1, {GPS_RECORDS_COLS} FROM sess.gps_records ORDER BY timestamp_ms ASC, id ASC"
+                ),
+                params![flight_id],
+            )?;
+        }
         tx.commit()?;
         Ok(flight_id)
     })();
@@ -1552,6 +1835,15 @@ pub fn commit_session_to_main(
     // Always detach, even if the transaction failed, so the connection isn't left with `sess` bound.
     let _ = conn.execute("DETACH DATABASE sess", []);
     outcome
+}
+
+/// Whether the temp session ATTACHed as `sess` has the table `table`.
+fn attached_table_exists(conn: &Connection, table: &str) -> SqlResult<bool> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sess.sqlite_master WHERE type = 'table' AND name = ?1)",
+        params![table],
+        |r| r.get(0),
+    )
 }
 
 /// Best-effort removal of a temp session file and its WAL/SHM sidecars (after a successful commit).
@@ -1702,7 +1994,7 @@ pub fn get_flight(conn: &Connection, flight_id: i64) -> SqlResult<Option<Flight>
 const MISSION_COLS: &str = "id, content_hash, name, format, waypoints_json, source_xml, \
     wp_count, total_distance_m, alt_diff_m, max_alt_m, min_alt_m, \
     bndbox_min_lat, bndbox_min_lon, bndbox_max_lat, bndbox_max_lon, location_name, \
-    created_at, notes, home_lat, home_lon";
+    created_at, notes, home_lat, home_lon, vehicle_class, extra_json";
 
 fn row_to_mission(row: &rusqlite::Row) -> SqlResult<Mission> {
     Ok(Mission {
@@ -1726,6 +2018,8 @@ fn row_to_mission(row: &rusqlite::Row) -> SqlResult<Mission> {
         notes: row.get(17)?,
         home_lat: row.get(18)?,
         home_lon: row.get(19)?,
+        vehicle_class: row.get(20)?,
+        extra_json: row.get(21)?,
     })
 }
 
@@ -1747,8 +2041,9 @@ pub fn upsert_mission(conn: &Connection, m: &MissionInput) -> SqlResult<i64> {
             content_hash, name, format, waypoints_json, source_xml, wp_count,
             total_distance_m, alt_diff_m, max_alt_m, min_alt_m,
             bndbox_min_lat, bndbox_min_lon, bndbox_max_lat, bndbox_max_lon, notes,
-            home_lat, home_lon
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+            home_lat, home_lon, vehicle_class, extra_json, location_name, created_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                  ?18, ?19, ?20, COALESCE(?21, datetime('now')))",
         params![
             m.content_hash,
             m.name,
@@ -1767,6 +2062,10 @@ pub fn upsert_mission(conn: &Connection, m: &MissionInput) -> SqlResult<i64> {
             m.notes,
             m.home_lat,
             m.home_lon,
+            m.vehicle_class,
+            m.extra_json,
+            m.location_name,
+            m.created_at,
         ],
     )?;
     Ok(conn.last_insert_rowid())
@@ -1800,17 +2099,18 @@ pub fn find_mission_by_hash(conn: &Connection, content_hash: &str) -> SqlResult<
     .optional()
 }
 
-/// Overwrite an existing library mission in place (OVERWRITE on save). Updates content + all
-/// computed metadata; `created_at` and `location_name` are preserved. The caller should
-/// pre-check `find_mission_by_hash` so it does not collide with a *different* existing row.
+/// Overwrite a library mission in place. `created_at`, `location_name` and — unless the input brings
+/// one — `extra_json` are kept. The caller pre-checks `find_mission_by_hash`: the new hash must not be
+/// another row's.
 pub fn update_mission(conn: &Connection, id: i64, m: &MissionInput) -> SqlResult<()> {
     conn.execute(
         "UPDATE missions SET
             content_hash = ?1, name = ?2, format = ?3, waypoints_json = ?4, source_xml = ?5,
             wp_count = ?6, total_distance_m = ?7, alt_diff_m = ?8, max_alt_m = ?9, min_alt_m = ?10,
             bndbox_min_lat = ?11, bndbox_min_lon = ?12, bndbox_max_lat = ?13, bndbox_max_lon = ?14,
-            notes = ?15, home_lat = ?16, home_lon = ?17
-         WHERE id = ?18",
+            notes = ?15, home_lat = ?16, home_lon = ?17, vehicle_class = ?18,
+            extra_json = COALESCE(?19, extra_json)
+         WHERE id = ?20",
         params![
             m.content_hash,
             m.name,
@@ -1829,9 +2129,17 @@ pub fn update_mission(conn: &Connection, id: i64, m: &MissionInput) -> SqlResult
             m.notes,
             m.home_lat,
             m.home_lon,
+            m.vehicle_class,
+            m.extra_json,
             id,
         ],
     )?;
+    Ok(())
+}
+
+/// Only for a `.kmission` import onto an existing row; every other writer leaves `extra_json` as it is.
+pub fn set_mission_extra(conn: &Connection, id: i64, extra_json: Option<&str>) -> SqlResult<()> {
+    conn.execute("UPDATE missions SET extra_json = ?1 WHERE id = ?2", params![extra_json, id])?;
     Ok(())
 }
 
@@ -2601,6 +2909,9 @@ fn read_telemetry_record(row: &rusqlite::Row) -> SqlResult<TelemetryRecord> {
         link_rssi_dbm: row.get(44)?,
         airspeed_ms: row.get(45)?,
         throttle_pct: row.get(46)?,
+        target_lat: row.get(47)?,
+        target_lon: row.get(48)?,
+        target_alt_m: row.get(49)?,
     })
 }
 
@@ -3169,6 +3480,30 @@ mod tests {
         cleanup(&path);
     }
 
+    /// `schema_mismatch` reports an older and a newer existing database, and neither a missing, a fresh
+    /// nor a current one — without creating or changing the file.
+    #[test]
+    fn schema_mismatch_is_read_only_and_exact() {
+        let path = temp_db_path("schema-mismatch");
+        cleanup(&path);
+        assert_eq!(schema_mismatch(&path), None);
+        assert!(!path.exists(), "the probe must not create the database");
+        drop(open_database(&path).unwrap());
+        assert_eq!(schema_mismatch(&path), None);
+        let stamp = |version: u32| {
+            let conn = Connection::open(&path).unwrap();
+            set_user_version(&conn, version).unwrap();
+        };
+        stamp(CURRENT_SCHEMA_VERSION + 1);
+        assert_eq!(schema_mismatch(&path), Some((CURRENT_SCHEMA_VERSION + 1, CURRENT_SCHEMA_VERSION)));
+        stamp(CURRENT_SCHEMA_VERSION - 1);
+        assert_eq!(schema_mismatch(&path), Some((CURRENT_SCHEMA_VERSION - 1, CURRENT_SCHEMA_VERSION)));
+        assert!(!backup_path_for(&path).exists(), "the probe must not start the upgrade");
+        drop(open_database(&path).unwrap());
+        assert_eq!(schema_mismatch(&path), None);
+        cleanup(&path);
+    }
+
     /// Hi-res cache sampling (HIRES_REPLAY): nearest row at-or-before the timestamp, None before
     /// the first row (the player then falls back to the 10 Hz sample).
     #[test]
@@ -3345,6 +3680,9 @@ mod tests {
                 nav_lat: None,
                 nav_lon: None,
                 nav_alt_m: None,
+                target_lat: None,
+                target_lon: None,
+                target_alt_m: None,
                 mode_primary: None,
                 mode_modifiers: None,
                 link_snr: None,
@@ -3439,6 +3777,9 @@ mod tests {
             nav_lat: None,
             nav_lon: None,
             nav_alt_m: None,
+            target_lat: None,
+            target_lon: None,
+            target_alt_m: None,
             mode_primary: None,
             mode_modifiers: None,
             link_snr: None,

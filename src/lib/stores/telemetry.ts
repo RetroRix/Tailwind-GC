@@ -25,7 +25,7 @@ export interface BatteryInstance {
   temperature: number | null;
 }
 
-/** One physical GPS receiver (MAVLink GPS_RAW_INT / GPS2_RAW), raw values; live only, not recorded. */
+/** One physical GPS receiver (MAVLink GPS_RAW_INT / GPS2_RAW), raw values. */
 export interface GpsReceiver {
   /** 0 = GPS1. */
   id: number;
@@ -38,6 +38,14 @@ export interface GpsReceiver {
   lat: number;
   lon: number;
   altMsl: number;
+  // Null where the receiver or the firmware does not report it.
+  vdop: number | null;
+  hAccM: number | null;
+  vAccM: number | null;
+  speedMs: number | null;
+  courseDeg: number | null;
+  /** Heading of a dual-antenna receiver. */
+  yawDeg: number | null;
 }
 
 /** Unified RC-link statistics (RC Link widget). Each field is null when the active protocol can't
@@ -104,7 +112,7 @@ export interface TelemetryData {
   // then falls back to the primary fields above. See docs/active/MULTI_BATTERY.md.
   batteries: BatteryInstance[];
 
-  // Physical GPS receivers (MAVLink). Empty on every other protocol and in replay.
+  // Physical GPS receivers (MAVLink; replay: from `gps_records`). Empty on every other protocol.
   gpsReceivers: GpsReceiver[];
 
   // RC link statistics (RSSI / LQ / SNR — protocol-dependent, see LinkStats)
@@ -159,6 +167,9 @@ export interface TelemetryData {
   navState: number;
   /** FC's current target waypoint (MSP_NAV_STATUS live / blackbox in replay). 0 = none. */
   activeWpNumber: number;
+  /** Size of the mission the FC holds, as a MAVLink FC reports it with the active item (without its home
+   *  slot). 0 = none or not told. */
+  fcMissionItems: number;
 
   /** Firmware variant of the connected FC ("INAV", "ArduPlane", "PX4", …): seeded from the handshake on
    *  connect (`setFcVariant`), set per sample in replay, empty when idle / on passive telemetry. */
@@ -186,7 +197,7 @@ const defaultTelemetry: TelemetryData = {
   sensorGyro: 0, sensorAcc: 0, sensorMag: 0, sensorBaro: 0,
   sensorGps: 0, sensorRangefinder: 0, sensorPitot: 0, sensorOpflow: 0, sensorRcReceiver: 0, prearmHealthy: 0,
   ekfStatus: 0, ekfType: 0,
-  flightMode: { primary: '', modifiers: [] }, navState: 0, activeWpNumber: 0,
+  flightMode: { primary: '', modifiers: [] }, navState: 0, activeWpNumber: 0, fcMissionItems: 0,
   fcVariant: '',
   lastUpdate: 0,
 };
@@ -463,7 +474,7 @@ export async function startTelemetryListeners() {
   );
 
   unlisteners.push(
-    await listen<{ id: number; fix_type: number; fix_raw: number; num_sat: number; hdop: number | null; lat: number; lon: number; alt_msl: number }[]>(
+    await listen<{ id: number; fix_type: number; fix_raw: number; num_sat: number; hdop: number | null; lat: number; lon: number; alt_msl: number; vdop: number | null; h_acc_m: number | null; v_acc_m: number | null; speed_ms: number | null; course_deg: number | null; yaw_deg: number | null }[]>(
       'telemetry-gps-receivers',
       (event) => {
         const gpsReceivers: GpsReceiver[] = event.payload.map((r) => ({
@@ -475,6 +486,12 @@ export async function startTelemetryListeners() {
           lat: r.lat,
           lon: r.lon,
           altMsl: r.alt_msl,
+          vdop: r.vdop,
+          hAccM: r.h_acc_m,
+          vAccM: r.v_acc_m,
+          speedMs: r.speed_ms,
+          courseDeg: r.course_deg,
+          yawDeg: r.yaw_deg,
         }));
         telemetry.update((t) => ({ ...t, gpsReceivers, lastUpdate: Date.now() }));
       }
@@ -571,11 +588,12 @@ export async function startTelemetryListeners() {
   );
 
   unlisteners.push(
-    await listen<{ active_wp_number: number; nav_state: number }>('telemetry-nav-status', (event) => {
+    await listen<{ active_wp_number: number; nav_state: number; mission_total?: number | null }>('telemetry-nav-status', (event) => {
       telemetry.update((t) => ({
         ...t,
         activeWpNumber: event.payload.active_wp_number,
         navState: event.payload.nav_state,
+        fcMissionItems: event.payload.mission_total ?? 0,
         lastUpdate: Date.now(),
       }));
     })
